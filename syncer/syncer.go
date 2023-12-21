@@ -249,7 +249,7 @@ func (h *rpcHandler) RelayHeader(bh gateway.BlockHeader, origin *gateway.Peer) {
 	if _, ok := h.s.cm.Block(bh.ID()); ok {
 		return // already seen
 	} else if _, ok := h.s.cm.Block(bh.ParentID); !ok {
-		h.s.log.Printf("peer %v relayed a header with unknown parent (%v); triggering a resync", origin, bh.ParentID)
+		h.s.log.Printf("[INFO] peer %v relayed a header with unknown parent (%v); triggering a resync", origin, bh.ParentID)
 		h.s.mu.Lock()
 		h.s.synced[origin.Addr] = false
 		h.s.mu.Unlock()
@@ -257,7 +257,7 @@ func (h *rpcHandler) RelayHeader(bh gateway.BlockHeader, origin *gateway.Peer) {
 	} else if cs := h.s.cm.TipState(); bh.ParentID != cs.Index.ID {
 		// Block extends a sidechain, which peer (if honest) believes to be the
 		// heaviest chain.
-		h.s.log.Printf("peer %v relayed a header that does not attach to our tip; triggering a resync", origin)
+		h.s.log.Printf("[INFO] peer %v relayed a header that does not attach to our tip; triggering a resync", origin)
 		h.s.mu.Lock()
 		h.s.synced[origin.Addr] = false
 		h.s.mu.Unlock()
@@ -270,7 +270,7 @@ func (h *rpcHandler) RelayHeader(bh gateway.BlockHeader, origin *gateway.Peer) {
 	// Header is valid and attaches to our tip; request + validate full block.
 	if b, err := origin.SendBlock(bh.ID(), h.s.config.SendBlockTimeout); err != nil {
 		// Log-worthy, but not ban-worthy.
-		h.s.log.Printf("couldn't retrieve new block %v after header relay from %v: %v", bh.ID(), origin, err)
+		h.s.log.Printf("[WARN] couldn't retrieve new block %v after header relay from %v: %v", bh.ID(), origin, err)
 		return
 	} else if err := h.s.cm.AddBlocks([]types.Block{b}); err != nil {
 		h.s.ban(origin, err)
@@ -294,7 +294,7 @@ add:
 		// Too risky to ban here (txns are probably just outdated), but at least
 		// log it if we think we're synced.
 		if b, ok := h.s.cm.Block(h.s.cm.Tip().ID); ok && time.Since(b.Timestamp) < 2*h.s.cm.TipState().BlockInterval() {
-			h.s.log.Printf("received an invalid transaction set from %v: %v", origin, err)
+			h.s.log.Printf("[WARN] received an invalid transaction set from %v: %v", origin, err)
 		}
 		return
 	}
@@ -303,7 +303,7 @@ add:
 
 func (h *rpcHandler) RelayV2Header(bh gateway.V2BlockHeader, origin *gateway.Peer) {
 	if _, ok := h.s.cm.Block(bh.Parent.ID); !ok {
-		h.s.log.Printf("peer %v relayed a v2 header with unknown parent (%v); triggering a resync", origin, bh.Parent.ID)
+		h.s.log.Printf("[INFO] peer %v relayed a v2 header with unknown parent (%v); triggering a resync", origin, bh.Parent.ID)
 		h.s.mu.Lock()
 		h.s.synced[origin.Addr] = false
 		h.s.mu.Unlock()
@@ -317,7 +317,7 @@ func (h *rpcHandler) RelayV2Header(bh gateway.V2BlockHeader, origin *gateway.Pee
 	} else if bh.Parent.ID != cs.Index.ID {
 		// Block extends a sidechain, which peer (if honest) believes to be the
 		// heaviest chain.
-		h.s.log.Printf("peer %v relayed a header that does not attach to our tip; triggering a resync", origin)
+		h.s.log.Printf("[INFO] peer %v relayed a header that does not attach to our tip; triggering a resync", origin)
 		h.s.mu.Lock()
 		h.s.synced[origin.Addr] = false
 		h.s.mu.Unlock()
@@ -338,7 +338,7 @@ func (h *rpcHandler) RelayV2Header(bh gateway.V2BlockHeader, origin *gateway.Pee
 
 func (h *rpcHandler) RelayV2BlockOutline(bo gateway.V2BlockOutline, origin *gateway.Peer) {
 	if _, ok := h.s.cm.Block(bo.ParentID); !ok {
-		h.s.log.Printf("peer %v relayed a v2 outline with unknown parent (%v); triggering a resync", origin, bo.ParentID)
+		h.s.log.Printf("[INFO] peer %v relayed a v2 outline with unknown parent (%v); triggering a resync", origin, bo.ParentID)
 		h.s.mu.Lock()
 		h.s.synced[origin.Addr] = false
 		h.s.mu.Unlock()
@@ -352,7 +352,7 @@ func (h *rpcHandler) RelayV2BlockOutline(bo gateway.V2BlockOutline, origin *gate
 	} else if bo.ParentID != cs.Index.ID {
 		// Block extends a sidechain, which peer (if honest) believes to be the
 		// heaviest chain.
-		h.s.log.Printf("peer %v relayed a v2 outline that does not attach to our tip; triggering a resync", origin)
+		h.s.log.Printf("[INFO] peer %v relayed a v2 outline that does not attach to our tip; triggering a resync", origin)
 		h.s.mu.Lock()
 		h.s.synced[origin.Addr] = false
 		h.s.mu.Unlock()
@@ -372,7 +372,7 @@ func (h *rpcHandler) RelayV2BlockOutline(bo gateway.V2BlockOutline, origin *gate
 		txns, v2txns, err := origin.SendTransactions(index, missing, h.s.config.SendTransactionsTimeout)
 		if err != nil {
 			// Log-worthy, but not ban-worthy.
-			h.s.log.Printf("couldn't retrieve missing transactions of %v after relay from %v: %v", bid, origin, err)
+			h.s.log.Printf("[WARN] couldn't retrieve missing transactions of %v after relay from %v: %v", bid, origin, err)
 			return
 		}
 		b, missing = bo.Complete(cs, txns, v2txns)
@@ -411,7 +411,7 @@ add:
 		// Too risky to ban here (txns are probably just outdated), but at least
 		// log it if we think we're synced.
 		if b, ok := h.s.cm.Block(h.s.cm.Tip().ID); ok && time.Since(b.Timestamp) < 2*h.s.cm.TipState().BlockInterval() {
-			h.s.log.Printf("received an invalid transaction set from %v: %v", origin, err)
+			h.s.log.Printf("[WARN] received an invalid transaction set from %v: %v", origin, err)
 		}
 		return
 	}
@@ -419,7 +419,7 @@ add:
 }
 
 func (s *Syncer) ban(p *gateway.Peer, err error) {
-	s.log.Printf("banning %v: %v", p, err)
+	s.log.Printf("[INFO] banning %v: %v", p, err)
 	p.SetErr(errors.New("banned"))
 	s.pm.Ban(p.ConnAddr, 24*time.Hour, err.Error())
 
@@ -480,7 +480,7 @@ func (s *Syncer) runPeer(p *gateway.Peer) {
 			// slow, fine; we don't need to worry about resource exhaustion
 			// unless we have tons of peers.
 			if err := p.HandleRPC(id, stream, h); err != nil {
-				s.log.Printf("incoming RPC %v from peer %v failed: %v", id, p, err)
+				s.log.Printf("[ERROR] incoming RPC %v from peer %v failed: %v", id, p, err)
 			}
 			<-inflight
 		}()
@@ -588,11 +588,11 @@ func (s *Syncer) acceptLoop() error {
 		go func() {
 			defer conn.Close()
 			if err := s.allowConnect(conn.RemoteAddr().String(), true); err != nil {
-				s.log.Printf("rejected inbound connection from %v: %v", conn.RemoteAddr(), err)
+				s.log.Printf("[INFO] rejected inbound connection from %v: %v", conn.RemoteAddr(), err)
 			} else if p, err := gateway.Accept(conn, s.header); err != nil {
-				s.log.Printf("failed to accept inbound connection from %v: %v", conn.RemoteAddr(), err)
+				// s.log.Printf("[ERROR] failed to accept inbound connection from %v: %v", conn.RemoteAddr(), err)
 			} else if s.alreadyConnected(p) {
-				s.log.Printf("rejected inbound connection from %v: already connected", conn.RemoteAddr())
+				s.log.Printf("[INFO] rejected inbound connection from %v: already connected", conn.RemoteAddr())
 			} else {
 				s.runPeer(p)
 			}
@@ -676,9 +676,7 @@ func (s *Syncer) peerLoop(closeChan <-chan struct{}) error {
 				break
 			}
 			if _, err := s.Connect(p); err == nil {
-				s.log.Printf("formed outbound connection to %v", p)
-			} else {
-				s.log.Printf("failed to form outbound connection to %v: %v", p, err)
+				s.log.Printf("[INFO] formed outbound connection to %v", p)
 			}
 			lastTried[p] = time.Now()
 		}
@@ -720,7 +718,7 @@ func (s *Syncer) syncLoop(closeChan <-chan struct{}) error {
 			s.mu.Lock()
 			s.synced[p.Addr] = true
 			s.mu.Unlock()
-			s.log.Printf("starting sync with %v", p)
+			s.log.Printf("[INFO] starting sync with %v", p)
 			oldTip := s.cm.Tip()
 			oldTime := time.Now()
 			lastPrint := time.Now()
@@ -738,7 +736,7 @@ func (s *Syncer) syncLoop(closeChan <-chan struct{}) error {
 				})
 				startTime, startHeight = endTime, endHeight
 				if time.Since(lastPrint) > 30*time.Second {
-					s.log.Printf("syncing with %v, tip now %v (avg %.2f blocks/s)", p, s.cm.Tip(), float64(s.cm.Tip().Height-oldTip.Height)/endTime.Sub(oldTime).Seconds())
+					s.log.Printf("[INFO] syncing with %v, tip now %v (avg %.2f blocks/s)", p, s.cm.Tip(), float64(s.cm.Tip().Height-oldTip.Height)/endTime.Sub(oldTime).Seconds())
 					lastPrint = time.Now()
 				}
 				return nil
@@ -763,11 +761,11 @@ func (s *Syncer) syncLoop(closeChan <-chan struct{}) error {
 			}
 			totalBlocks := s.cm.Tip().Height - oldTip.Height
 			if err != nil {
-				s.log.Printf("syncing with %v failed after %v blocks: %v", p, totalBlocks, err)
+				s.log.Printf("[ERROR] syncing with %v failed after %v blocks: %v", p, totalBlocks, err)
 			} else if newTip := s.cm.Tip(); newTip != oldTip {
-				s.log.Printf("finished syncing %v blocks with %v, tip now %v", totalBlocks, p, newTip)
+				s.log.Printf("[INFO] finished syncing %v blocks with %v, tip now %v", totalBlocks, p, newTip)
 			} else {
-				s.log.Printf("finished syncing %v blocks with %v, tip unchanged", sentBlocks, p)
+				s.log.Printf("[INFO] finished syncing %v blocks with %v, tip unchanged", sentBlocks, p)
 			}
 		}
 	}

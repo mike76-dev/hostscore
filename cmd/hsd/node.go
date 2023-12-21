@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -173,14 +172,6 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 		return nil, errors.New("invalid network: must be one of 'mainnet', 'zen', or 'anagami'")
 	}
 
-	// Create the logger.
-	logFile, err := os.OpenFile(filepath.Join(config.Dir, "hsd.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	logger := log.New(io.MultiWriter(os.Stderr, logFile), "", log.LstdFlags)
-
-	// Connect to the database.
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
 		User:                 config.DBUser,
@@ -237,6 +228,11 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
+	logFile, err := os.OpenFile(filepath.Join(config.Dir, "syncer.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		log.Fatal(err)
+	}
+	logger := log.New(logFile, "", log.LstdFlags|log.Lshortfile)
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(logger))
 
 	return &node{
