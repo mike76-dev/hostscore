@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/mike76-dev/hostscore/database"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
+	bolt "go.etcd.io/bbolt"
 	"go.sia.tech/core/chain"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
@@ -85,16 +85,76 @@ var (
 	}
 )
 
-// node represents a satellite node containing all required modules.
+type boltDB struct {
+	tx *bolt.Tx
+	db *bolt.DB
+}
+
+func (db *boltDB) newTx() (err error) {
+	if db.tx == nil {
+		db.tx, err = db.db.Begin(true)
+	}
+	return
+}
+
+func (db *boltDB) Bucket(name []byte) chain.DBBucket {
+	if err := db.newTx(); err != nil {
+		panic(err)
+	}
+
+	b := db.tx.Bucket(name)
+	if b == nil {
+		return nil
+	}
+	return b
+}
+
+func (db *boltDB) CreateBucket(name []byte) (chain.DBBucket, error) {
+	if err := db.newTx(); err != nil {
+		return nil, err
+	}
+
+	b, err := db.tx.CreateBucket(name)
+	if b == nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func (db *boltDB) Flush() error {
+	if db.tx == nil {
+		return nil
+	}
+
+	if err := db.tx.Commit(); err != nil {
+		return err
+	}
+	db.tx = nil
+	return nil
+}
+
+func (db *boltDB) Cancel() {
+	if db.tx == nil {
+		return
+	}
+
+	db.tx.Rollback()
+	db.tx = nil
+}
+
+func (db *boltDB) Close() error {
+	db.Flush()
+	return db.db.Close()
+}
+
 type node struct {
-	cm *chain.Manager
-	s  *syncer.Syncer
-	db *database.MySQLDB
+	cm  *chain.Manager
+	s   *syncer.Syncer
+	mdb *sql.DB
 
 	Start func() (stop func())
 }
 
-// newNode will create a new node.
 func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 	var network *consensus.Network
 	var genesisBlock types.Block
@@ -130,28 +190,29 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 		DBName:               config.DBName,
 		AllowNativePasswords: true,
 	}
-	db, err := sql.Open("mysql", cfg.FormatDSN())
+	mdb, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		log.Fatalf("Could not connect to the database: %v\n", err)
 	}
-	err = db.Ping()
+	err = mdb.Ping()
 	if err != nil {
 		log.Fatalf("MySQL database not responding: %v\n", err)
 	}
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
+	mdb.SetConnMaxLifetime(time.Minute * 3)
+	mdb.SetMaxOpenConns(10)
+	mdb.SetMaxIdleConns(10)
 
-	mdb := database.NewMySQLDB(db, config.DBName, logger)
-	dbstore, tipState, err := chain.NewDBStore(mdb, network, genesisBlock)
+	bdb, err := bolt.Open(filepath.Join(config.Dir, "consensus.db"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	db := &boltDB{db: bdb}
+	dbstore, tipState, err := chain.NewDBStore(db, network, genesisBlock)
 	if err != nil {
 		return nil, err
 	}
-
-	// Create chain manager.
 	cm := chain.NewManager(dbstore, tipState)
 
-	// Start listening to the network.
 	l, err := net.Listen("tcp", config.GatewayAddr)
 	if err != nil {
 		return nil, err
@@ -164,7 +225,6 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 		syncerAddr = net.JoinHostPort("127.0.0.1", port)
 	}
 
-	// Create syncer.
 	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(config.Dir, "peers.json"))
 	if err != nil {
 		log.Fatal(err)
@@ -180,9 +240,9 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(logger))
 
 	return &node{
-		cm: cm,
-		s:  s,
-		db: mdb,
+		cm:  cm,
+		s:   s,
+		mdb: mdb,
 		Start: func() func() {
 			ch := make(chan struct{})
 			go func() {
@@ -193,6 +253,7 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 				l.Close()
 				<-ch
 				db.Close()
+				mdb.Close()
 			}
 		},
 	}, nil
