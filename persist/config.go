@@ -18,11 +18,9 @@ const configFilename = "hsdconfig.json"
 // HSDConfig contains the fields that are passed on to the new node.
 type HSDConfig struct {
 	Name        string `json:"name"`
-	UserAgent   string `json:"agent"`
 	GatewayAddr string `json:"gateway"`
 	APIAddr     string `json:"api"`
 	Dir         string `json:"dir"`
-	Bootstrap   bool   `json:"bootstrap"`
 	DBUser      string `json:"dbUser"`
 	DBName      string `json:"dbName"`
 	Network     string `json:"network"`
