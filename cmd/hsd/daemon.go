@@ -12,7 +12,7 @@ import (
 )
 
 // startDaemon starts the hsd server.
-func startDaemon(config *persist.HSDConfig, apiPassword string, dbPassword string) error {
+func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword, seed string) error {
 	fmt.Printf("hsd v%v\n", build.NodeVersion)
 	if build.GitRevision == "" {
 		fmt.Println("WARN: compiled without build commit or version. To compile correctly, please use the makefile")
@@ -26,7 +26,7 @@ func startDaemon(config *persist.HSDConfig, apiPassword string, dbPassword strin
 	if err != nil {
 		log.Fatal(err)
 	}
-	n, err := newNode(config, dbPassword)
+	n, err := newNode(config, dbPassword, seed)
 	if err != nil {
 		log.Fatal(err)
 	}

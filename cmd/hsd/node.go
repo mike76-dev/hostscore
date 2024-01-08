@@ -5,12 +5,12 @@ import (
 	"errors"
 	"log"
 	"net"
-	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
+	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
 	bolt "go.etcd.io/bbolt"
@@ -147,14 +147,15 @@ func (db *boltDB) Close() error {
 }
 
 type node struct {
-	cm  *chain.Manager
-	s   *syncer.Syncer
-	mdb *sql.DB
+	cm *chain.Manager
+	s  *syncer.Syncer
+	w  *walletutil.JSONWallet
+	db *sql.DB
 
 	Start func() (stop func())
 }
 
-func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
+func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) {
 	var network *consensus.Network
 	var genesisBlock types.Block
 	var bootstrapPeers []string
@@ -168,6 +169,8 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 	case "anagami":
 		network, genesisBlock = TestnetAnagami()
 		bootstrapPeers = anagamiBootstrap
+		testnetFixDBTree(config.Dir)
+		testnetFixMultiproofs(config.Dir)
 	default:
 		return nil, errors.New("invalid network: must be one of 'mainnet', 'zen', or 'anagami'")
 	}
@@ -192,6 +195,11 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 	mdb.SetConnMaxLifetime(time.Minute * 3)
 	mdb.SetMaxOpenConns(10)
 	mdb.SetMaxIdleConns(10)
+
+	logger, err := persist.NewFileLogger(filepath.Join(config.Dir, "syncer.log"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	bdb, err := bolt.Open(filepath.Join(config.Dir, "consensus.db"), 0600, nil)
 	if err != nil {
@@ -228,17 +236,18 @@ func newNode(config *persist.HSDConfig, dbPassword string) (*node, error) {
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	logFile, err := os.OpenFile(filepath.Join(config.Dir, "syncer.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	logger := log.New(logFile, "", log.LstdFlags|log.Lshortfile)
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(logger))
 
+	w, err := walletutil.NewJSONWallet(seed, config.Dir, cm)
+	if err != nil {
+		return nil, err
+	}
+
 	return &node{
-		cm:  cm,
-		s:   s,
-		mdb: mdb,
+		cm: cm,
+		s:  s,
+		w:  w,
+		db: mdb,
 		Start: func() func() {
 			ch := make(chan struct{})
 			go func() {

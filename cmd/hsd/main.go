@@ -1,24 +1,25 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
+	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/persist"
-
+	"github.com/mike76-dev/hostscore/wallet"
+	"go.sia.tech/core/types"
 	"golang.org/x/term"
+	"lukechampine.com/flagg"
 )
 
 // Default config values.
 var defaultConfig = persist.HSDConfig{
 	Name:        "",
-	UserAgent:   "HostScore",
 	GatewayAddr: ":9981",
 	APIAddr:     "localhost:9980",
 	Dir:         ".",
-	Bootstrap:   true,
 	DBUser:      "",
 	DBName:      "hostscore",
 	Network:     "mainnet",
@@ -59,6 +60,44 @@ func getDBPassword() string {
 	return dbPassword
 }
 
+func getWalletSeed() string {
+	seed := os.Getenv("HSD_WALLET_SEED")
+	if seed != "" {
+		log.Println("Using HSD_WALLET_SEED environment variable.")
+	} else {
+		fmt.Print("Enter wallet seed: ")
+		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			log.Fatalf("Could not read database password: %v\n", err)
+		}
+		seed = string(pw)
+	}
+	return seed
+}
+
+var (
+	rootUsage = `Usage:
+    hsd [flags] [action]
+
+Run 'hsd' with no arguments to start the blockchain node and API server.
+
+Actions:
+    version     print hsd version
+    seed        generate a seed
+`
+	versionUsage = `Usage:
+    hsd version
+
+Prints the version of the hsd binary.
+`
+	seedUsage = `Usage:
+    hsd seed
+
+Generates a secure seed.
+`
+)
+
 func main() {
 	log.SetFlags(0)
 
@@ -75,68 +114,120 @@ func main() {
 		config = defaultConfig
 	}
 
-	// Parse command line flags. If set, they override the loaded config.
-	name := flag.String("name", "", "name of the benchmarking node")
-	userAgent := flag.String("agent", "", "custom agent used for API calls")
-	gatewayAddr := flag.String("addr", "", "address to listen on for peer connections")
-	apiAddr := flag.String("api-addr", "", "address to serve API on")
-	dir := flag.String("dir", "", "directory to store logs in")
-	bootstrap := flag.Bool("bootstrap", true, "bootstrap the gateway and consensus modules")
-	dbUser := flag.String("db-user", "", "username for accessing the database")
-	dbName := flag.String("db-name", "", "name of MYSQL database")
-	network := flag.String("network", "mainnet", "name of the network")
-	flag.Parse()
-	if *name != "" {
-		config.Name = *name
-	}
-	if *userAgent != "" {
-		config.UserAgent = *userAgent
-	}
-	if *gatewayAddr != "" {
-		config.GatewayAddr = *gatewayAddr
-	}
-	if *apiAddr != "" {
-		config.APIAddr = *apiAddr
-	}
-	if *dir != "" {
-		config.Dir = *dir
-	}
-	config.Bootstrap = *bootstrap
-	if *dbUser != "" {
-		config.DBUser = *dbUser
-	}
-	if *dbName != "" {
-		config.DBName = *dbName
-	}
-	if *network != "" {
-		config.Network = *network
-	}
+	var name, gatewayAddr, apiAddr, dir, dbUser, dbName, network string
 
-	// Save the configuration.
-	err = config.Save(configDir)
-	if err != nil {
-		log.Fatalln("Unable to save config file")
+	rootCmd := flagg.Root
+	rootCmd.Usage = flagg.SimpleUsage(rootCmd, rootUsage)
+	rootCmd.StringVar(&name, "name", "", "name of the benchmarking node")
+	rootCmd.StringVar(&gatewayAddr, "addr", ":9981", "p2p address to listen on")
+	rootCmd.StringVar(&apiAddr, "api-addr", "localhost:9980", "address to serve API on")
+	rootCmd.StringVar(&dir, "dir", ".", "directory to store node state in")
+	rootCmd.StringVar(&dbUser, "db-user", "", "username for accessing the database")
+	rootCmd.StringVar(&dbName, "db-name", "", "name of MYSQL database")
+	rootCmd.StringVar(&network, "network", "mainnet", "network to connect to")
+	versionCmd := flagg.New("version", versionUsage)
+	seedCmd := flagg.New("seed", seedUsage)
+	dbDeleteCmd := flagg.New("deletev1", "delete v1 state from consensus.db")
+
+	cmd := flagg.Parse(flagg.Tree{
+		Cmd: rootCmd,
+		Sub: []flagg.Tree{
+			{Cmd: versionCmd},
+			{Cmd: seedCmd},
+			{Cmd: dbDeleteCmd},
+		},
+	})
+
+	switch cmd {
+	case rootCmd:
+		if len(cmd.Args()) != 0 {
+			cmd.Usage()
+			return
+		}
+
+		// Parse command line flags. If set, they override the loaded config.
+		if name != "" {
+			config.Name = name
+		}
+		if gatewayAddr != "" {
+			config.GatewayAddr = gatewayAddr
+		}
+		if apiAddr != "" {
+			config.APIAddr = apiAddr
+		}
+		if dir != "" {
+			config.Dir = dir
+		}
+		if dbUser != "" {
+			config.DBUser = dbUser
+		}
+		if dbName != "" {
+			config.DBName = dbName
+		}
+		if network != "" {
+			config.Network = network
+		}
+
+		// Save the configuration.
+		err = config.Save(configDir)
+		if err != nil {
+			log.Fatalln("Unable to save config file")
+		}
+
+		// Fetch API password.
+		apiPassword := getAPIPassword()
+
+		// Fetch DB password.
+		dbPassword := getDBPassword()
+
+		// Fetch wallet seed.
+		seed := getWalletSeed()
+
+		// Create the directory if it does not yet exist.
+		// This also checks if the provided directory parameter is valid.
+		err = os.MkdirAll(config.Dir, 0700)
+		if err != nil {
+			log.Fatalf("Provided parameter is invalid: %v\n", config.Dir)
+		}
+
+		// Start hsd. startDaemon will only return when it is shutting down.
+		err = startDaemon(&config, apiPassword, dbPassword, seed)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		// Daemon seems to have closed cleanly. Print a 'closed' message.
+		log.Println("Shutdown complete.")
+
+	case versionCmd:
+		if len(cmd.Args()) != 0 {
+			cmd.Usage()
+			return
+		}
+		fmt.Printf("hsd v%v\n", build.NodeVersion)
+		if build.GitRevision != "" {
+			fmt.Println("Git Revision " + build.GitRevision)
+		}
+
+	case seedCmd:
+		if len(cmd.Args()) != 0 {
+			cmd.Usage()
+			return
+		}
+		seed := wallet.NewSeedPhrase()
+		sk, err := wallet.KeyFromPhrase(seed)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		addr := types.StandardUnlockHash(sk.PublicKey())
+		fmt.Printf("Seed:    %s\n", seed)
+		fmt.Printf("Address: %v\n", strings.TrimPrefix(addr.String(), "addr:"))
+
+	case dbDeleteCmd:
+		if len(cmd.Args()) != 0 {
+			cmd.Usage()
+			return
+		}
+		testnetDeleteV1DBState(config.Dir)
 	}
-
-	// Fetch API password.
-	apiPassword := getAPIPassword()
-
-	// Fetch DB password.
-	dbPassword := getDBPassword()
-
-	// Create the logs directory if it does not yet exist.
-	// This also checks if the provided directory parameter is valid.
-	err = os.MkdirAll(config.Dir, 0700)
-	if err != nil {
-		log.Fatalf("Provided parameter is invalid: %v\n", config.Dir)
-	}
-
-	// Start satd. startDaemon will only return when it is shutting down.
-	err = startDaemon(&config, apiPassword, dbPassword)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// Daemon seems to have closed cleanly. Print a 'closed' message.
-	log.Println("Shutdown complete.")
 }

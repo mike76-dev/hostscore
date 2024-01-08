@@ -1,9 +1,15 @@
 package main
 
 import (
-	"encoding/binary"
+	"bytes"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 	"time"
 
+	bolt "go.etcd.io/bbolt"
+	"go.sia.tech/core/chain"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 )
@@ -59,27 +65,147 @@ func TestnetAnagami() (*consensus.Network, types.Block) {
 	return n, b
 }
 
-func mineBlock(cs consensus.State, b *types.Block) (hashes int, found bool) {
-	buf := make([]byte, 32+8+8+32)
-	binary.LittleEndian.PutUint64(buf[32:], b.Nonce)
-	binary.LittleEndian.PutUint64(buf[40:], uint64(b.Timestamp.Unix()))
-	if b.V2 != nil {
-		copy(buf[:32], "sia/id/block|")
-		copy(buf[48:], b.V2.Commitment[:])
-	} else {
-		root := b.MerkleRoot()
-		copy(buf[:32], b.ParentID[:])
-		copy(buf[48:], root[:])
+func testnetFixDBTree(dir string) {
+	bdb, err := bolt.Open(filepath.Join(dir, "consensus.db"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
 	}
-	factor := cs.NonceFactor()
-	startBlock := time.Now()
-	for types.BlockID(types.HashBytes(buf)).CmpWork(cs.ChildTarget) < 0 {
-		b.Nonce += factor
-		hashes++
-		binary.LittleEndian.PutUint64(buf[32:], b.Nonce)
-		if time.Since(startBlock) > 10*time.Second {
-			return hashes, false
+	db := &boltDB{db: bdb}
+	defer db.Close()
+	if db.Bucket([]byte("tree-fix-2")) != nil {
+		return
+	}
+
+	fmt.Print("Fixing consensus.db Merkle tree...")
+
+	network, genesisBlock := TestnetAnagami()
+	dbstore, tipState, err := chain.NewDBStore(db, network, genesisBlock)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cm := chain.NewManager(dbstore, tipState)
+
+	bdb2, err := bolt.Open(filepath.Join(dir, "consensus.db-fixed"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	db2 := &boltDB{db: bdb2}
+	defer db2.Close()
+	dbstore2, tipState2, err := chain.NewDBStore(db2, network, genesisBlock)
+	if err != nil {
+		log.Fatal(err)
+	}
+	cm2 := chain.NewManager(dbstore2, tipState2)
+
+	for cm2.Tip() != cm.Tip() {
+		fmt.Printf("\rFixing consensus.db Merkle tree...%v/%v", cm2.Tip().Height, cm.Tip().Height)
+		index, _ := cm.BestIndex(cm2.Tip().Height + 1)
+		b, _ := cm.Block(index.ID)
+		if err := cm2.AddBlocks([]types.Block{b}); err != nil {
+			break
 		}
 	}
-	return hashes, true
+	fmt.Println()
+
+	if _, err := db2.CreateBucket([]byte("tree-fix-2")); err != nil {
+		log.Fatal(err)
+	} else if err := db.Close(); err != nil {
+		log.Fatal(err)
+	} else if err := db2.Close(); err != nil {
+		log.Fatal(err)
+	} else if err := os.Rename(filepath.Join(dir, "consensus.db-fixed"), filepath.Join(dir, "consensus.db")); err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Print("Backing up old wallet state...")
+	os.RemoveAll(filepath.Join(dir, "wallets.json-bck"))
+	os.Rename(filepath.Join(dir, "wallets.json"), filepath.Join(dir, "wallets.json-bck"))
+	os.RemoveAll(filepath.Join(dir, "wallets-bck"))
+	os.Rename(filepath.Join(dir, "wallets"), filepath.Join(dir, "wallets-bck"))
+	fmt.Println("done.")
+	fmt.Println("NOTE: Your wallet will resync automatically on first use; this may take a few seconds.")
+}
+
+func testnetDeleteV1DBState(dir string) {
+	bdb, err := bolt.Open(filepath.Join(dir, "consensus.db"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	var needUpdate bool
+	bdb.View(func(tx *bolt.Tx) error {
+		needUpdate = tx.Bucket([]byte("Tree")) != nil
+		return nil
+	})
+	if !needUpdate {
+		return
+	}
+
+	fmt.Println("Deleting unneeded v1 state...")
+
+	var blockIDs []types.BlockID
+	bdb.View(func(tx *bolt.Tx) error {
+		return tx.Bucket([]byte("Blocks")).ForEach(func(k, v []byte) error {
+			blockIDs = append(blockIDs, *(*types.BlockID)(k))
+			return nil
+		})
+	})
+	var total int
+	err = bdb.Update(func(tx *bolt.Tx) error {
+		for _, bucket := range []struct {
+			name     string
+			elemName string
+		}{
+			{"SiacoinElements", "siacoin elements"},
+			{"SiafundElements", "siafund elements"},
+			{"FileContracts", "file contract elements"},
+			{"AncestorTimestamps", "ancestor timestamps"},
+			{"Tree", "Merkle tree hashes"},
+		} {
+			b := tx.Bucket([]byte(bucket.name))
+			if b == nil {
+				continue
+			}
+			b.ForEach(func(k, v []byte) error {
+				fmt.Printf("\rDeleting %v...%x", bucket.elemName, k)
+				total += len(k) + len(v)
+				return b.Delete(k)
+			})
+			tx.DeleteBucket([]byte(bucket.name))
+			fmt.Println("done.")
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	db := &boltDB{db: bdb}
+	defer db.Close()
+	network, genesisBlock := TestnetAnagami()
+	dbstore, _, err := chain.NewDBStore(db, network, genesisBlock)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	e := types.NewEncoder(&buf)
+	for _, id := range blockIDs {
+		fmt.Printf("\rDeleting v1 block supplements...%v", id)
+		if b, bs, _ := dbstore.Block(id); bs != nil {
+			buf.Reset()
+			for _, txn := range bs.Transactions {
+				txn.EncodeTo(e)
+			}
+			for _, fc := range bs.ExpiringFileContracts {
+				fc.EncodeTo(e)
+			}
+			e.Flush()
+			total += buf.Len()
+			bs.Transactions = nil
+			bs.ExpiringFileContracts = nil
+			dbstore.AddBlock(b, bs)
+		}
+	}
+	fmt.Println("done.")
+	fmt.Printf("All v1 state deleted. Your consensus.db is now %v MB lighter!\n", total/1e6)
 }

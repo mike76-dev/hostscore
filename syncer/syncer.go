@@ -3,13 +3,13 @@ package syncer
 import (
 	"context"
 	"errors"
-	"io"
-	"log"
+	"fmt"
 	"net"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/mike76-dev/hostscore/persist"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
@@ -27,9 +27,9 @@ type ChainManager interface {
 	TipState() consensus.State
 
 	PoolTransaction(txid types.TransactionID) (types.Transaction, bool)
-	AddPoolTransactions(txns []types.Transaction) error
+	AddPoolTransactions(txns []types.Transaction) (bool, error)
 	V2PoolTransaction(txid types.TransactionID) (types.V2Transaction, bool)
-	AddV2PoolTransactions(txns []types.V2Transaction) error
+	AddV2PoolTransactions(basis types.ChainIndex, txns []types.V2Transaction) (bool, error)
 	TransactionsForPartialBlock(missing []types.Hash256) ([]types.Transaction, []types.V2Transaction)
 }
 
@@ -78,7 +78,7 @@ type config struct {
 	MaxSendBlocks              uint64
 	PeerDiscoveryInterval      time.Duration
 	SyncInterval               time.Duration
-	Logger                     *log.Logger
+	Logger                     *persist.Logger
 }
 
 // An Option modifies a Syncer's configuration.
@@ -170,7 +170,7 @@ func WithSyncInterval(d time.Duration) Option {
 
 // WithLogger sets the logger used by a Syncer. The default is a logger that
 // outputs to io.Discard.
-func WithLogger(l *log.Logger) Option {
+func WithLogger(l *persist.Logger) Option {
 	return func(c *config) { c.Logger = l }
 }
 
@@ -181,7 +181,7 @@ type Syncer struct {
 	pm     PeerStore
 	header gateway.Header
 	config config
-	log    *log.Logger // redundant, but convenient
+	log    *persist.Logger // redundant, but convenient
 
 	mu      sync.Mutex
 	peers   map[string]*gateway.Peer
@@ -191,6 +191,16 @@ type Syncer struct {
 
 type rpcHandler struct {
 	s *Syncer
+}
+
+func (h *rpcHandler) resync(p *gateway.Peer, reason string) {
+	h.s.mu.Lock()
+	alreadyResyncing := !h.s.synced[p.Addr]
+	h.s.synced[p.Addr] = false
+	h.s.mu.Unlock()
+	if !alreadyResyncing {
+		h.s.log.Printf("[INFO] triggering resync with %v: %v", p, reason)
+	}
 }
 
 func (h *rpcHandler) PeersForShare() (peers []string) {
@@ -216,7 +226,7 @@ func (h *rpcHandler) BlocksForHistory(history []types.BlockID, max uint64) ([]ty
 
 func (h *rpcHandler) Transactions(index types.ChainIndex, txnHashes []types.Hash256) (txns []types.Transaction, v2txns []types.V2Transaction, _ error) {
 	if b, ok := h.s.cm.Block(index.ID); ok {
-		// Get txns from block.
+		// get txns from block
 		want := make(map[types.Hash256]bool)
 		for _, h := range txnHashes {
 			want[h] = true
@@ -249,27 +259,21 @@ func (h *rpcHandler) RelayHeader(bh gateway.BlockHeader, origin *gateway.Peer) {
 	if _, ok := h.s.cm.Block(bh.ID()); ok {
 		return // already seen
 	} else if _, ok := h.s.cm.Block(bh.ParentID); !ok {
-		h.s.log.Printf("[INFO] peer %v relayed a header with unknown parent (%v); triggering a resync", origin, bh.ParentID)
-		h.s.mu.Lock()
-		h.s.synced[origin.Addr] = false
-		h.s.mu.Unlock()
+		h.resync(origin, fmt.Sprintf("peer relayed a header with unknown parent (%v)", bh.ParentID))
 		return
 	} else if cs := h.s.cm.TipState(); bh.ParentID != cs.Index.ID {
-		// Block extends a sidechain, which peer (if honest) believes to be the
-		// heaviest chain.
-		h.s.log.Printf("[INFO] peer %v relayed a header that does not attach to our tip; triggering a resync", origin)
-		h.s.mu.Lock()
-		h.s.synced[origin.Addr] = false
-		h.s.mu.Unlock()
+		// block extends a sidechain, which peer (if honest) believes to be the
+		// heaviest chain
+		h.resync(origin, "peer relayed a header that does not attach to our tip")
 		return
 	} else if bh.ID().CmpWork(cs.ChildTarget) < 0 {
 		h.s.ban(origin, errors.New("peer sent header with insufficient work"))
 		return
 	}
 
-	// Header is valid and attaches to our tip; request + validate full block.
+	// header is valid and attaches to our tip; request + validate full block
 	if b, err := origin.SendBlock(bh.ID(), h.s.config.SendBlockTimeout); err != nil {
-		// Log-worthy, but not ban-worthy.
+		// log-worthy, but not ban-worthy
 		h.s.log.Printf("[WARN] couldn't retrieve new block %v after header relay from %v: %v", bh.ID(), origin, err)
 		return
 	} else if err := h.s.cm.AddBlocks([]types.Block{b}); err != nil {
@@ -281,53 +285,42 @@ func (h *rpcHandler) RelayHeader(bh gateway.BlockHeader, origin *gateway.Peer) {
 }
 
 func (h *rpcHandler) RelayTransactionSet(txns []types.Transaction, origin *gateway.Peer) {
-	// If we've already seen these transactions, don't relay them again.
-	for _, txn := range txns {
-		if _, ok := h.s.cm.PoolTransaction(txn.ID()); !ok {
-			goto add
+	if len(txns) == 0 {
+		h.s.ban(origin, errors.New("peer sent an empty transaction set"))
+	} else if known, err := h.s.cm.AddPoolTransactions(txns); !known {
+		if err != nil {
+			// too risky to ban here (txns are probably just outdated), but at least
+			// log it if we think we're synced
+			if b, ok := h.s.cm.Block(h.s.cm.Tip().ID); ok && time.Since(b.Timestamp) < 2*h.s.cm.TipState().BlockInterval() {
+				h.s.log.Printf("received an invalid transaction set from %v: %v", origin, err)
+			}
+		} else {
+			h.s.relayTransactionSet(txns, origin) // non-blocking
 		}
 	}
-	return
-
-add:
-	if err := h.s.cm.AddPoolTransactions(txns); err != nil {
-		// Too risky to ban here (txns are probably just outdated), but at least
-		// log it if we think we're synced.
-		if b, ok := h.s.cm.Block(h.s.cm.Tip().ID); ok && time.Since(b.Timestamp) < 2*h.s.cm.TipState().BlockInterval() {
-			h.s.log.Printf("[WARN] received an invalid transaction set from %v: %v", origin, err)
-		}
-		return
-	}
-	h.s.relayTransactionSet(txns, origin) // non-blocking
 }
 
 func (h *rpcHandler) RelayV2Header(bh gateway.V2BlockHeader, origin *gateway.Peer) {
 	if _, ok := h.s.cm.Block(bh.Parent.ID); !ok {
-		h.s.log.Printf("[INFO] peer %v relayed a v2 header with unknown parent (%v); triggering a resync", origin, bh.Parent.ID)
-		h.s.mu.Lock()
-		h.s.synced[origin.Addr] = false
-		h.s.mu.Unlock()
+		h.resync(origin, fmt.Sprintf("peer relayed a v2 header with unknown parent (%v)", bh.Parent.ID))
 		return
 	}
 	cs := h.s.cm.TipState()
 	bid := bh.ID(cs)
 	if _, ok := h.s.cm.Block(bid); ok {
-		// Already seen.
+		// already seen
 		return
 	} else if bh.Parent.ID != cs.Index.ID {
-		// Block extends a sidechain, which peer (if honest) believes to be the
-		// heaviest chain.
-		h.s.log.Printf("[INFO] peer %v relayed a header that does not attach to our tip; triggering a resync", origin)
-		h.s.mu.Lock()
-		h.s.synced[origin.Addr] = false
-		h.s.mu.Unlock()
+		// block extends a sidechain, which peer (if honest) believes to be the
+		// heaviest chain
+		h.resync(origin, "peer relayed a v2 header that does not attach to our tip")
 		return
 	} else if bid.CmpWork(cs.ChildTarget) < 0 {
 		h.s.ban(origin, errors.New("peer sent v2 header with insufficient work"))
 		return
 	}
 
-	// Header is sufficiently valid; relay it.
+	// header is sufficiently valid; relay it
 	//
 	// NOTE: The purpose of header announcements is to inform the network as
 	// quickly as possible that a new block has been found. A proper
@@ -338,46 +331,40 @@ func (h *rpcHandler) RelayV2Header(bh gateway.V2BlockHeader, origin *gateway.Pee
 
 func (h *rpcHandler) RelayV2BlockOutline(bo gateway.V2BlockOutline, origin *gateway.Peer) {
 	if _, ok := h.s.cm.Block(bo.ParentID); !ok {
-		h.s.log.Printf("[INFO] peer %v relayed a v2 outline with unknown parent (%v); triggering a resync", origin, bo.ParentID)
-		h.s.mu.Lock()
-		h.s.synced[origin.Addr] = false
-		h.s.mu.Unlock()
+		h.resync(origin, fmt.Sprintf("peer relayed a v2 outline with unknown parent (%v)", bo.ParentID))
 		return
 	}
 	cs := h.s.cm.TipState()
 	bid := bo.ID(cs)
 	if _, ok := h.s.cm.Block(bid); ok {
-		// Already seen.
+		// already seen
 		return
 	} else if bo.ParentID != cs.Index.ID {
-		// Block extends a sidechain, which peer (if honest) believes to be the
-		// heaviest chain.
-		h.s.log.Printf("[INFO] peer %v relayed a v2 outline that does not attach to our tip; triggering a resync", origin)
-		h.s.mu.Lock()
-		h.s.synced[origin.Addr] = false
-		h.s.mu.Unlock()
+		// block extends a sidechain, which peer (if honest) believes to be the
+		// heaviest chain
+		h.resync(origin, "peer relayed a v2 outline that does not attach to our tip")
 		return
 	} else if bid.CmpWork(cs.ChildTarget) < 0 {
 		h.s.ban(origin, errors.New("peer sent v2 outline with insufficient work"))
 		return
 	}
 
-	// Block has sufficient work and attaches to our tip, but may be missing
+	// block has sufficient work and attaches to our tip, but may be missing
 	// transactions; first, check for them in our txpool; then, if block is
-	// still incomplete, request remaining transactions from the peer.
+	// still incomplete, request remaining transactions from the peer
 	txns, v2txns := h.s.cm.TransactionsForPartialBlock(bo.Missing())
 	b, missing := bo.Complete(cs, txns, v2txns)
 	if len(missing) > 0 {
 		index := types.ChainIndex{ID: bid, Height: cs.Index.Height + 1}
 		txns, v2txns, err := origin.SendTransactions(index, missing, h.s.config.SendTransactionsTimeout)
 		if err != nil {
-			// Log-worthy, but not ban-worthy.
-			h.s.log.Printf("[WARN] couldn't retrieve missing transactions of %v after relay from %v: %v", bid, origin, err)
+			// log-worthy, but not ban-worthy
+			h.s.log.Printf("[ERROR] couldn't retrieve missing transactions of %v after relay from %v: %v", bid, origin, err)
 			return
 		}
 		b, missing = bo.Complete(cs, txns, v2txns)
 		if len(missing) > 0 {
-			// Inexcusable.
+			// inexcusable
 			h.s.ban(origin, errors.New("peer sent wrong missing transactions for a block it relayed"))
 			return
 		}
@@ -387,35 +374,28 @@ func (h *rpcHandler) RelayV2BlockOutline(bo gateway.V2BlockOutline, origin *gate
 		return
 	}
 
-	// When we forward the block, exclude any txns that were in our txpool,
-	// since they're probably present in our peers' txpools as well.
+	// when we forward the block, exclude any txns that were in our txpool,
+	// since they're probably present in our peers' txpools as well
 	//
 	// NOTE: crucially, we do NOT exclude any txns we had to request from the
-	// sending peer, since other peers probably don't have them either.
+	// sending peer, since other peers probably don't have them either
 	bo.RemoveTransactions(txns, v2txns)
 
 	h.s.relayV2BlockOutline(bo, origin) // non-blocking
 }
 
-func (h *rpcHandler) RelayV2TransactionSet(txns []types.V2Transaction, origin *gateway.Peer) {
-	// If we've already seen these transactions, don't relay them again.
-	for _, txn := range txns {
-		if _, ok := h.s.cm.V2PoolTransaction(txn.ID()); !ok {
-			goto add
+func (h *rpcHandler) RelayV2TransactionSet(basis types.ChainIndex, txns []types.V2Transaction, origin *gateway.Peer) {
+	if _, ok := h.s.cm.Block(basis.ID); !ok {
+		h.resync(origin, fmt.Sprintf("peer %v relayed a v2 transaction set with unknown basis (%v)", origin, basis))
+	} else if len(txns) == 0 {
+		h.s.ban(origin, errors.New("peer sent an empty transaction set"))
+	} else if known, err := h.s.cm.AddV2PoolTransactions(basis, txns); !known {
+		if err != nil {
+			h.s.log.Printf("received an invalid transaction set from %v: %v", origin, err)
+		} else {
+			h.s.relayV2TransactionSet(basis, txns, origin) // non-blocking
 		}
 	}
-	return
-
-add:
-	if err := h.s.cm.AddV2PoolTransactions(txns); err != nil {
-		// Too risky to ban here (txns are probably just outdated), but at least
-		// log it if we think we're synced.
-		if b, ok := h.s.cm.Block(h.s.cm.Tip().ID); ok && time.Since(b.Timestamp) < 2*h.s.cm.TipState().BlockInterval() {
-			h.s.log.Printf("[WARN] received an invalid transaction set from %v: %v", origin, err)
-		}
-		return
-	}
-	h.s.relayV2TransactionSet(txns, origin) // non-blocking
 }
 
 func (s *Syncer) ban(p *gateway.Peer, err error) {
@@ -427,7 +407,7 @@ func (s *Syncer) ban(p *gateway.Peer, err error) {
 	if err != nil {
 		return // shouldn't happen
 	}
-	// Add a strike to each subnet.
+	// add a strike to each subnet
 	for subnet, maxStrikes := range map[string]int{
 		Subnet(host, "/32"): 2,   // 1.2.3.4:*
 		Subnet(host, "/24"): 8,   // 1.2.3.*
@@ -531,14 +511,14 @@ func (s *Syncer) relayV2BlockOutline(pb gateway.V2BlockOutline, origin *gateway.
 	}
 }
 
-func (s *Syncer) relayV2TransactionSet(txns []types.V2Transaction, origin *gateway.Peer) {
+func (s *Syncer) relayV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction, origin *gateway.Peer) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, p := range s.peers {
 		if p == origin || !p.SupportsV2() {
 			continue
 		}
-		go p.RelayV2TransactionSet(txns, s.config.RelayTransactionSetTimeout)
+		go p.RelayV2TransactionSet(index, txns, s.config.RelayTransactionSetTimeout)
 	}
 }
 
@@ -559,7 +539,7 @@ func (s *Syncer) allowConnect(peer string, inbound bool) error {
 			out++
 		}
 	}
-	// TODO: subnet-based limits.
+	// TODO: subnet-based limits
 	if inbound && in >= s.config.MaxInboundPeers {
 		return errors.New("too many inbound peers")
 	} else if !inbound && out >= s.config.MaxOutboundPeers {
@@ -588,9 +568,9 @@ func (s *Syncer) acceptLoop() error {
 		go func() {
 			defer conn.Close()
 			if err := s.allowConnect(conn.RemoteAddr().String(), true); err != nil {
-				s.log.Printf("[INFO] rejected inbound connection from %v: %v", conn.RemoteAddr(), err)
+				s.log.Printf("[ERROR] rejected inbound connection from %v: %v", conn.RemoteAddr(), err)
 			} else if p, err := gateway.Accept(conn, s.header); err != nil {
-				// s.log.Printf("[ERROR] failed to accept inbound connection from %v: %v", conn.RemoteAddr(), err)
+				s.log.Printf("ERROR] failed to accept inbound connection from %v: %v", conn.RemoteAddr(), err)
 			} else if s.alreadyConnected(p) {
 				s.log.Printf("[INFO] rejected inbound connection from %v: already connected", conn.RemoteAddr())
 			} else {
@@ -617,7 +597,7 @@ func (s *Syncer) peerLoop(closeChan <-chan struct{}) error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		for _, p := range s.pm.Peers() {
-			// TODO: don't include port in comparison.
+			// TODO: don't include port in comparison
 			if _, ok := s.peers[p]; !ok && time.Since(lastTried[p]) > 5*time.Minute {
 				peers = append(peers, p)
 			}
@@ -627,7 +607,7 @@ func (s *Syncer) peerLoop(closeChan <-chan struct{}) error {
 		return peers
 	}
 	discoverPeers := func() {
-		// Try up to three randomly-chosen peers.
+		// try up to three randomly-chosen peers
 		var peers []*gateway.Peer
 		s.mu.Lock()
 		for _, p := range s.peers {
@@ -784,7 +764,7 @@ func (s *Syncer) Run() error {
 	go func() { errChan <- s.syncLoop(closeChan) }()
 	err := <-errChan
 
-	// When one goroutine exits, shutdown and wait for the others.
+	// when one goroutine exits, shutdown and wait for the others
 	close(closeChan)
 	s.l.Close()
 	s.mu.Lock()
@@ -809,7 +789,7 @@ func (s *Syncer) Connect(addr string) (*gateway.Peer, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), s.config.ConnectTimeout)
 	defer cancel()
-	// Slightly gross polling hack so that we shutdown quickly.
+	// slightly gross polling hack so that we shutdown quickly
 	go func() {
 		for {
 			select {
@@ -840,7 +820,7 @@ func (s *Syncer) Connect(addr string) (*gateway.Peer, error) {
 	}
 	go s.runPeer(p)
 
-	// runPeer does this too, but doing it outside the goroutine prevents a race.
+	// runPeer does this too, but doing it outside the goroutine prevents a race
 	s.mu.Lock()
 	s.peers[p.Addr] = p
 	s.mu.Unlock()
@@ -860,8 +840,8 @@ func (s *Syncer) BroadcastV2BlockOutline(b gateway.V2BlockOutline) { s.relayV2Bl
 func (s *Syncer) BroadcastTransactionSet(txns []types.Transaction) { s.relayTransactionSet(txns, nil) }
 
 // BroadcastV2TransactionSet broadcasts a v2 transaction set to all peers.
-func (s *Syncer) BroadcastV2TransactionSet(txns []types.V2Transaction) {
-	s.relayV2TransactionSet(txns, nil)
+func (s *Syncer) BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction) {
+	s.relayV2TransactionSet(index, txns, nil)
 }
 
 // Peers returns the set of currently-connected peers.
@@ -905,7 +885,6 @@ func New(l net.Listener, cm ChainManager, pm PeerStore, header gateway.Header, o
 		MaxSendBlocks:              10,
 		PeerDiscoveryInterval:      5 * time.Second,
 		SyncInterval:               5 * time.Second,
-		Logger:                     log.New(io.Discard, "", 0),
 	}
 	for _, opt := range opts {
 		opt(&config)
