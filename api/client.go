@@ -151,6 +151,15 @@ func (c *Client) FundSF(txn types.Transaction, amount uint64, changeAddr, claimA
 	return
 }
 
+// Send sends the provided amount of SC to the provided address.
+func (c *Client) Send(amount string, dest string, v2 bool) error {
+	return c.c.POST("/wallet/send", WalletSendRequest{
+		Amount:      amount,
+		Destination: dest,
+		V2:          v2,
+	}, nil)
+}
+
 // NewClient returns a client that communicates with a hsd server listening
 // on the specified address.
 func NewClient(addr, password string) *Client {

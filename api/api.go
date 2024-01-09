@@ -78,6 +78,13 @@ type WalletFundResponse struct {
 	DependsOn   []types.Transaction `json:"dependsOn"`
 }
 
+// WalletSendRequest is the request type for /wallet/send.
+type WalletSendRequest struct {
+	Amount      string `json:"amount"`
+	Destination string `json:"destination"`
+	V2          bool   `json:"v2"`
+}
+
 // SeedSignRequest requests that a transaction be signed using the keys derived
 // from the given indices.
 type SeedSignRequest struct {

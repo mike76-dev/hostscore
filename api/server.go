@@ -45,6 +45,7 @@ type (
 	// A Wallet manages the wallet.
 	Wallet interface {
 		Address() types.Address
+		Key() types.PrivateKey
 		Events(offset, limit int) ([]wallet.Event, error)
 		UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElement, error)
 		Annotate(pool []types.Transaction) ([]wallet.PoolTransaction, error)
@@ -416,6 +417,126 @@ func (s *server) walletFundSFHandler(jc jape.Context) {
 	})
 }
 
+func (s *server) walletSendHandler(jc jape.Context) {
+	var wsr WalletSendRequest
+	if jc.Decode(&wsr) != nil {
+		return
+	}
+
+	amount, err := types.ParseCurrency(wsr.Amount)
+	if jc.Check("couldn't parse amount", err) != nil {
+		return
+	}
+	dest, err := types.ParseAddress(wsr.Destination)
+	if jc.Check("couldn't parse recipient address", err) != nil {
+		return
+	}
+
+	ourKey := s.w.Key()
+	ourUC := types.StandardUnlockConditions(ourKey.PublicKey())
+	ourAddr := s.w.Address()
+
+	cs := s.cm.TipState()
+	utxos, _, err := s.w.UnspentOutputs()
+	if jc.Check("couldn't get outputs", err) != nil {
+		return
+	}
+	txns, v2txns := s.cm.PoolTransactions(), s.cm.V2PoolTransactions()
+	inPool := make(map[types.Hash256]bool)
+	for _, ptxn := range txns {
+		for _, in := range ptxn.SiacoinInputs {
+			inPool[types.Hash256(in.ParentID)] = true
+		}
+	}
+	for _, ptxn := range v2txns {
+		for _, in := range ptxn.SiacoinInputs {
+			inPool[in.Parent.ID] = true
+		}
+	}
+
+	frand.Shuffle(len(utxos), reflect.Swapper(utxos))
+	var inputSum types.Currency
+	rem := utxos[:0]
+	for _, utxo := range utxos {
+		if inputSum.Cmp(amount) >= 0 {
+			break
+		} else if cs.Index.Height > utxo.MaturityHeight && !inPool[utxo.ID] {
+			rem = append(rem, utxo)
+			inputSum = inputSum.Add(utxo.SiacoinOutput.Value)
+		}
+	}
+	utxos = rem
+	if inputSum.Cmp(amount) < 0 {
+		jc.Error(errors.New("insufficient balance"), http.StatusBadRequest)
+		return
+	}
+	outputs := []types.SiacoinOutput{
+		{Address: dest, Value: amount},
+	}
+	minerFee := s.cm.RecommendedFee()
+	total := amount.Add(minerFee)
+	if total.Cmp(inputSum) > 0 {
+		jc.Error(errors.New("balance insufficient to include miner fee"), http.StatusBadRequest)
+		return
+	}
+	if change := inputSum.Sub(total); !change.IsZero() {
+		outputs = append(outputs, types.SiacoinOutput{
+			Address: ourAddr,
+			Value:   change,
+		})
+	}
+
+	if wsr.V2 {
+		txn := types.V2Transaction{
+			SiacoinInputs:  make([]types.V2SiacoinInput, len(utxos)),
+			SiacoinOutputs: outputs,
+			MinerFee:       minerFee,
+		}
+		for i, sce := range utxos {
+			txn.SiacoinInputs[i].Parent = sce
+			txn.SiacoinInputs[i].SatisfiedPolicy.Policy = types.SpendPolicy{
+				Type: types.PolicyTypeUnlockConditions(ourUC),
+			}
+		}
+		sigHash := cs.InputSigHash(txn)
+		for i := range utxos {
+			txn.SiacoinInputs[i].SatisfiedPolicy.Signatures = []types.Signature{ourKey.SignHash(sigHash)}
+		}
+		index := s.cm.TipState().Index
+		_, err := s.cm.AddV2PoolTransactions(index, []types.V2Transaction{txn})
+		if jc.Check("invalid v2 transaction set", err) != nil {
+			return
+		}
+		s.s.BroadcastV2TransactionSet(index, []types.V2Transaction{txn})
+		return
+	} else {
+		txn := types.Transaction{
+			SiacoinInputs:  make([]types.SiacoinInput, len(utxos)),
+			SiacoinOutputs: outputs,
+			Signatures:     make([]types.TransactionSignature, len(utxos)),
+		}
+		if !minerFee.IsZero() {
+			txn.MinerFees = append(txn.MinerFees, minerFee)
+		}
+		for i, sce := range utxos {
+			txn.SiacoinInputs[i] = types.SiacoinInput{
+				ParentID:         types.SiacoinOutputID(sce.ID),
+				UnlockConditions: ourUC,
+			}
+		}
+		cs := s.cm.TipState()
+		for i, sce := range utxos {
+			txn.Signatures[i] = wallet.StandardTransactionSignature(sce.ID)
+			wallet.SignTransaction(cs, &txn, i, ourKey)
+		}
+		_, err := s.cm.AddPoolTransactions([]types.Transaction{txn})
+		if jc.Check("invalid transaction set", err) != nil {
+			return
+		}
+		s.s.BroadcastTransactionSet([]types.Transaction{txn})
+	}
+}
+
 // NewServer returns an HTTP handler that serves the hsd API.
 func NewServer(cm ChainManager, s Syncer, w Wallet) http.Handler {
 	srv := server{
@@ -446,5 +567,6 @@ func NewServer(cm ChainManager, s Syncer, w Wallet) http.Handler {
 		"POST   /wallet/release": srv.walletReleaseHandler,
 		"POST   /wallet/fund":    srv.walletFundHandler,
 		"POST   /wallet/fundsf":  srv.walletFundSFHandler,
+		"POST   /wallet/send":    srv.walletSendHandler,
 	})
 }

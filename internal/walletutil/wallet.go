@@ -30,6 +30,11 @@ func (ew *EphemeralWallet) Address() types.Address {
 	return ew.s.Address()
 }
 
+// Key implements api.Wallet.
+func (ew *EphemeralWallet) Key() types.PrivateKey {
+	return ew.s.key
+}
+
 // Events implements api.Wallet.
 func (ew *EphemeralWallet) Events(offset, limit int) ([]wallet.Event, error) {
 	return ew.s.Events(offset, limit)
@@ -53,6 +58,11 @@ type JSONWallet struct {
 // Address implements api.Wallet.
 func (w *JSONWallet) Address() types.Address {
 	return w.s.Address()
+}
+
+// Key implements api.Wallet.
+func (w *JSONWallet) Key() types.PrivateKey {
+	return w.s.key
 }
 
 // Events implements api.Wallet.

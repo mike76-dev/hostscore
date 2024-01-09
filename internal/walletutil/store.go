@@ -14,6 +14,7 @@ import (
 type EphemeralStore struct {
 	tip    types.ChainIndex
 	addr   types.Address
+	key    types.PrivateKey
 	sces   map[types.SiacoinOutputID]types.SiacoinElement
 	sfes   map[types.SiafundOutputID]types.SiafundElement
 	events []wallet.Event
@@ -166,6 +167,7 @@ func NewEphemeralStore(seed string) *EphemeralStore {
 	}
 	return &EphemeralStore{
 		addr: types.StandardUnlockHash(sk.PublicKey()),
+		key:  sk,
 		sces: make(map[types.SiacoinOutputID]types.SiacoinElement),
 		sfes: make(map[types.SiafundOutputID]types.SiafundElement),
 	}
