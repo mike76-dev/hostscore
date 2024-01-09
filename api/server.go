@@ -40,6 +40,7 @@ type (
 		BroadcastTransactionSet(txns []types.Transaction)
 		BroadcastV2TransactionSet(index types.ChainIndex, txns []types.V2Transaction)
 		BroadcastV2BlockOutline(bo gateway.V2BlockOutline)
+		Synced() bool
 	}
 
 	// A Wallet manages the wallet.
@@ -67,7 +68,12 @@ func (s *server) consensusNetworkHandler(jc jape.Context) {
 }
 
 func (s *server) consensusTipHandler(jc jape.Context) {
-	jc.Encode(s.cm.TipState().Index)
+	resp := ConsensusTipResponse{
+		Height:  s.cm.TipState().Index.Height,
+		BlockID: s.cm.TipState().Index.ID,
+		Synced:  s.s.Synced(),
+	}
+	jc.Encode(resp)
 }
 
 func (s *server) consensusTipStateHandler(jc jape.Context) {

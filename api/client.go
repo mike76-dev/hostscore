@@ -44,7 +44,7 @@ func (c *Client) ConsensusNetwork() (resp *consensus.Network, err error) {
 }
 
 // ConsensusTip returns the current tip index.
-func (c *Client) ConsensusTip() (resp types.ChainIndex, err error) {
+func (c *Client) ConsensusTip() (resp ConsensusTipResponse, err error) {
 	err = c.c.GET("/consensus/tip", &resp)
 	return
 }

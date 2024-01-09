@@ -18,6 +18,13 @@ type GatewayPeer struct {
 	SyncDuration   time.Duration `json:"syncDuration"`
 }
 
+// ConsensusTipResponse is the response type for /consensus/tip.
+type ConsensusTipResponse struct {
+	Height  uint64        `json:"height"`
+	BlockID types.BlockID `json:"id"`
+	Synced  bool          `json:"synced"`
+}
+
 // TxpoolBroadcastRequest is the request type for /txpool/broadcast.
 type TxpoolBroadcastRequest struct {
 	Transactions   []types.Transaction   `json:"transactions"`

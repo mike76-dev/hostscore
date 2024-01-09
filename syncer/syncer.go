@@ -183,10 +183,26 @@ type Syncer struct {
 	config config
 	log    *persist.Logger // redundant, but convenient
 
-	mu      sync.Mutex
-	peers   map[string]*gateway.Peer
-	synced  map[string]bool
-	strikes map[string]int
+	mu        sync.Mutex
+	peers     map[string]*gateway.Peer
+	synced    map[string]bool
+	strikes   map[string]int
+	syncStart time.Time
+}
+
+// Synced returns if the syncer is synced to the blockchain.
+func (s *Syncer) Synced() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var count, total int
+	for _, ok := range s.synced {
+		total++
+		if ok {
+			count++
+		}
+	}
+
+	return count >= 5 || (count == total && total > 0 && time.Since(s.syncStart) >= 10*time.Minute)
 }
 
 type rpcHandler struct {
@@ -681,6 +697,7 @@ func (s *Syncer) syncLoop(closeChan <-chan struct{}) error {
 
 	ticker := time.NewTicker(s.config.SyncInterval)
 	defer ticker.Stop()
+	s.syncStart = time.Now()
 	sleep := func() bool {
 		select {
 		case <-ticker.C:
