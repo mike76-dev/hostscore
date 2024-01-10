@@ -233,7 +233,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	}
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(config.Dir))
 
-	w, err := walletutil.NewDBWallet(mdb, seed, config.Network, cm)
+	w, err := walletutil.NewDBWallet(mdb, seed, config.Network, config.Dir, cm)
 	if err != nil {
 		return nil, err
 	}

@@ -2,8 +2,10 @@ package walletutil
 
 import (
 	"database/sql"
+	"log"
 	"path/filepath"
 
+	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
@@ -100,8 +102,9 @@ func NewJSONWallet(seed, dir string, cm ChainManager) (*JSONWallet, error) {
 }
 
 type DBWallet struct {
-	s  *DBStore
-	cm ChainManager
+	s   *DBStore
+	cm  ChainManager
+	log *persist.Logger
 }
 
 // Address implements api.Wallet.
@@ -132,21 +135,27 @@ func (w *DBWallet) UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElem
 // Close shuts down the wallet.
 func (w *DBWallet) Close() {
 	w.s.close()
+	w.log.Close()
 }
 
 // NewDBWallet returns a wallet that is stored in a MyQL database.
-func NewDBWallet(db *sql.DB, seed, network string, cm ChainManager) (*DBWallet, error) {
+func NewDBWallet(db *sql.DB, seed, network, dir string, cm ChainManager) (*DBWallet, error) {
 	store, tip, err := NewDBStore(db, seed, network)
 	if err != nil {
 		return nil, err
+	}
+	l, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
+	if err != nil {
+		log.Fatal(err)
 	}
 	if err := cm.AddSubscriber(store, tip); err != nil {
 		return nil, err
 	}
 
 	w := &DBWallet{
-		cm: cm,
-		s:  store,
+		cm:  cm,
+		s:   store,
+		log: l,
 	}
 
 	return w, nil
