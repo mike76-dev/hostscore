@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/mike76-dev/hostscore/wallet"
@@ -89,12 +88,6 @@ func (c *Client) Address() (resp types.Address, err error) {
 // Balance returns the wallet balance.
 func (c *Client) Balance() (resp WalletBalanceResponse, err error) {
 	err = c.c.GET("/wallet/balance", &resp)
-	return
-}
-
-// Events returns all events relevant to the wallet.
-func (c *Client) Events(offset, limit int) (resp []wallet.Event, err error) {
-	err = c.c.GET(fmt.Sprintf("/wallet/events?offset=%d&limit=%d", offset, limit), &resp)
 	return
 }
 

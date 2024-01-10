@@ -47,7 +47,6 @@ type (
 	Wallet interface {
 		Address() types.Address
 		Key() types.PrivateKey
-		Events(offset, limit int) ([]wallet.Event, error)
 		UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElement, error)
 		Annotate(pool []types.Transaction) ([]wallet.PoolTransaction, error)
 	}
@@ -190,18 +189,6 @@ func (s *server) walletBalanceHandler(jc jape.Context) {
 		ImmatureSiacoins: immature,
 		Siafunds:         sf,
 	})
-}
-
-func (s *server) walletEventsHandler(jc jape.Context) {
-	offset, limit := 0, -1
-	if jc.DecodeForm("offset", &offset) != nil || jc.DecodeForm("limit", &limit) != nil {
-		return
-	}
-	events, err := s.w.Events(offset, limit)
-	if jc.Check("couldn't load events", err) != nil {
-		return
-	}
-	jc.Encode(events)
 }
 
 func (s *server) walletTxpoolHandler(jc jape.Context) {
@@ -566,7 +553,6 @@ func NewServer(cm ChainManager, s Syncer, w Wallet) http.Handler {
 
 		"GET    /wallet/address": srv.walletAddressHandlerGET,
 		"GET    /wallet/balance": srv.walletBalanceHandler,
-		"GET    /wallet/events":  srv.walletEventsHandler,
 		"GET    /wallet/txpool":  srv.walletTxpoolHandler,
 		"GET    /wallet/outputs": srv.walletOutputsHandler,
 		"POST   /wallet/reserve": srv.walletReserveHandler,

@@ -149,7 +149,7 @@ func (db *boltDB) Close() error {
 type node struct {
 	cm *chain.Manager
 	s  *syncer.Syncer
-	w  *walletutil.DBWallet
+	w  *walletutil.Wallet
 	db *sql.DB
 
 	Start func() (stop func())
@@ -233,7 +233,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	}
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(config.Dir))
 
-	w, err := walletutil.NewDBWallet(mdb, seed, config.Network, config.Dir, cm)
+	w, err := walletutil.NewWallet(mdb, seed, config.Network, config.Dir, cm)
 	if err != nil {
 		return nil, err
 	}
