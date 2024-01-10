@@ -1,6 +1,7 @@
 package walletutil
 
 import (
+	"database/sql"
 	"path/filepath"
 
 	"github.com/mike76-dev/hostscore/wallet"
@@ -91,6 +92,59 @@ func NewJSONWallet(seed, dir string, cm ChainManager) (*JSONWallet, error) {
 	}
 
 	w := &JSONWallet{
+		cm: cm,
+		s:  store,
+	}
+
+	return w, nil
+}
+
+type DBWallet struct {
+	s  *DBStore
+	cm ChainManager
+}
+
+// Address implements api.Wallet.
+func (w *DBWallet) Address() types.Address {
+	return w.s.Address()
+}
+
+// Key implements api.Wallet.
+func (w *DBWallet) Key() types.PrivateKey {
+	return w.s.key
+}
+
+// Events implements api.Wallet.
+func (w *DBWallet) Events(offset, limit int) ([]wallet.Event, error) {
+	return w.s.Events(offset, limit)
+}
+
+// Annotate implements api.Wallet.
+func (w *DBWallet) Annotate(txns []types.Transaction) ([]wallet.PoolTransaction, error) {
+	return w.s.Annotate(txns), nil
+}
+
+// UnspentOutputs implements api.Wallet.
+func (w *DBWallet) UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElement, error) {
+	return w.s.UnspentOutputs()
+}
+
+// Close shuts down the wallet.
+func (w *DBWallet) Close() {
+	w.s.close()
+}
+
+// NewDBWallet returns a wallet that is stored in a MyQL database.
+func NewDBWallet(db *sql.DB, seed, network string, cm ChainManager) (*DBWallet, error) {
+	store, tip, err := NewDBStore(db, seed, network)
+	if err != nil {
+		return nil, err
+	}
+	if err := cm.AddSubscriber(store, tip); err != nil {
+		return nil, err
+	}
+
+	w := &DBWallet{
 		cm: cm,
 		s:  store,
 	}
