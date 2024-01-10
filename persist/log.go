@@ -32,3 +32,7 @@ func NewFileLogger(logFilename string) (*Logger, error) {
 	printCommitHash(logger)
 	return &Logger{logger}, nil
 }
+
+func (logger *Logger) Close() {
+	logger.Println("[SHUTDOWN] logging has terminated")
+}

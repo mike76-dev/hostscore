@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
@@ -170,7 +172,11 @@ func WithSyncInterval(d time.Duration) Option {
 
 // WithLogger sets the logger used by a Syncer. The default is a logger that
 // outputs to io.Discard.
-func WithLogger(l *persist.Logger) Option {
+func WithLogger(dir string) Option {
+	l, err := persist.NewFileLogger(filepath.Join(dir, "syncer.log"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	return func(c *config) { c.Logger = l }
 }
 
@@ -791,6 +797,9 @@ func (s *Syncer) Run() error {
 		delete(s.peers, addr)
 	}
 	s.mu.Unlock()
+	if s.log != nil {
+		s.log.Close()
+	}
 	<-errChan
 	<-errChan
 	if errors.Is(err, net.ErrClosed) {

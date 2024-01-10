@@ -196,11 +196,6 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	mdb.SetMaxOpenConns(10)
 	mdb.SetMaxIdleConns(10)
 
-	logger, err := persist.NewFileLogger(filepath.Join(config.Dir, "syncer.log"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	bdb, err := bolt.Open(filepath.Join(config.Dir, "consensus.db"), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -236,7 +231,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	s := syncer.New(l, cm, ps, header, syncer.WithLogger(logger))
+	s := syncer.New(l, cm, ps, header, syncer.WithLogger(config.Dir))
 
 	w, err := walletutil.NewDBWallet(mdb, seed, config.Network, cm)
 	if err != nil {
