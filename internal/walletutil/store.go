@@ -187,11 +187,12 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 		sce.EncodeTo(e)
 		e.Flush()
 		_, err = s.tx.Exec(`
-			INSERT INTO wt_sces_`+s.network+` (scoid, bytes)
-			VALUES (?, ?)
-		`, sce.ID[:], buf.Bytes())
+			UPDATE wt_sces_`+s.network+`
+			SET bytes = ?
+			WHERE scoid = ?
+		`, buf.Bytes(), sce.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't add SC element proof")
+			err = utils.AddContext(err, "couldn't update SC element proof")
 		}
 	}
 	for id, sfe := range s.sfes {
@@ -202,11 +203,12 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 		sfe.EncodeTo(e)
 		e.Flush()
 		_, err = s.tx.Exec(`
-			INSERT INTO wt_sfes_`+s.network+` (sfoid, bytes)
-			VALUES (?, ?)
-		`, sfe.ID[:], buf.Bytes())
+			UPDATE wt_sfes_`+s.network+`
+			SET bytes = ?
+			WHERE sfoid = ?
+		`, buf.Bytes(), sfe.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't add SF element proof")
+			err = utils.AddContext(err, "couldn't update SF element proof")
 		}
 	}
 
@@ -287,11 +289,12 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 		sce.EncodeTo(e)
 		e.Flush()
 		_, err = s.tx.Exec(`
-			INSERT INTO wt_sces_`+s.network+` (scoid, bytes)
-			VALUES (?, ?)
-		`, sce.ID[:], buf.Bytes())
+			UPDATE wt_sces_`+s.network+`
+			SET bytes = ?
+			WHERE scoid = ?
+		`, buf.Bytes(), sce.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't add SC element proof")
+			err = utils.AddContext(err, "couldn't update SC element proof")
 		}
 	}
 	for id, sfe := range s.sfes {
@@ -302,11 +305,12 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 		sfe.EncodeTo(e)
 		e.Flush()
 		_, err = s.tx.Exec(`
-			INSERT INTO wt_sfes_`+s.network+` (sfoid, bytes)
-			VALUES (?, ?)
-		`, sfe.ID[:], buf.Bytes())
+			UPDATE wt_sfes_`+s.network+`
+			SET bytes = ?
+			WHERE sfoid = ?
+		`, buf.Bytes(), sfe.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't add SF element proof")
+			err = utils.AddContext(err, "couldn't update SF element proof")
 		}
 	}
 
