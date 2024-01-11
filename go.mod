@@ -5,7 +5,7 @@ go 1.21.3
 require (
 	github.com/go-sql-driver/mysql v1.7.1
 	go.etcd.io/bbolt v1.3.8
-	go.sia.tech/core v0.1.12-0.20240108182830-2ffe1cc4b4f0
+	go.sia.tech/core v0.1.12-0.20240110232951-32f441a776b4
 	golang.org/x/term v0.15.0
 	lukechampine.com/flagg v1.1.1
 	lukechampine.com/frand v1.4.2
