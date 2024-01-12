@@ -98,13 +98,15 @@ CREATE TABLE hdb_hosts_mainnet (
 );
 
 CREATE TABLE hdb_scans_mainnet (
-	id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-	public_key  BINARY(32) NOT NULL,
-	ran_at      BIGINT NOT NULL,
-	success     BOOL NOT NULL,
-	latency     DOUBLE,
-	settings    BLOB,
-	price_table BLOB,
+	id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+	public_key   BINARY(32) NOT NULL,
+	ran_at       BIGINT NOT NULL,
+	rhp2         BOOL NOT NULL,
+	rhp3         BOOL NOT NULL,
+	latency_rhp2 DOUBLE NOT NULL,
+	latency_rhp3 DOUBLE NOT NULL,
+	settings     BLOB NOT NULL,
+	price_table  BLOB NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
 );
@@ -138,13 +140,15 @@ CREATE TABLE hdb_hosts_zen (
 );
 
 CREATE TABLE hdb_scans_zen (
-	id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-	public_key  BINARY(32) NOT NULL,
-	ran_at      BIGINT NOT NULL,
-	success     BOOL NOT NULL,
-	latency     DOUBLE,
-	settings    BLOB,
-	price_table BLOB,
+	id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+	public_key   BINARY(32) NOT NULL,
+	ran_at       BIGINT NOT NULL,
+	rhp2         BOOL NOT NULL,
+	rhp3         BOOL NOT NULL,
+	latency_rhp2 DOUBLE NOT NULL,
+	latency_rhp3 DOUBLE NOT NULL,
+	settings     BLOB NOT NULL,
+	price_table  BLOB NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
 );
@@ -178,13 +182,15 @@ CREATE TABLE hdb_hosts_anagami (
 );
 
 CREATE TABLE hdb_scans_anagami (
-	id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-	public_key  BINARY(32) NOT NULL,
-	ran_at      BIGINT NOT NULL,
-	success     BOOL NOT NULL,
-	latency     DOUBLE,
-	settings    BLOB,
-	price_table BLOB,
+	id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+	public_key   BINARY(32) NOT NULL,
+	ran_at       BIGINT NOT NULL,
+	rhp2         BOOL NOT NULL,
+	rhp3         BOOL NOT NULL,
+	latency_rhp2 DOUBLE NOT NULL,
+	latency_rhp3 DOUBLE NOT NULL,
+	settings     BLOB NOT NULL,
+	price_table  BLOB NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_anagami(public_key)
 );

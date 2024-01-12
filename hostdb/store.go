@@ -200,7 +200,7 @@ func (s *hostDBStore) load() error {
 		s.mu.Unlock()
 
 		scanRows, err := s.db.Query(`
-			SELECT ran_at, success, latency, settings, price_table
+			SELECT ran_at, rhp2, rhp3, latency_rhp2, latency_rhp3, settings, price_table
 			FROM hdb_scans_`+s.network+`
 			WHERE public_key = ?
 			ORDER BY ran_at DESC
@@ -212,18 +212,20 @@ func (s *hostDBStore) load() error {
 		}
 		for scanRows.Next() {
 			var ra int64
-			var success bool
-			var l float64
+			var rhp2, rhp3 bool
+			var l2, l3 float64
 			var settings, pt []byte
-			if err := scanRows.Scan(&ra, &success, &l, &settings, &pt); err != nil {
+			if err := scanRows.Scan(&ra, &rhp2, &rhp3, &l2, &l3, &settings, &pt); err != nil {
 				scanRows.Close()
 				rows.Close()
 				return utils.AddContext(err, "couldn't load scan history")
 			}
 			scan := HostDBScan{
-				Timestamp: time.Unix(ra, 0),
-				Success:   success,
-				Latency:   time.Duration(l),
+				Timestamp:   time.Unix(ra, 0),
+				RHP2:        rhp2,
+				RHP3:        rhp3,
+				LatencyRHP2: time.Duration(l2) * time.Millisecond,
+				LatencyRHP3: time.Duration(l3) * time.Millisecond,
 			}
 			d := types.NewBufDecoder(settings)
 			utils.DecodeSettings(&scan.Settings, d)

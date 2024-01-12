@@ -34,11 +34,13 @@ type HostDBEntry struct {
 
 // A HostDBScan contains all information measured during a host scan.
 type HostDBScan struct {
-	Timestamp  time.Time            `json:"timestamp"`
-	Success    bool                 `json:"success"`
-	Latency    time.Duration        `json:"latency"`
-	Settings   rhpv2.HostSettings   `json:"settings"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+	Timestamp   time.Time            `json:"timestamp"`
+	RHP2        bool                 `json:"successRHP2"`
+	RHP3        bool                 `json:"successRHP3"`
+	LatencyRHP2 time.Duration        `json:"latencyRHP2"`
+	LatencyRHP3 time.Duration        `json:"latencyRHP3"`
+	Settings    rhpv2.HostSettings   `json:"settings"`
+	PriceTable  rhpv3.HostPriceTable `json:"priceTable"`
 }
 
 // The HostDB is a database of hosts.
