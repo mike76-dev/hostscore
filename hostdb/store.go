@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	siasync "github.com/mike76-dev/hostscore/internal/sync"
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/persist"
 	"go.sia.tech/core/chain"
@@ -25,8 +24,7 @@ type hostDBStore struct {
 	blockedHosts   map[types.PublicKey]struct{}
 	blockedDomains *blockedDomains
 
-	mu      sync.Mutex
-	threads siasync.ThreadGroup
+	mu sync.Mutex
 
 	tip types.ChainIndex
 }
@@ -108,7 +106,6 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 }
 
 func (s *hostDBStore) close() {
-	s.threads.Stop()
 	if s.tx != nil {
 		if err := s.tx.Commit(); err != nil {
 			s.log.Println("[ERROR] couldn't commit transaction:", err)
@@ -169,12 +166,6 @@ func (s *hostDBStore) load() error {
 	}
 
 	for rows.Next() {
-		select {
-		case <-s.threads.StopChan():
-			rows.Close()
-			return nil
-		default:
-		}
 		var id int
 		pk := make([]byte, 32)
 		var ks uint64
