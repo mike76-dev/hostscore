@@ -3,6 +3,7 @@ package hostdb
 import (
 	"database/sql"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 	s.hosts[host.PublicKey] = host
 	_, err := s.tx.Exec(`
 		INSERT INTO hdb_hosts_`+s.network+` (
+			id,
 			public_key,
 			first_seen,
 			known_since,
@@ -74,7 +76,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			ip_nets,
 			last_ip_change
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -88,6 +90,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			ip_nets = new.ip_nets,
 			last_ip_change = new.last_ip_change
 	`,
+		host.ID,
 		host.PublicKey[:],
 		host.FirstSeen.Unix(),
 		host.KnownSince,
@@ -146,6 +149,7 @@ func (s *hostDBStore) load() error {
 
 	rows, err = s.db.Query(`
 		SELECT
+			id,
 			public_key,
 			first_seen,
 			known_since,
@@ -171,17 +175,19 @@ func (s *hostDBStore) load() error {
 			return nil
 		default:
 		}
+		var id int
 		pk := make([]byte, 32)
 		var ks uint64
 		var b bool
 		var na, ip string
 		var ut, dt, fs, ls, lc int64
 		var si, fi float64
-		if err := rows.Scan(&pk, &fs, &ks, &b, &na, &ut, &dt, &si, &fi, &ls, &ip, &lc); err != nil {
+		if err := rows.Scan(&id, &pk, &fs, &ks, &b, &na, &ut, &dt, &si, &fi, &ls, &ip, &lc); err != nil {
 			rows.Close()
 			return utils.AddContext(err, "couldn't scan host data")
 		}
 		host := &HostDBEntry{
+			ID:                     id,
 			FirstSeen:              time.Unix(fs, 0),
 			KnownSince:             ks,
 			Blocked:                b,
@@ -289,6 +295,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			host := s.hosts[pk]
 			if host == nil {
 				host = &HostDBEntry{
+					ID:         len(s.hosts) + 1,
 					PublicKey:  pk,
 					FirstSeen:  cau.Block.Timestamp,
 					KnownSince: cau.State.Index.Height,
@@ -358,4 +365,25 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 // ProcessChainRevertUpdate implements chain.Subscriber.
 func (s *hostDBStore) ProcessChainRevertUpdate(_ *chain.RevertUpdate) error {
 	return nil
+}
+
+func (s *hostDBStore) getHosts(offset, limit int) (hosts []HostDBEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit == -1 {
+		limit = len(s.hosts)
+	}
+	if offset > len(s.hosts) {
+		offset = len(s.hosts)
+	}
+	if offset+limit > len(s.hosts) {
+		limit = len(s.hosts) - offset
+	}
+	for _, host := range s.hosts {
+		if host.ID > offset && host.ID <= offset+limit {
+			hosts = append(hosts, *host)
+		}
+	}
+	slices.SortFunc(hosts, func(a, b HostDBEntry) int { return a.ID - b.ID })
+	return
 }

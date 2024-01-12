@@ -16,33 +16,34 @@ import (
 // A HostDBEntry represents one host entry in the HostDB. It
 // aggregates the host's external settings and metrics with its public key.
 type HostDBEntry struct {
-	PublicKey              types.PublicKey
-	FirstSeen              time.Time
-	KnownSince             uint64
-	NetAddress             string
-	Blocked                bool
-	Uptime                 time.Duration
-	Downtime               time.Duration
-	ScanHistory            []HostDBScan
-	SuccessfulInteractions float64
-	FailedInteractions     float64
-	LastSeen               time.Time
-	IPNets                 []string
-	LastIPChange           time.Time
+	ID                     int             `json:"id"`
+	PublicKey              types.PublicKey `json:"publicKey"`
+	FirstSeen              time.Time       `json:"firstSeen"`
+	KnownSince             uint64          `json:"knownSince"`
+	NetAddress             string          `json:"netaddress"`
+	Blocked                bool            `json:"blocked"`
+	Uptime                 time.Duration   `json:"uptime"`
+	Downtime               time.Duration   `json:"downtime"`
+	ScanHistory            []HostDBScan    `json:"scanHistory"`
+	SuccessfulInteractions float64         `json:"successfulInteractions"`
+	FailedInteractions     float64         `json:"failedInteractions"`
+	LastSeen               time.Time       `json:"lastSeen"`
+	IPNets                 []string        `json:"ipNets"`
+	LastIPChange           time.Time       `json:"lastIPChange"`
 }
 
 // A HostDBScan contains all information measured during a host scan.
 type HostDBScan struct {
-	Timestamp  time.Time
-	Success    bool
-	Latency    time.Duration
-	Settings   rhpv2.HostSettings
-	PriceTable rhpv3.HostPriceTable
+	Timestamp  time.Time            `json:"timestamp"`
+	Success    bool                 `json:"success"`
+	Latency    time.Duration        `json:"latency"`
+	Settings   rhpv2.HostSettings   `json:"settings"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 }
 
 // The HostDB is a database of hosts.
 type HostDB struct {
-	cm ChainManager
+	cm *chain.Manager
 	s  *hostDBStore
 
 	/*initialScanComplete  bool
@@ -53,9 +54,9 @@ type HostDB struct {
 	scanningThreads      int*/
 }
 
-type ChainManager interface {
-	AddSubscriber(s chain.Subscriber, tip types.ChainIndex) error
-	BestIndex(height uint64) (types.ChainIndex, bool)
+// Hosts returns a list of HostDB's hosts.
+func (hdb *HostDB) Hosts(offset, limit int) (hosts []HostDBEntry) {
+	return hdb.s.getHosts(offset, limit)
 }
 
 // Close shuts down HostDB.
@@ -64,7 +65,7 @@ func (hdb *HostDB) Close() {
 }
 
 // NewHostDB returns a new HostDB.
-func NewHostDB(db *sql.DB, network, dir string, cm ChainManager) (*HostDB, <-chan error) {
+func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
 	l, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
 	if err != nil {

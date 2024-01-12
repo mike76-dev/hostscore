@@ -1,8 +1,10 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -151,6 +153,12 @@ func (c *Client) Send(amount string, dest string, v2 bool) error {
 		Destination: dest,
 		V2:          v2,
 	}, nil)
+}
+
+// Hosts returns a list of HostDB hosts.
+func (c *Client) Hosts(offset, limit int) (resp []hostdb.HostDBEntry, err error) {
+	err = c.c.GET(fmt.Sprintf("/hostdb/hosts?offset=%d&limit=%d", offset, limit), &resp)
+	return
 }
 
 // NewClient returns a client that communicates with a hsd server listening

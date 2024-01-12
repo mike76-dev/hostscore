@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/syncer"
 	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/consensus"
@@ -50,12 +51,18 @@ type (
 		UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElement, error)
 		Annotate(pool []types.Transaction) ([]wallet.PoolTransaction, error)
 	}
+
+	// A HostDB manages the hosts database.
+	HostDB interface {
+		Hosts(offset, limit int) (hosts []hostdb.HostDBEntry)
+	}
 )
 
 type server struct {
-	cm ChainManager
-	s  Syncer
-	w  Wallet
+	cm  ChainManager
+	s   Syncer
+	w   Wallet
+	hdb HostDB
 
 	// for walletsReserveHandler
 	mu   sync.Mutex
@@ -530,12 +537,22 @@ func (s *server) walletSendHandler(jc jape.Context) {
 	}
 }
 
+func (s *server) hostDBHostsHandler(jc jape.Context) {
+	offset, limit := 0, -1
+	if jc.DecodeForm("offset", &offset) != nil || jc.DecodeForm("limit", &limit) != nil {
+		return
+	}
+	hosts := s.hdb.Hosts(offset, limit)
+	jc.Encode(hosts)
+}
+
 // NewServer returns an HTTP handler that serves the hsd API.
-func NewServer(cm ChainManager, s Syncer, w Wallet) http.Handler {
+func NewServer(cm ChainManager, s Syncer, w Wallet, hdb HostDB) http.Handler {
 	srv := server{
 		cm:   cm,
 		s:    s,
 		w:    w,
+		hdb:  hdb,
 		used: make(map[types.Hash256]bool),
 	}
 	return jape.Mux(map[string]jape.Handler{
@@ -560,5 +577,7 @@ func NewServer(cm ChainManager, s Syncer, w Wallet) http.Handler {
 		"POST   /wallet/fund":    srv.walletFundHandler,
 		"POST   /wallet/fundsf":  srv.walletFundSFHandler,
 		"POST   /wallet/send":    srv.walletSendHandler,
+
+		"GET    /hostdb/hosts": srv.hostDBHostsHandler,
 	})
 }
