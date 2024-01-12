@@ -12,28 +12,12 @@ import (
 	"time"
 
 	"github.com/mike76-dev/hostscore/persist"
+	"go.sia.tech/core/chain"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
 	"lukechampine.com/frand"
 )
-
-// A ChainManager manages blockchain state.
-type ChainManager interface {
-	History() ([32]types.BlockID, error)
-	BlocksForHistory(history []types.BlockID, max uint64) ([]types.Block, uint64, error)
-	Block(id types.BlockID) (types.Block, bool)
-	State(id types.BlockID) (consensus.State, bool)
-	AddBlocks(blocks []types.Block) error
-	Tip() types.ChainIndex
-	TipState() consensus.State
-
-	PoolTransaction(txid types.TransactionID) (types.Transaction, bool)
-	AddPoolTransactions(txns []types.Transaction) (bool, error)
-	V2PoolTransaction(txid types.TransactionID) (types.V2Transaction, bool)
-	AddV2PoolTransactions(basis types.ChainIndex, txns []types.V2Transaction) (bool, error)
-	TransactionsForPartialBlock(missing []types.Hash256) ([]types.Transaction, []types.V2Transaction)
-}
 
 // PeerInfo contains metadata about a peer.
 type PeerInfo struct {
@@ -183,7 +167,7 @@ func WithLogger(dir string) Option {
 // A Syncer synchronizes blockchain data with peers.
 type Syncer struct {
 	l      net.Listener
-	cm     ChainManager
+	cm     *chain.Manager
 	pm     PeerStore
 	header gateway.Header
 	config config
@@ -906,7 +890,7 @@ func (s *Syncer) Addr() string {
 }
 
 // New returns a new Syncer.
-func New(l net.Listener, cm ChainManager, pm PeerStore, header gateway.Header, opts ...Option) *Syncer {
+func New(l net.Listener, cm *chain.Manager, pm PeerStore, header gateway.Header, opts ...Option) *Syncer {
 	config := config{
 		MaxInboundPeers:            8,
 		MaxOutboundPeers:           8,

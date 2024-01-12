@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
+	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
@@ -147,10 +149,11 @@ func (db *boltDB) Close() error {
 }
 
 type node struct {
-	cm *chain.Manager
-	s  *syncer.Syncer
-	w  *walletutil.Wallet
-	db *sql.DB
+	cm  *chain.Manager
+	s   *syncer.Syncer
+	w   *walletutil.Wallet
+	hdb *hostdb.HostDB
+	db  *sql.DB
 
 	Start func() (stop func())
 }
@@ -201,6 +204,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 		log.Fatal(err)
 	}
 	db := &boltDB{db: bdb}
+
 	dbstore, tipState, err := chain.NewDBStore(db, network, genesisBlock)
 	if err != nil {
 		return nil, err
@@ -238,11 +242,17 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 		return nil, err
 	}
 
+	hdb, errChan := hostdb.NewHostDB(mdb, config.Network, config.Dir, cm)
+	if err := utils.PeekErr(errChan); err != nil {
+		return nil, err
+	}
+
 	return &node{
-		cm: cm,
-		s:  s,
-		w:  w,
-		db: mdb,
+		cm:  cm,
+		s:   s,
+		w:   w,
+		hdb: hdb,
+		db:  mdb,
 		Start: func() func() {
 			ch := make(chan struct{})
 			go func() {
@@ -252,6 +262,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 			return func() {
 				l.Close()
 				<-ch
+				hdb.Close()
 				w.Close()
 				db.Close()
 				mdb.Close()
