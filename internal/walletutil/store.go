@@ -133,7 +133,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 				delete(s.sces, types.SiacoinOutputID(sce.ID))
 				_, err = s.tx.Exec("DELETE FROM wt_sces_"+s.network+" WHERE scoid = ?", sce.ID[:])
 				if err != nil {
-					err = utils.AddContext(err, "couldn't delete SC output")
+					s.log.Println("[ERROR] couldn't delete SC output:", err)
 				}
 			} else {
 				sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
@@ -147,7 +147,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 					VALUES (?, ?)
 				`, sce.ID[:], buf.Bytes())
 				if err != nil {
-					err = utils.AddContext(err, "couldn't add SC output")
+					s.log.Println("[ERROR] couldn't add SC output:", err)
 				}
 			}
 		}
@@ -158,7 +158,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 				delete(s.sfes, types.SiafundOutputID(sfe.ID))
 				_, err = s.tx.Exec("DELETE FROM wt_sfes_"+s.network+" WHERE sfoid = ?", sfe.ID[:])
 				if err != nil {
-					err = utils.AddContext(err, "couldn't delete SF output")
+					s.log.Println("[ERROR] couldn't delete SF output:", err)
 				}
 			} else {
 				sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
@@ -172,7 +172,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 					VALUES (?, ?)
 				`, sfe.ID[:], buf.Bytes())
 				if err != nil {
-					err = utils.AddContext(err, "couldn't add SF output")
+					s.log.Println("[ERROR] couldn't add SF output:", err)
 				}
 			}
 		}
@@ -192,7 +192,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 			WHERE scoid = ?
 		`, buf.Bytes(), sce.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't update SC element proof")
+			s.log.Println("[ERROR] couldn't update SC element proof:", err)
 		}
 	}
 	for id, sfe := range s.sfes {
@@ -208,7 +208,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 			WHERE sfoid = ?
 		`, buf.Bytes(), sfe.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't update SF element proof")
+			s.log.Println("[ERROR] couldn't update SF element proof:", err)
 		}
 	}
 
@@ -235,7 +235,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 				delete(s.sces, types.SiacoinOutputID(sce.ID))
 				_, err = s.tx.Exec("DELETE FROM wt_sces_"+s.network+" WHERE scoid = ?", sce.ID[:])
 				if err != nil {
-					err = utils.AddContext(err, "couldn't delete SC output")
+					s.log.Println("[ERROR] couldn't delete SC output:", err)
 				}
 			} else {
 				sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
@@ -249,7 +249,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 					VALUES (?, ?)
 				`, sce.ID[:], buf.Bytes())
 				if err != nil {
-					err = utils.AddContext(err, "couldn't add SC output")
+					s.log.Println("[ERROR] couldn't add SC output:", err)
 				}
 			}
 		}
@@ -260,7 +260,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 				delete(s.sfes, types.SiafundOutputID(sfe.ID))
 				_, err = s.tx.Exec("DELETE FROM wt_sfes_"+s.network+" WHERE sfoid = ?", sfe.ID[:])
 				if err != nil {
-					err = utils.AddContext(err, "couldn't delete SF output")
+					s.log.Println("[ERROR] couldn't delete SF output:", err)
 				}
 			} else {
 				sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
@@ -274,7 +274,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 					VALUES (?, ?)
 				`, sfe.ID[:], buf.Bytes())
 				if err != nil {
-					err = utils.AddContext(err, "couldn't add SF output")
+					s.log.Println("[ERROR] couldn't add SF output:", err)
 				}
 			}
 		}
@@ -294,7 +294,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 			WHERE scoid = ?
 		`, buf.Bytes(), sce.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't update SC element proof")
+			s.log.Println("[ERROR] couldn't update SC element proof:", err)
 		}
 	}
 	for id, sfe := range s.sfes {
@@ -310,13 +310,18 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 			WHERE sfoid = ?
 		`, buf.Bytes(), sfe.ID[:])
 		if err != nil {
-			err = utils.AddContext(err, "couldn't update SF element proof")
+			s.log.Println("[ERROR] couldn't update SF element proof:", err)
 		}
 	}
 
 	s.tip = cru.State.Index
 
-	return s.save()
+	err = s.save()
+	if err != nil {
+		s.log.Println("[ERROR] couldn't save wallet:", err)
+	}
+
+	return nil
 }
 
 func (s *DBStore) close() {
@@ -372,5 +377,9 @@ func NewDBStore(db *sql.DB, seed, network string, logger *persist.Logger) (*DBSt
 	}
 
 	err = s.load()
+	if err != nil {
+		s.log.Println("[ERROR] couldn't load wallet:", err)
+	}
+
 	return s, s.tip, err
 }
