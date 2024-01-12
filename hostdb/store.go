@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	siasync "github.com/mike76-dev/hostscore/internal/sync"
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/persist"
 	"go.sia.tech/core/chain"
@@ -24,8 +25,8 @@ type hostDBStore struct {
 	blockedHosts   map[types.PublicKey]struct{}
 	blockedDomains *blockedDomains
 
-	mu        sync.Mutex
-	closeChan chan struct{}
+	mu      sync.Mutex
+	threads siasync.ThreadGroup
 
 	tip types.ChainIndex
 }
@@ -37,7 +38,6 @@ func newHostDBStore(db *sql.DB, logger *persist.Logger, network string) (*hostDB
 		network:      network,
 		hosts:        make(map[types.PublicKey]*HostDBEntry),
 		blockedHosts: make(map[types.PublicKey]struct{}),
-		closeChan:    make(chan struct{}),
 	}
 	err := s.load()
 	if err != nil {
@@ -108,7 +108,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 }
 
 func (s *hostDBStore) close() {
-	s.closeChan <- struct{}{}
+	s.threads.Stop()
 	if s.tx != nil {
 		if err := s.tx.Commit(); err != nil {
 			s.log.Println("[ERROR] couldn't commit transaction:", err)
@@ -170,7 +170,7 @@ func (s *hostDBStore) load() error {
 
 	for rows.Next() {
 		select {
-		case <-s.closeChan:
+		case <-s.threads.StopChan():
 			rows.Close()
 			return nil
 		default:
