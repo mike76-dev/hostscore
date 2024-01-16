@@ -326,7 +326,7 @@ func (s *hostDBStore) load() error {
 				Latency:   time.Duration(latency) * time.Millisecond,
 				Error:     msg,
 			}
-			if success {
+			if len(settings) > 0 {
 				d := types.NewBufDecoder(settings)
 				utils.DecodeSettings(&scan.Settings, d)
 				if err := d.Err(); err != nil {
@@ -334,7 +334,9 @@ func (s *hostDBStore) load() error {
 					rows.Close()
 					return utils.AddContext(err, "couldn't decode host settings")
 				}
-				d = types.NewBufDecoder(pt)
+			}
+			if len(pt) > 0 {
+				d := types.NewBufDecoder(pt)
 				utils.DecodePriceTable(&scan.PriceTable, d)
 				if err := d.Err(); err != nil {
 					scanRows.Close()
@@ -406,7 +408,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				s.log.Println("[ERROR] couldn't update host:", err)
 				return err
 			}
-			if !exists && !host.Blocked {
+			if (!exists || s.hdb.syncer.Synced()) && !host.Blocked {
 				s.hdb.queueScan(host)
 			}
 		}
@@ -445,7 +447,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				s.log.Println("[ERROR] couldn't update host:", err)
 				return err
 			}
-			if !exists && !host.Blocked {
+			if (!exists || s.hdb.syncer.Synced()) && !host.Blocked {
 				s.hdb.queueScan(host)
 			}
 		}
@@ -495,7 +497,7 @@ func (s *hostDBStore) getHostsForScan() {
 		if host.Blocked {
 			continue
 		}
-		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= scanInterval {
+		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= calculateScanInterval(host) {
 			s.hdb.queueScan(host)
 		}
 	}
