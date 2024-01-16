@@ -306,3 +306,30 @@ func (hdb *HostDB) scanHosts() {
 		}
 	}
 }
+
+// calculateScanInterval calculates a scan interval depending on how long ago
+// the host was seen online.
+func calculateScanInterval(host *HostDBEntry) time.Duration {
+	if host.LastSeen.IsZero() {
+		return scanInterval // 30 minutes
+	}
+	if time.Since(host.LastSeen) > 28*24*time.Hour {
+		return scanInterval * 48 // 24 hours
+	}
+	if time.Since(host.LastSeen) > 14*24*time.Hour {
+		return scanInterval * 24 // 12 hours
+	}
+	if time.Since(host.LastSeen) > 7*24*time.Hour {
+		return scanInterval * 12 // 6 hours
+	}
+	if time.Since(host.LastSeen) > 3*24*time.Hour {
+		return scanInterval * 8 // 4 hours
+	}
+	if time.Since(host.LastSeen) > 2*24*time.Hour {
+		return scanInterval * 4 // 2 hours
+	}
+	if time.Since(host.LastSeen) > 24*time.Hour {
+		return scanInterval * 2 // 1 hour
+	}
+	return scanInterval // 30 minutes
+}
