@@ -1,6 +1,7 @@
 package hostdb
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"slices"
@@ -11,6 +12,8 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/persist"
 	"go.sia.tech/core/chain"
+	rhpv2 "go.sia.tech/core/rhp/v2"
+	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 )
 
@@ -19,6 +22,7 @@ type hostDBStore struct {
 	tx      *sql.Tx
 	log     *persist.Logger
 	network string
+	hdb     *HostDB
 
 	hosts          map[types.PublicKey]*HostDBEntry
 	blockedHosts   map[types.PublicKey]struct{}
@@ -68,13 +72,16 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			net_address,
 			uptime,
 			downtime,
-			failed_interactions,
-			successful_interactions,
 			last_seen,
 			ip_nets,
-			last_ip_change
+			last_ip_change,
+			historic_successful_interactions,
+			historic_failed_interactions,
+			recent_successful_interactions,
+			recent_failed_interactions,
+			last_update
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -82,11 +89,14 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			net_address = new.net_address,
 			uptime = new.uptime,
 			downtime = new.downtime,
-			failed_interactions = new.failed_interactions,
-			successful_interactions = new.successful_interactions,
 			last_seen = new.last_seen,
 			ip_nets = new.ip_nets,
-			last_ip_change = new.last_ip_change
+			last_ip_change = new.last_ip_change,
+			historic_successful_interactions = new.historic_successful_interactions,
+			historic_failed_interactions = new.historic_failed_interactions,
+			recent_successful_interactions = new.recent_successful_interactions,
+			recent_failed_interactions = new.recent_failed_interactions,
+			last_update = new.last_update
 	`,
 		host.ID,
 		host.PublicKey[:],
@@ -96,13 +106,94 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 		host.NetAddress,
 		int64(host.Uptime.Seconds()),
 		int64(host.Downtime.Seconds()),
-		host.SuccessfulInteractions,
-		host.FailedInteractions,
 		host.LastSeen.Unix(),
 		strings.Join(host.IPNets, ";"),
 		host.LastIPChange.Unix(),
+		host.Interactions.HistoricSuccesses,
+		host.Interactions.HistoricFailures,
+		host.Interactions.RecentSuccesses,
+		host.Interactions.RecentFailures,
+		host.Interactions.LastUpdate,
 	)
+	if err != nil {
+		return err
+	}
+
+	if err := s.tx.Commit(); err != nil {
+		return err
+	}
+
+	s.tx, err = s.db.Begin()
 	return err
+}
+
+// updateScanHistory adds a new scan to the host's scan history.
+func (s *hostDBStore) updateScanHistory(host HostDBEntry, scan HostDBScan) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tx == nil {
+		return errors.New("there is no transaction")
+	}
+
+	if scan.Success {
+		host.LastSeen = scan.Timestamp
+		if len(host.ScanHistory) > 0 {
+			host.Uptime += scan.Timestamp.Sub(host.ScanHistory[len(host.ScanHistory)-1].Timestamp)
+		}
+	} else {
+		if len(host.ScanHistory) > 0 {
+			host.Downtime += scan.Timestamp.Sub(host.ScanHistory[len(host.ScanHistory)-1].Timestamp)
+		}
+	}
+
+	// Limit the in-memory history to two most recent scans.
+	host.ScanHistory = append(host.ScanHistory, scan)
+	if len(host.ScanHistory) > 2 {
+		host.ScanHistory = host.ScanHistory[1:]
+	}
+
+	var settings, pt bytes.Buffer
+	if (scan.Settings != rhpv2.HostSettings{}) {
+		e := types.NewEncoder(&settings)
+		utils.EncodeSettings(&scan.Settings, e)
+		e.Flush()
+	}
+	if (scan.PriceTable != rhpv3.HostPriceTable{}) {
+		e := types.NewEncoder(&pt)
+		utils.EncodePriceTable(&scan.PriceTable, e)
+		e.Flush()
+	}
+
+	_, err := s.tx.Exec(`
+		INSERT INTO hdb_scans_`+s.network+` (
+			public_key,
+			ran_at,
+			success,
+			latency,
+			error,
+			settings,
+			price_table
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`,
+		host.PublicKey[:],
+		scan.Timestamp.Unix(),
+		scan.Success,
+		scan.Latency.Milliseconds(),
+		scan.Error,
+		settings.Bytes(),
+		pt.Bytes(),
+	)
+	if err != nil {
+		return utils.AddContext(err, "couldn't update scan history")
+	}
+
+	err = s.update(&host)
+	if err != nil {
+		return utils.AddContext(err, "couldn't update host")
+	}
+
+	return nil
 }
 
 func (s *hostDBStore) close() {
@@ -154,11 +245,14 @@ func (s *hostDBStore) load() error {
 			net_address,
 			uptime,
 			downtime,
-			successful_interactions,
-			failed_interactions,
 			last_seen,
 			ip_nets,
-			last_ip_change
+			last_ip_change,
+			historic_successful_interactions,
+			historic_failed_interactions,
+			recent_successful_interactions,
+			recent_failed_interactions,
+			last_update
 		FROM hdb_hosts_` + s.network,
 	)
 	if err != nil {
@@ -168,28 +262,33 @@ func (s *hostDBStore) load() error {
 	for rows.Next() {
 		var id int
 		pk := make([]byte, 32)
-		var ks uint64
+		var ks, lu uint64
 		var b bool
 		var na, ip string
 		var ut, dt, fs, ls, lc int64
-		var si, fi float64
-		if err := rows.Scan(&id, &pk, &fs, &ks, &b, &na, &ut, &dt, &si, &fi, &ls, &ip, &lc); err != nil {
+		var hsi, hfi, rsi, rfi float64
+		if err := rows.Scan(&id, &pk, &fs, &ks, &b, &na, &ut, &dt, &ls, &ip, &lc, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
 			rows.Close()
 			return utils.AddContext(err, "couldn't scan host data")
 		}
 		host := &HostDBEntry{
-			ID:                     id,
-			FirstSeen:              time.Unix(fs, 0),
-			KnownSince:             ks,
-			Blocked:                b,
-			NetAddress:             na,
-			Uptime:                 time.Duration(ut) * time.Second,
-			Downtime:               time.Duration(dt) * time.Second,
-			SuccessfulInteractions: si,
-			FailedInteractions:     fi,
-			LastSeen:               time.Unix(ls, 0),
-			IPNets:                 strings.Split(ip, ";"),
-			LastIPChange:           time.Unix(lc, 0),
+			ID:           id,
+			FirstSeen:    time.Unix(fs, 0),
+			KnownSince:   ks,
+			Blocked:      b,
+			NetAddress:   na,
+			Uptime:       time.Duration(ut) * time.Second,
+			Downtime:     time.Duration(dt) * time.Second,
+			LastSeen:     time.Unix(ls, 0),
+			IPNets:       strings.Split(ip, ";"),
+			LastIPChange: time.Unix(lc, 0),
+			Interactions: HostInteractions{
+				HistoricSuccesses: hsi,
+				HistoricFailures:  hfi,
+				RecentSuccesses:   rsi,
+				RecentFailures:    rfi,
+				LastUpdate:        lu,
+			},
 		}
 		copy(host.PublicKey[:], pk)
 		s.mu.Lock()
@@ -200,7 +299,7 @@ func (s *hostDBStore) load() error {
 		s.mu.Unlock()
 
 		scanRows, err := s.db.Query(`
-			SELECT ran_at, rhp2, rhp3, latency_rhp2, latency_rhp3, settings, price_table
+			SELECT ran_at, success, latency, error, settings, price_table
 			FROM hdb_scans_`+s.network+`
 			WHERE public_key = ?
 			ORDER BY ran_at DESC
@@ -212,34 +311,36 @@ func (s *hostDBStore) load() error {
 		}
 		for scanRows.Next() {
 			var ra int64
-			var rhp2, rhp3 bool
-			var l2, l3 float64
+			var success bool
+			var latency float64
+			var msg string
 			var settings, pt []byte
-			if err := scanRows.Scan(&ra, &rhp2, &rhp3, &l2, &l3, &settings, &pt); err != nil {
+			if err := scanRows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
 				scanRows.Close()
 				rows.Close()
 				return utils.AddContext(err, "couldn't load scan history")
 			}
 			scan := HostDBScan{
-				Timestamp:   time.Unix(ra, 0),
-				RHP2:        rhp2,
-				RHP3:        rhp3,
-				LatencyRHP2: time.Duration(l2) * time.Millisecond,
-				LatencyRHP3: time.Duration(l3) * time.Millisecond,
+				Timestamp: time.Unix(ra, 0),
+				Success:   success,
+				Latency:   time.Duration(latency) * time.Millisecond,
+				Error:     msg,
 			}
-			d := types.NewBufDecoder(settings)
-			utils.DecodeSettings(&scan.Settings, d)
-			if d.Err() != nil {
-				scanRows.Close()
-				rows.Close()
-				return utils.AddContext(err, "couldn't decode host settings")
-			}
-			d = types.NewBufDecoder(pt)
-			utils.DecodePriceTable(&scan.PriceTable, d)
-			if d.Err() != nil {
-				scanRows.Close()
-				rows.Close()
-				return utils.AddContext(err, "couldn't decode host price table")
+			if success {
+				d := types.NewBufDecoder(settings)
+				utils.DecodeSettings(&scan.Settings, d)
+				if err := d.Err(); err != nil {
+					scanRows.Close()
+					rows.Close()
+					return utils.AddContext(err, "couldn't decode host settings")
+				}
+				d = types.NewBufDecoder(pt)
+				utils.DecodePriceTable(&scan.PriceTable, d)
+				if err := d.Err(); err != nil {
+					scanRows.Close()
+					rows.Close()
+					return utils.AddContext(err, "couldn't decode host price table")
+				}
 			}
 			host.ScanHistory = append(host.ScanHistory, scan)
 		}
@@ -285,8 +386,8 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				// Local netaddress.
 				continue
 			}
-			host := s.hosts[pk]
-			if host == nil {
+			host, exists := s.hosts[pk]
+			if !exists {
 				host = &HostDBEntry{
 					ID:         len(s.hosts) + 1,
 					PublicKey:  pk,
@@ -304,6 +405,9 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			if err != nil {
 				s.log.Println("[ERROR] couldn't update host:", err)
 				return err
+			}
+			if !exists && !host.Blocked {
+				s.hdb.queueScan(host)
 			}
 		}
 	}
@@ -323,8 +427,8 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				// Local netaddress.
 				continue
 			}
-			host := s.hosts[pk]
-			if host == nil {
+			host, exists := s.hosts[pk]
+			if !exists {
 				host = &HostDBEntry{
 					PublicKey:  pk,
 					KnownSince: cau.State.Index.Height,
@@ -340,6 +444,9 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			if err != nil {
 				s.log.Println("[ERROR] couldn't update host:", err)
 				return err
+			}
+			if !exists && !host.Blocked {
+				s.hdb.queueScan(host)
 			}
 		}
 	}
@@ -379,4 +486,34 @@ func (s *hostDBStore) getHosts(offset, limit int) (hosts []HostDBEntry) {
 	}
 	slices.SortFunc(hosts, func(a, b HostDBEntry) int { return a.ID - b.ID })
 	return
+}
+
+func (s *hostDBStore) getHostsForScan() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, host := range s.hosts {
+		if host.Blocked {
+			continue
+		}
+		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= scanInterval {
+			s.hdb.queueScan(host)
+		}
+	}
+}
+
+func (s *hostDBStore) findHost(pk types.PublicKey) (host HostDBEntry, exists bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry := s.hosts[pk]
+	if entry != nil {
+		host = *entry
+		exists = true
+	}
+	return
+}
+
+func (s *hostDBStore) updateHost(host *HostDBEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.update(host)
 }

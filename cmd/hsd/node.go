@@ -242,7 +242,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 		return nil, err
 	}
 
-	hdb, errChan := hostdb.NewHostDB(mdb, config.Network, config.Dir, cm)
+	hdb, errChan := hostdb.NewHostDB(mdb, config.Network, config.Dir, cm, s)
 	if err := utils.PeekErr(errChan); err != nil {
 		return nil, err
 	}
