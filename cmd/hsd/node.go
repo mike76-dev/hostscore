@@ -15,11 +15,11 @@ import (
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
-	bolt "go.etcd.io/bbolt"
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils"
+	"go.sia.tech/coreutils/chain"
 )
 
 // Network bootstraps.
@@ -86,68 +86,6 @@ var (
 	}
 )
 
-type boltDB struct {
-	tx *bolt.Tx
-	db *bolt.DB
-}
-
-func (db *boltDB) newTx() (err error) {
-	if db.tx == nil {
-		db.tx, err = db.db.Begin(true)
-	}
-	return
-}
-
-func (db *boltDB) Bucket(name []byte) chain.DBBucket {
-	if err := db.newTx(); err != nil {
-		panic(err)
-	}
-
-	b := db.tx.Bucket(name)
-	if b == nil {
-		return nil
-	}
-	return b
-}
-
-func (db *boltDB) CreateBucket(name []byte) (chain.DBBucket, error) {
-	if err := db.newTx(); err != nil {
-		return nil, err
-	}
-
-	b, err := db.tx.CreateBucket(name)
-	if b == nil {
-		return nil, err
-	}
-	return b, nil
-}
-
-func (db *boltDB) Flush() error {
-	if db.tx == nil {
-		return nil
-	}
-
-	if err := db.tx.Commit(); err != nil {
-		return err
-	}
-	db.tx = nil
-	return nil
-}
-
-func (db *boltDB) Cancel() {
-	if db.tx == nil {
-		return
-	}
-
-	db.tx.Rollback()
-	db.tx = nil
-}
-
-func (db *boltDB) Close() error {
-	db.Flush()
-	return db.db.Close()
-}
-
 type node struct {
 	cm  *chain.Manager
 	s   *syncer.Syncer
@@ -172,8 +110,6 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	case "anagami":
 		network, genesisBlock = TestnetAnagami()
 		bootstrapPeers = anagamiBootstrap
-		testnetFixDBTree(config.Dir)
-		testnetFixMultiproofs(config.Dir)
 	default:
 		return nil, errors.New("invalid network: must be one of 'mainnet', 'zen', or 'anagami'")
 	}
@@ -199,13 +135,11 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	mdb.SetMaxOpenConns(10)
 	mdb.SetMaxIdleConns(10)
 
-	bdb, err := bolt.Open(filepath.Join(config.Dir, "consensus.db"), 0600, nil)
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(config.Dir, "consensus.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	db := &boltDB{db: bdb}
-
-	dbstore, tipState, err := chain.NewDBStore(db, network, genesisBlock)
+	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesisBlock)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +198,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 				<-ch
 				hdb.Close()
 				w.Close()
-				db.Close()
+				bdb.Close()
 				mdb.Close()
 			}
 		},

@@ -127,14 +127,12 @@ func main() {
 	rootCmd.StringVar(&network, "network", "mainnet", "network to connect to")
 	versionCmd := flagg.New("version", versionUsage)
 	seedCmd := flagg.New("seed", seedUsage)
-	dbDeleteCmd := flagg.New("deletev1", "delete v1 state from consensus.db")
 
 	cmd := flagg.Parse(flagg.Tree{
 		Cmd: rootCmd,
 		Sub: []flagg.Tree{
 			{Cmd: versionCmd},
 			{Cmd: seedCmd},
-			{Cmd: dbDeleteCmd},
 		},
 	})
 
@@ -222,12 +220,5 @@ func main() {
 		addr := types.StandardUnlockHash(sk.PublicKey())
 		fmt.Printf("Seed:    %s\n", seed)
 		fmt.Printf("Address: %v\n", strings.TrimPrefix(addr.String(), "addr:"))
-
-	case dbDeleteCmd:
-		if len(cmd.Args()) != 0 {
-			cmd.Usage()
-			return
-		}
-		testnetDeleteV1DBState(config.Dir)
 	}
 }

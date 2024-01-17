@@ -7,8 +7,8 @@ import (
 
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/wallet"
-	"go.sia.tech/core/chain"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 type ChainManager interface {

@@ -10,10 +10,10 @@ import (
 	siasync "github.com/mike76-dev/hostscore/internal/sync"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
-	"go.sia.tech/core/chain"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 )
 
 // A HostDBEntry represents one host entry in the HostDB. It
