@@ -301,7 +301,7 @@ func (h *rpcHandler) RelayTransactionSet(txns []types.Transaction, origin *gatew
 			// too risky to ban here (txns are probably just outdated), but at least
 			// log it if we think we're synced
 			if b, ok := h.s.cm.Block(h.s.cm.Tip().ID); ok && time.Since(b.Timestamp) < 2*h.s.cm.TipState().BlockInterval() {
-				h.s.log.Printf("received an invalid transaction set from %v: %v", origin, err)
+				h.s.log.Printf("[ERROR] received an invalid transaction set from %v: %v", origin, err)
 			}
 		} else {
 			h.s.relayTransactionSet(txns, origin) // non-blocking
@@ -398,7 +398,7 @@ func (h *rpcHandler) RelayV2TransactionSet(basis types.ChainIndex, txns []types.
 		h.s.ban(origin, errors.New("peer sent an empty transaction set"))
 	} else if known, err := h.s.cm.AddV2PoolTransactions(basis, txns); !known {
 		if err != nil {
-			h.s.log.Printf("received an invalid transaction set from %v: %v", origin, err)
+			h.s.log.Printf("[ERROR] received an invalid transaction set from %v: %v", origin, err)
 		} else {
 			h.s.relayV2TransactionSet(basis, txns, origin) // non-blocking
 		}
@@ -577,7 +577,7 @@ func (s *Syncer) acceptLoop() error {
 			if err := s.allowConnect(conn.RemoteAddr().String(), true); err != nil {
 				s.log.Printf("[ERROR] rejected inbound connection from %v: %v", conn.RemoteAddr(), err)
 			} else if p, err := gateway.Accept(conn, s.header); err != nil {
-				s.log.Printf("ERROR] failed to accept inbound connection from %v: %v", conn.RemoteAddr(), err)
+				s.log.Printf("[ERROR] failed to accept inbound connection from %v: %v", conn.RemoteAddr(), err)
 			} else if s.alreadyConnected(p) {
 				s.log.Printf("[INFO] rejected inbound connection from %v: already connected", conn.RemoteAddr())
 			} else {
