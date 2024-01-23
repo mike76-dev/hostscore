@@ -171,12 +171,12 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	}
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(config.Dir))
 
-	w, err := walletutil.NewWallet(mdb, seed, config.Network, config.Dir, cm)
+	w, err := walletutil.NewWallet(mdb, seed, config.Network, config.Dir, cm, s)
 	if err != nil {
 		return nil, err
 	}
 
-	hdb, errChan := hostdb.NewHostDB(mdb, config.Network, config.Dir, cm, s)
+	hdb, errChan := hostdb.NewHostDB(mdb, config.Network, config.Dir, cm, s, w)
 	if err := utils.PeekErr(errChan); err != nil {
 		return nil, err
 	}

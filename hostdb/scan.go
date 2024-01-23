@@ -13,7 +13,6 @@ import (
 )
 
 const (
-	scanBatchSize     = 1000
 	scanInterval      = 30 * time.Minute
 	scanCheckInterval = 30 * time.Second
 	maxScanThreads    = 100
@@ -139,8 +138,8 @@ func (hdb *HostDB) scanHost(host HostDBEntry) {
 	var settings rhpv2.HostSettings
 	var pt rhpv3.HostPriceTable
 	var latency time.Duration
-	var errMsg string
 	var success bool
+	var errMsg string
 	var start time.Time
 	err = func() error {
 		timeout := 2 * time.Minute
@@ -188,24 +187,23 @@ func (hdb *HostDB) scanHost(host HostDBEntry) {
 				})
 				return err
 			})
-			if err != nil {
-				errMsg = err.Error()
-			}
-		} else {
-			errMsg = err.Error()
 		}
 
-		return nil
+		return err
 	}()
-	if err != nil && strings.Contains(errMsg, "operation was canceled") {
+	if err != nil && strings.Contains(err.Error(), "operation was canceled") {
 		// Shutting down.
 		return
 	}
-	if err != nil {
+	if err == nil {
+		hdb.IncrementSuccessfulInteractions(&host)
+	} else {
+		errMsg = err.Error()
+		hdb.IncrementFailedInteractions(&host)
 		hdb.log.Printf("[DEBUG] scan of %s failed: %v\n", host.NetAddress, err)
 	}
 
-	scan := HostDBScan{
+	scan := HostScan{
 		Timestamp:  start,
 		Success:    success,
 		Latency:    latency,
@@ -271,7 +269,11 @@ func (hdb *HostDB) probeHosts(scanPool <-chan HostDBEntry) {
 		}
 
 		// There appears to be internet connectivity, continue with the scan.
-		hdb.scanHost(host)
+		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= calculateScanInterval(&host) {
+			hdb.scanHost(host)
+		} else if hdb.syncer.Synced() {
+			hdb.benchmarkHost(host)
+		}
 	}
 }
 

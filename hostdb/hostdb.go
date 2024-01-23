@@ -8,6 +8,7 @@ import (
 	"time"
 
 	siasync "github.com/mike76-dev/hostscore/internal/sync"
+	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
 	rhpv2 "go.sia.tech/core/rhp/v2"
@@ -19,19 +20,23 @@ import (
 // A HostDBEntry represents one host entry in the HostDB. It
 // aggregates the host's external settings and metrics with its public key.
 type HostDBEntry struct {
-	ID           int              `json:"id"`
-	PublicKey    types.PublicKey  `json:"publicKey"`
-	FirstSeen    time.Time        `json:"firstSeen"`
-	KnownSince   uint64           `json:"knownSince"`
-	NetAddress   string           `json:"netaddress"`
-	Blocked      bool             `json:"blocked"`
-	Uptime       time.Duration    `json:"uptime"`
-	Downtime     time.Duration    `json:"downtime"`
-	ScanHistory  []HostDBScan     `json:"scanHistory"`
-	Interactions HostInteractions `json:"interactions"`
-	LastSeen     time.Time        `json:"lastSeen"`
-	IPNets       []string         `json:"ipNets"`
-	LastIPChange time.Time        `json:"lastIPChange"`
+	ID            int                        `json:"id"`
+	PublicKey     types.PublicKey            `json:"publicKey"`
+	FirstSeen     time.Time                  `json:"firstSeen"`
+	KnownSince    uint64                     `json:"knownSince"`
+	NetAddress    string                     `json:"netaddress"`
+	Blocked       bool                       `json:"blocked"`
+	Uptime        time.Duration              `json:"uptime"`
+	Downtime      time.Duration              `json:"downtime"`
+	ScanHistory   []HostScan                 `json:"scanHistory"`
+	LastBenchmark HostBenchmark              `json:"lastBenchmark"`
+	Interactions  HostInteractions           `json:"interactions"`
+	LastSeen      time.Time                  `json:"lastSeen"`
+	IPNets        []string                   `json:"ipNets"`
+	LastIPChange  time.Time                  `json:"lastIPChange"`
+	Revision      types.FileContractRevision `json:"-"`
+	Settings      rhpv2.HostSettings         `json:"settings"`
+	PriceTable    rhpv3.HostPriceTable       `json:"priceTable"`
 }
 
 // HostInteractions combines historic and recent interactions.
@@ -43,8 +48,8 @@ type HostInteractions struct {
 	LastUpdate        uint64  `json:"-"`
 }
 
-// A HostDBScan contains all information measured during a host scan.
-type HostDBScan struct {
+// A HostScan contains all information measured during a host scan.
+type HostScan struct {
 	Timestamp  time.Time            `json:"timestamp"`
 	Success    bool                 `json:"success"`
 	Latency    time.Duration        `json:"latency"`
@@ -53,11 +58,21 @@ type HostDBScan struct {
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 }
 
+// A HostBenchmark contains the information measured during a host benchmark.
+type HostBenchmark struct {
+	Timestamp     time.Time `json:"timestamp"`
+	Success       bool      `json:"success"`
+	Error         string    `json:"error"`
+	UploadSpeed   float64   `json:"uploadSpeed"`
+	DownloadSpeed float64   `json:"downloadSpeed"`
+}
+
 // The HostDB is a database of hosts.
 type HostDB struct {
 	syncer *syncer.Syncer
 	cm     *chain.Manager
 	s      *hostDBStore
+	w      *walletutil.Wallet
 	log    *persist.Logger
 
 	tg siasync.ThreadGroup
@@ -84,7 +99,7 @@ func (hdb *HostDB) Close() {
 }
 
 // NewHostDB returns a new HostDB.
-func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *syncer.Syncer) (*HostDB, <-chan error) {
+func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *syncer.Syncer, w *walletutil.Wallet) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
 	l, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
 	if err != nil {
@@ -108,6 +123,7 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 	hdb := &HostDB{
 		syncer:  syncer,
 		cm:      cm,
+		w:       w,
 		s:       store,
 		log:     l,
 		scanMap: make(map[types.PublicKey]struct{}),

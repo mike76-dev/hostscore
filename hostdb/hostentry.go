@@ -1,11 +1,7 @@
 package hostdb
 
 import (
-	"errors"
 	"math"
-
-	"github.com/mike76-dev/hostscore/internal/utils"
-	"go.sia.tech/core/types"
 )
 
 const (
@@ -80,39 +76,23 @@ func (hdb *HostDB) updateHostHistoricInteractions(host *HostDBEntry) {
 }
 
 // IncrementSuccessfulInteractions increments the number of successful
-// interactions with a host for a given key.
-func (hdb *HostDB) IncrementSuccessfulInteractions(key types.PublicKey) error {
-	if err := hdb.tg.Add(); err != nil {
-		return utils.AddContext(err, "error adding hostdb threadgroup")
-	}
-	defer hdb.tg.Done()
-
+// interactions with a given host.
+func (hdb *HostDB) IncrementSuccessfulInteractions(host *HostDBEntry) error {
 	hdb.mu.Lock()
 	defer hdb.mu.Unlock()
 
-	// Fetch the host.
-	host, exists := hdb.s.findHost(key)
-	if !exists {
-		return errors.New("host not found in the database")
-	}
-
 	// Update historic values if necessary.
-	hdb.updateHostHistoricInteractions(&host)
+	hdb.updateHostHistoricInteractions(host)
 
 	// Increment the successful interactions.
 	host.Interactions.RecentSuccesses++
 
-	return hdb.s.updateHost(&host)
+	return nil
 }
 
 // IncrementFailedInteractions increments the number of failed interactions with
-// a host for a given key.
-func (hdb *HostDB) IncrementFailedInteractions(key types.PublicKey) error {
-	if err := hdb.tg.Add(); err != nil {
-		return utils.AddContext(err, "error adding hostdb threadgroup")
-	}
-	defer hdb.tg.Done()
-
+// a given host.
+func (hdb *HostDB) IncrementFailedInteractions(host *HostDBEntry) error {
 	hdb.mu.Lock()
 	defer hdb.mu.Unlock()
 
@@ -121,17 +101,11 @@ func (hdb *HostDB) IncrementFailedInteractions(key types.PublicKey) error {
 		return nil
 	}
 
-	// Fetch the host.
-	host, exists := hdb.s.findHost(key)
-	if !exists {
-		return errors.New("host not found in the database")
-	}
-
 	// Update historic values if necessary.
-	hdb.updateHostHistoricInteractions(&host)
+	hdb.updateHostHistoricInteractions(host)
 
 	// Increment the failed interactions.
 	host.Interactions.RecentFailures++
 
-	return hdb.s.updateHost(&host)
+	return nil
 }

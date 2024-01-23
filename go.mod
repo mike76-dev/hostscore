@@ -14,6 +14,7 @@ require (
 require (
 	github.com/aead/chacha20 v0.0.0-20180709150244-8b13a72661da // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
+	gitlab.com/NebulousLabs/encoding v0.0.0-20200604091946-456c3dc907fe // indirect
 	gitlab.com/NebulousLabs/merkletree v0.0.0-20200118113624-07fbf710afc4 // indirect
 	go.sia.tech/coreutils v0.0.0-20240117014706-6d8493622b68 // indirect
 	go.sia.tech/mux v1.2.0 // indirect

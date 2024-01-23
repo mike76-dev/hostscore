@@ -130,18 +130,6 @@ func (c *Client) Fund(txn types.Transaction, amount types.Currency, changeAddr t
 	err = c.c.POST("/wallet/fund", WalletFundRequest{
 		Transaction:   txn,
 		Amount:        amount,
-		ChangeAddress: changeAddr,
-	}, &resp)
-	return
-}
-
-// FundSF funds a siafund transaction.
-func (c *Client) FundSF(txn types.Transaction, amount uint64, changeAddr, claimAddr types.Address) (resp WalletFundResponse, err error) {
-	err = c.c.POST("/wallet/fundsf", WalletFundSFRequest{
-		Transaction:   txn,
-		Amount:        amount,
-		ChangeAddress: changeAddr,
-		ClaimAddress:  claimAddr,
 	}, &resp)
 	return
 }

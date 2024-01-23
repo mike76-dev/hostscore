@@ -65,17 +65,8 @@ type WalletReleaseRequest struct {
 
 // WalletFundRequest is the request type for /wallet/fund.
 type WalletFundRequest struct {
-	Transaction   types.Transaction `json:"transaction"`
-	Amount        types.Currency    `json:"amount"`
-	ChangeAddress types.Address     `json:"changeAddress"`
-}
-
-// WalletFundSFRequest is the request type for /wallet/fundsf.
-type WalletFundSFRequest struct {
-	Transaction   types.Transaction `json:"transaction"`
-	Amount        uint64            `json:"amount"`
-	ChangeAddress types.Address     `json:"changeAddress"`
-	ClaimAddress  types.Address     `json:"claimAddress"`
+	Transaction types.Transaction `json:"transaction"`
+	Amount      types.Currency    `json:"amount"`
 }
 
 // WalletFundResponse is the response type for /wallet/fund.

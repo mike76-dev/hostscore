@@ -68,14 +68,17 @@ CREATE TABLE wt_sfes_anagami (
 
 /* hostdb */
 DROP TABLE IF EXISTS hdb_scans_mainnet;
+DROP TABLE IF EXISTS hdb_benchmarks_mainnet;
 DROP TABLE IF EXISTS hdb_hosts_mainnet;
 DROP TABLE IF EXISTS hdb_domains_mainnet;
 DROP TABLE IF EXISTS hdb_tip_mainnet;
 DROP TABLE IF EXISTS hdb_scans_zen;
+DROP TABLE IF EXISTS hdb_benchmarks_zen;
 DROP TABLE IF EXISTS hdb_hosts_zen;
 DROP TABLE IF EXISTS hdb_domains_zen;
 DROP TABLE IF EXISTS hdb_tip_zen;
 DROP TABLE IF EXISTS hdb_scans_anagami;
+DROP TABLE IF EXISTS hdb_benchmarks_anagami;
 DROP TABLE IF EXISTS hdb_hosts_anagami;
 DROP TABLE IF EXISTS hdb_domains_anagami;
 DROP TABLE IF EXISTS hdb_tip_anagami;
@@ -97,6 +100,7 @@ CREATE TABLE hdb_hosts_mainnet (
 	recent_successful_interactions   DOUBLE NOT NULL,
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
+	revision       BLOB,
 	PRIMARY KEY (id)
 );
 
@@ -109,6 +113,18 @@ CREATE TABLE hdb_scans_mainnet (
 	error        TEXT NOT NULL,
 	settings     BLOB,
 	price_table  BLOB,
+	PRIMARY KEY (id),
+	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
+);
+
+CREATE TABLE hdb_benchmarks_mainnet (
+	id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+	public_key     BINARY(32) NOT NULL,
+	ran_at         BIGINT NOT NULL,
+	success        BOOL NOT NULL,
+	upload_speed   DOUBLE NOT NULL,
+	download_speed DOUBLE NOT NULL,
+	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
 );
@@ -141,6 +157,7 @@ CREATE TABLE hdb_hosts_zen (
 	recent_successful_interactions   DOUBLE NOT NULL,
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
+	revision       BLOB,
 	PRIMARY KEY (id)
 );
 
@@ -153,6 +170,18 @@ CREATE TABLE hdb_scans_zen (
 	error        TEXT NOT NULL,
 	settings     BLOB,
 	price_table  BLOB,
+	PRIMARY KEY (id),
+	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
+);
+
+CREATE TABLE hdb_benchmarks_zen (
+	id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+	public_key     BINARY(32) NOT NULL,
+	ran_at         BIGINT NOT NULL,
+	success        BOOL NOT NULL,
+	upload_speed   DOUBLE NOT NULL,
+	download_speed DOUBLE NOT NULL,
+	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
 );
@@ -185,6 +214,7 @@ CREATE TABLE hdb_hosts_anagami (
 	recent_successful_interactions   DOUBLE NOT NULL,
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
+	revision       BLOB,
 	PRIMARY KEY (id)
 );
 
@@ -197,6 +227,18 @@ CREATE TABLE hdb_scans_anagami (
 	error        TEXT NOT NULL,
 	settings     BLOB,
 	price_table  BLOB,
+	PRIMARY KEY (id),
+	FOREIGN KEY (public_key) REFERENCES hdb_hosts_anagami(public_key)
+);
+
+CREATE TABLE hdb_benchmarks_anagami (
+	id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+	public_key     BINARY(32) NOT NULL,
+	ran_at         BIGINT NOT NULL,
+	success        BOOL NOT NULL,
+	upload_speed   DOUBLE NOT NULL,
+	download_speed DOUBLE NOT NULL,
+	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_anagami(public_key)
 );
