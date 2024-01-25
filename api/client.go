@@ -2,7 +2,6 @@ package api
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/wallet"
@@ -15,12 +14,6 @@ import (
 type Client struct {
 	c jape.Client
 	n *consensus.Network // for ConsensusTipState
-}
-
-// TxpoolBroadcast broadcasts a set of transaction to the network.
-func (c *Client) TxpoolBroadcast(txns []types.Transaction, v2txns []types.V2Transaction) (err error) {
-	err = c.c.POST("/txpool/broadcast", TxpoolBroadcastRequest{txns, v2txns}, nil)
-	return
 }
 
 // TxpoolTransactions returns all transactions in the transaction pool.
@@ -69,18 +62,6 @@ func (c *Client) SyncerPeers() (resp []GatewayPeer, err error) {
 	return
 }
 
-// SyncerConnect adds the address as a peer of the syncer.
-func (c *Client) SyncerConnect(addr string) (err error) {
-	err = c.c.POST("/syncer/connect", addr, nil)
-	return
-}
-
-// SyncerBroadcastBlock broadcasts a block to all peers.
-func (c *Client) SyncerBroadcastBlock(b types.Block) (err error) {
-	err = c.c.POST("/syncer/broadcast/block", b, nil)
-	return
-}
-
 // Address returns the address controlled by the wallet.
 func (c *Client) Address() (resp types.Address, err error) {
 	err = c.c.GET("/wallet/address", &resp)
@@ -104,43 +85,6 @@ func (c *Client) Outputs() (sc []types.SiacoinElement, sf []types.SiafundElement
 	var resp WalletOutputsResponse
 	err = c.c.GET("/wallet/outputs", &resp)
 	return resp.SiacoinOutputs, resp.SiafundOutputs, err
-}
-
-// Reserve reserves a set outputs for use in a transaction.
-func (c *Client) Reserve(sc []types.SiacoinOutputID, sf []types.SiafundOutputID, duration time.Duration) (err error) {
-	err = c.c.POST("/wallet/reserve", WalletReserveRequest{
-		SiacoinOutputs: sc,
-		SiafundOutputs: sf,
-		Duration:       duration,
-	}, nil)
-	return
-}
-
-// Release releases a set of previously-reserved outputs.
-func (c *Client) Release(sc []types.SiacoinOutputID, sf []types.SiafundOutputID) (err error) {
-	err = c.c.POST("/wallet/release", WalletReleaseRequest{
-		SiacoinOutputs: sc,
-		SiafundOutputs: sf,
-	}, nil)
-	return
-}
-
-// Fund funds a siacoin transaction.
-func (c *Client) Fund(txn types.Transaction, amount types.Currency, changeAddr types.Address) (resp WalletFundResponse, err error) {
-	err = c.c.POST("/wallet/fund", WalletFundRequest{
-		Transaction:   txn,
-		Amount:        amount,
-	}, &resp)
-	return
-}
-
-// Send sends the provided amount of SC to the provided address.
-func (c *Client) Send(amount string, dest string, v2 bool) error {
-	return c.c.POST("/wallet/send", WalletSendRequest{
-		Amount:      amount,
-		Destination: dest,
-		V2:          v2,
-	}, nil)
 }
 
 // Hosts returns a list of HostDB hosts.
