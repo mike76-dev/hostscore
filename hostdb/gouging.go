@@ -10,9 +10,6 @@ import (
 )
 
 const (
-	maxBaseRPCPriceVsBandwidth      = uint64(40e3)
-	maxSectorAccessPriceVsBandwidth = uint64(400e3)
-
 	contractDuration = 7 * 144 // 7 days
 )
 
@@ -49,7 +46,7 @@ func checkGouging(height uint64, hs *rhpv2.HostSettings, pt *rhpv3.HostPriceTabl
 		if err = checkDownloadGougingRHPv3(*pt); err != nil {
 			return
 		}
-		if err = checkPriceGougingPT(height, *pt); err != nil {
+		if err = checkPriceGougingPT(*pt); err != nil {
 			return
 		}
 		if err = checkUploadGougingRHPv3(*pt); err != nil {
@@ -68,21 +65,10 @@ func checkPriceGougingHS(hs rhpv2.HostSettings) error {
 	if hs.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
 		return fmt.Errorf("base RPC price exceeds limit: %v > %v", hs.BaseRPCPrice, maxBaseRPCPrice)
 	}
-	maxBaseRPCPrice := hs.DownloadBandwidthPrice.Mul64(maxBaseRPCPriceVsBandwidth)
-	if hs.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
-		return errors.New("base RPC price too high")
-	}
 
 	// Check sector access price.
 	if hs.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
 		return fmt.Errorf("sector access price exceeds limit: %v > %v", hs.SectorAccessPrice, maxSectorAccessPrice)
-	}
-	if hs.DownloadBandwidthPrice.IsZero() {
-		hs.DownloadBandwidthPrice = types.NewCurrency64(1)
-	}
-	maxSAPrice := hs.DownloadBandwidthPrice.Mul64(maxSectorAccessPriceVsBandwidth)
-	if hs.SectorAccessPrice.Cmp(maxSAPrice) > 0 {
-		return errors.New("sector access price too high")
 	}
 
 	// Check max storage price.
@@ -99,7 +85,7 @@ func checkPriceGougingHS(hs rhpv2.HostSettings) error {
 }
 
 // checkPriceGougingPT checks the price table.
-func checkPriceGougingPT(height uint64, pt rhpv3.HostPriceTable) error {
+func checkPriceGougingPT(pt rhpv3.HostPriceTable) error {
 	// Check base RPC price.
 	if maxBaseRPCPrice.Cmp(pt.InitBaseCost) < 0 {
 		return fmt.Errorf("init base cost exceeds limit: %v > %v", pt.InitBaseCost, maxBaseRPCPrice)
@@ -113,11 +99,6 @@ func checkPriceGougingPT(height uint64, pt rhpv3.HostPriceTable) error {
 	// Check storage price.
 	if pt.WriteStoreCost.Cmp(maxStoragePrice) > 0 {
 		return fmt.Errorf("storage price exceeds limit: %v > %v", pt.WriteStoreCost, maxStoragePrice)
-	}
-
-	// Check block height.
-	if pt.HostBlockHeight < height-6 {
-		return errors.New("host is not synced")
 	}
 
 	return nil
