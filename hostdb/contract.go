@@ -18,9 +18,9 @@ func (hdb *HostDB) calculateFunding(settings rhpv2.HostSettings) (funding, colla
 	numBenchmarks := contractDuration / (6 * benchmarkInterval / time.Hour)
 	dataSize := benchmarkBatchSize * numBenchmarks
 
-	downloadCost = downloadCost.Mul64(uint64(dataSize)).Div64(contractDuration)
-	uploadCost = uploadCost.Mul64(uint64(dataSize)).Div64(contractDuration)
-	storageCost = storageCost.Mul64(uint64(dataSize))
+	downloadCost = downloadCost.Mul64(uint64(dataSize))
+	uploadCost = uploadCost.Mul64(uint64(dataSize))
+	storageCost = storageCost.Mul64(uint64(dataSize)).Mul64(contractDuration)
 
 	txnFee := hdb.cm.RecommendedFee().Mul64(2048).Mul64(3)
 	contractCost = contractCost.Add(txnFee)
@@ -36,7 +36,7 @@ func (hdb *HostDB) calculateFunding(settings rhpv2.HostSettings) (funding, colla
 
 // prepareContractFormation creates a new contract and a formation
 // transaction set.
-func (hdb *HostDB) prepareContractFormation(host HostDBEntry) ([]types.Transaction, error) {
+func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transaction, error) {
 	blockHeight := hdb.s.tip.Height
 	settings := host.Settings
 	ourKey := hdb.w.Key()
