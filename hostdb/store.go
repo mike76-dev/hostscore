@@ -137,7 +137,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 }
 
 // updateScanHistory adds a new scan to the host's scan history.
-func (s *hostDBStore) updateScanHistory(host HostDBEntry, scan HostScan) error {
+func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tx == nil {
@@ -199,7 +199,7 @@ func (s *hostDBStore) updateScanHistory(host HostDBEntry, scan HostScan) error {
 		return utils.AddContext(err, "couldn't update scan history")
 	}
 
-	err = s.update(&host)
+	err = s.update(host)
 	if err != nil {
 		return utils.AddContext(err, "couldn't update host")
 	}
@@ -208,7 +208,7 @@ func (s *hostDBStore) updateScanHistory(host HostDBEntry, scan HostScan) error {
 }
 
 // updateBenchmarks adds a new benchmark to the host's benchmark history.
-func (s *hostDBStore) updateBenchmarks(host HostDBEntry, benchmark HostBenchmark) error {
+func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmark) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tx == nil {
@@ -223,22 +223,24 @@ func (s *hostDBStore) updateBenchmarks(host HostDBEntry, benchmark HostBenchmark
 			success,
 			upload_speed,
 			download_speed,
+			ttfb,
 			error
 		)
-		VALUES (?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`,
 		host.PublicKey[:],
 		benchmark.Timestamp.Unix(),
 		benchmark.Success,
 		benchmark.UploadSpeed,
 		benchmark.DownloadSpeed,
+		benchmark.TTFB.Seconds(),
 		benchmark.Error,
 	)
 	if err != nil {
 		return utils.AddContext(err, "couldn't update benchmarks")
 	}
 
-	err = s.update(&host)
+	err = s.update(host)
 	if err != nil {
 		return utils.AddContext(err, "couldn't update host")
 	}
@@ -489,15 +491,15 @@ func (s *hostDBStore) load() error {
 
 		var ra int64
 		var success bool
-		var ul, dl float64
+		var ul, dl, ttfb float64
 		var msg string
 		err = s.db.QueryRow(`
-			SELECT ran_at, success, upload_speed, download_speed, error
+			SELECT ran_at, success, upload_speed, download_speed, ttfb, error
 			FROM hdb_benchmarks_`+s.network+`
 			WHERE public_key = ?
 			ORDER BY ran_at DESC
 			LIMIT 1
-		`, pk).Scan(&ra, &success, &ul, &dl, &msg)
+		`, pk).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			rows.Close()
 			return utils.AddContext(err, "couldn't load benchmarks")
@@ -508,6 +510,7 @@ func (s *hostDBStore) load() error {
 				Success:       success,
 				UploadSpeed:   ul,
 				DownloadSpeed: dl,
+				TTFB:          time.Duration(ttfb * float64(time.Second)),
 				Error:         msg,
 			}
 		}

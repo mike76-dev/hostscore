@@ -124,6 +124,7 @@ CREATE TABLE hdb_benchmarks_mainnet (
 	success        BOOL NOT NULL,
 	upload_speed   DOUBLE NOT NULL,
 	download_speed DOUBLE NOT NULL,
+	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
@@ -181,6 +182,7 @@ CREATE TABLE hdb_benchmarks_zen (
 	success        BOOL NOT NULL,
 	upload_speed   DOUBLE NOT NULL,
 	download_speed DOUBLE NOT NULL,
+	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
@@ -238,6 +240,7 @@ CREATE TABLE hdb_benchmarks_anagami (
 	success        BOOL NOT NULL,
 	upload_speed   DOUBLE NOT NULL,
 	download_speed DOUBLE NOT NULL,
+	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_anagami(public_key)

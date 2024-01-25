@@ -144,7 +144,7 @@ func RPCReadSector(ctx context.Context, t *rhpv3.Transport, w io.Writer, pt rhpv
 }
 
 // RPCAppendSector calls the ExecuteProgram RPC with an AppendSector instruction.
-func RPCAppendSector(ctx context.Context, t *rhpv3.Transport, renterKey types.PrivateKey, pt rhpv3.HostPriceTable, rev types.FileContractRevision, payment rhpv3.PaymentMethod, sector *[rhpv2.SectorSize]byte) (sectorRoot types.Hash256, cost types.Currency, err error) {
+func RPCAppendSector(ctx context.Context, t *rhpv3.Transport, renterKey types.PrivateKey, pt rhpv3.HostPriceTable, rev *types.FileContractRevision, payment rhpv3.PaymentMethod, sector *[rhpv2.SectorSize]byte) (sectorRoot types.Hash256, cost types.Currency, err error) {
 	// Sanity check revision first.
 	if rev.RevisionNumber == math.MaxUint64 {
 		return types.Hash256{}, types.ZeroCurrency, errMaxRevisionReached
@@ -159,7 +159,7 @@ func RPCAppendSector(ctx context.Context, t *rhpv3.Transport, renterKey types.Pr
 			SectorDataOffset: 0,
 			ProofRequired:    true,
 		}},
-		ProgramData: (*sector)[:],
+		ProgramData: sector[:],
 	}
 
 	var cancellationToken types.Specifier
@@ -177,7 +177,7 @@ func RPCAppendSector(ctx context.Context, t *rhpv3.Transport, renterKey types.Pr
 	}
 
 	// Compute expected collateral and refund.
-	expectedCost, expectedCollateral, expectedRefund, err := uploadSectorCost(pt, rev.WindowEnd)
+	expectedCost, expectedCollateral, expectedRefund, err := UploadSectorCost(pt, rev.WindowEnd)
 	if err != nil {
 		return types.Hash256{}, types.ZeroCurrency, err
 	}
@@ -236,22 +236,21 @@ func RPCAppendSector(ctx context.Context, t *rhpv3.Transport, renterKey types.Pr
 	}
 
 	// Finalize the program with a new revision.
-	newRevision := rev
-	newValid, newMissed, err := updateRevisionOutputs(&newRevision, types.ZeroCurrency, collateral)
+	newValid, newMissed, err := updateRevisionOutputs(rev, types.ZeroCurrency, collateral)
 	if err != nil {
 		return types.Hash256{}, types.ZeroCurrency, err
 	}
-	newRevision.Filesize += rhpv2.SectorSize
-	newRevision.RevisionNumber++
-	newRevision.FileMerkleRoot = executeResp.NewMerkleRoot
+	rev.Filesize += rhpv2.SectorSize
+	rev.RevisionNumber++
+	rev.FileMerkleRoot = executeResp.NewMerkleRoot
 
 	h := types.NewHasher()
-	newRevision.EncodeTo(h.E)
+	rev.EncodeTo(h.E)
 	finalizeReq := rhpv3.RPCFinalizeProgramRequest{
 		Signature:         renterKey.SignHash(h.Sum()),
 		ValidProofValues:  newValid,
 		MissedProofValues: newMissed,
-		RevisionNumber:    newRevision.RevisionNumber,
+		RevisionNumber:    rev.RevisionNumber,
 	}
 
 	var finalizeResp rhpv3.RPCFinalizeProgramResponse
@@ -296,9 +295,9 @@ func padBandwidth(pt rhpv3.HostPriceTable, rc rhpv3.ResourceCost) rhpv3.Resource
 	return rc
 }
 
-// uploadSectorCost returns an overestimate for the cost of uploading a sector
+// UploadSectorCost returns an overestimate for the cost of uploading a sector
 // to a host.
-func uploadSectorCost(pt rhpv3.HostPriceTable, windowEnd uint64) (cost, collateral, storage types.Currency, _ error) {
+func UploadSectorCost(pt rhpv3.HostPriceTable, windowEnd uint64) (cost, collateral, storage types.Currency, _ error) {
 	rc := pt.BaseCost()
 	rc = rc.Add(pt.AppendSectorCost(windowEnd - pt.HostBlockHeight))
 	rc = padBandwidth(pt, rc)
@@ -310,6 +309,21 @@ func uploadSectorCost(pt rhpv3.HostPriceTable, windowEnd uint64) (cost, collater
 		return types.ZeroCurrency, types.ZeroCurrency, types.ZeroCurrency, errors.New("overflow occurred while adding leeway to read sector cost")
 	}
 	return cost.Div64(10), collateral, rc.Storage, nil
+}
+
+// ReadSectorCost returns an overestimate for the cost of reading a sector from a host.
+func ReadSectorCost(pt rhpv3.HostPriceTable, length uint64) (types.Currency, error) {
+	rc := pt.BaseCost()
+	rc = rc.Add(pt.ReadSectorCost(length))
+	rc = padBandwidth(pt, rc)
+	cost, _ := rc.Total()
+
+	// Overestimate the cost by 10%.
+	cost, overflow := cost.Mul64WithOverflow(11)
+	if overflow {
+		return types.ZeroCurrency, errors.New("overflow occurred while adding leeway to read sector cost")
+	}
+	return cost.Div64(10), nil
 }
 
 // updateRevisionOutputs updates the revision outputs with new values.
@@ -345,4 +359,46 @@ func updateRevisionOutputs(rev *types.FileContractRevision, cost, collateral typ
 
 	return []types.Currency{rev.ValidProofOutputs[0].Value, rev.ValidProofOutputs[1].Value},
 		[]types.Currency{rev.MissedProofOutputs[0].Value, rev.MissedProofOutputs[1].Value, rev.MissedProofOutputs[2].Value}, nil
+}
+
+// RPCLatestRevision fetches the latest revision from the host.
+func RPCLatestRevision(ctx context.Context, t *rhpv3.Transport, contractID types.FileContractID) (types.FileContractRevision, error) {
+	s := t.DialStream()
+	defer s.Close()
+
+	s.SetDeadline(time.Now().Add(15 * time.Second))
+	req := rhpv3.RPCLatestRevisionRequest{
+		ContractID: contractID,
+	}
+	var resp rhpv3.RPCLatestRevisionResponse
+	pt := rhpv3.HostPriceTable{}
+	if err := s.WriteRequest(rhpv3.RPCLatestRevisionID, &req); err != nil {
+		return types.FileContractRevision{}, err
+	} else if err := s.ReadResponse(&resp, 4096); err != nil {
+		return types.FileContractRevision{}, err
+	} else if err := s.WriteResponse(&pt.UID); err != nil {
+		return types.FileContractRevision{}, err
+	}
+	return resp.Revision, nil
+}
+
+// RPCFundAccount funds an ephemeral account.
+func RPCFundAccount(ctx context.Context, t *rhpv3.Transport, payment rhpv3.PaymentMethod, account rhpv3.Account, settingsID rhpv3.SettingsID) (err error) {
+	s := t.DialStream()
+	defer s.Close()
+
+	req := rhpv3.RPCFundAccountRequest{
+		Account: account,
+	}
+	var resp rhpv3.RPCFundAccountResponse
+	if err := s.WriteRequest(rhpv3.RPCFundAccountID, &settingsID); err != nil {
+		return err
+	} else if err := s.WriteResponse(&req); err != nil {
+		return err
+	} else if err := processPayment(s, payment); err != nil {
+		return err
+	} else if err := s.ReadResponse(&resp, 65536); err != nil {
+		return err
+	}
+	return nil
 }

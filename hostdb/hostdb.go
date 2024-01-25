@@ -60,11 +60,12 @@ type HostScan struct {
 
 // A HostBenchmark contains the information measured during a host benchmark.
 type HostBenchmark struct {
-	Timestamp     time.Time `json:"timestamp"`
-	Success       bool      `json:"success"`
-	Error         string    `json:"error"`
-	UploadSpeed   float64   `json:"uploadSpeed"`
-	DownloadSpeed float64   `json:"downloadSpeed"`
+	Timestamp     time.Time     `json:"timestamp"`
+	Success       bool          `json:"success"`
+	Error         string        `json:"error"`
+	UploadSpeed   float64       `json:"uploadSpeed"`
+	DownloadSpeed float64       `json:"downloadSpeed"`
+	TTFB          time.Duration `json:"ttfb"`
 }
 
 // The HostDB is a database of hosts.
@@ -78,10 +79,11 @@ type HostDB struct {
 	tg siasync.ThreadGroup
 	mu sync.Mutex
 
-	scanning             bool
+	benchmarking         bool
 	initialScanLatencies []time.Duration
-	scanList             []HostDBEntry
-	scanMap              map[types.PublicKey]struct{}
+	scanList             []*HostDBEntry
+	benchmarkList        []*HostDBEntry
+	scanMap              map[types.PublicKey]bool
 	scanThreads          int
 }
 
@@ -126,7 +128,7 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 		w:       w,
 		s:       store,
 		log:     l,
-		scanMap: make(map[types.PublicKey]struct{}),
+		scanMap: make(map[types.PublicKey]bool),
 	}
 	hdb.s.hdb = hdb
 
