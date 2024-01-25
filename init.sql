@@ -101,6 +101,8 @@ CREATE TABLE hdb_hosts_mainnet (
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
 	revision       BLOB,
+	settings       BLOB,
+	price_table    BLOB,
 	PRIMARY KEY (id)
 );
 
@@ -159,6 +161,8 @@ CREATE TABLE hdb_hosts_zen (
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
 	revision       BLOB,
+	settings       BLOB,
+	price_table    BLOB,
 	PRIMARY KEY (id)
 );
 
@@ -217,6 +221,8 @@ CREATE TABLE hdb_hosts_anagami (
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
 	revision       BLOB,
+	settings       BLOB,
+	price_table    BLOB,
 	PRIMARY KEY (id)
 );
 
