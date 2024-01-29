@@ -79,7 +79,7 @@ func (w *Wallet) Close() {
 	w.s.close()
 }
 
-// NewWallet returns a wallet that is stored in a MyQL database.
+// NewWallet returns a wallet that is stored in a MySQL database.
 func NewWallet(db *sql.DB, seed, network, dir string, cm *chain.Manager, syncer *syncer.Syncer) (*Wallet, error) {
 	l, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
 	if err != nil {

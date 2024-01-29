@@ -58,6 +58,12 @@ type HostScan struct {
 	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
 }
 
+// ScanHistory combines the scan history with the host's public key.
+type ScanHistory struct {
+	HostScan
+	PublicKey types.PublicKey `json:"publicKey"`
+}
+
 // A HostBenchmark contains the information measured during a host benchmark.
 type HostBenchmark struct {
 	Timestamp     time.Time     `json:"timestamp"`
@@ -66,6 +72,12 @@ type HostBenchmark struct {
 	UploadSpeed   float64       `json:"uploadSpeed"`
 	DownloadSpeed float64       `json:"downloadSpeed"`
 	TTFB          time.Duration `json:"ttfb"`
+}
+
+// BenchmarkHistory combines the benchmark history with the host's public key.
+type BenchmarkHistory struct {
+	HostBenchmark
+	PublicKey types.PublicKey `json:"publicKey"`
 }
 
 // The HostDB is a database of hosts.
@@ -90,6 +102,26 @@ type HostDB struct {
 // Hosts returns a list of HostDB's hosts.
 func (hdb *HostDB) Hosts(offset, limit int) (hosts []HostDBEntry) {
 	return hdb.s.getHosts(offset, limit)
+}
+
+// Scans returns the host's scan history.
+func (hdb *HostDB) Scans(pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
+	return hdb.s.getScans(pk, from, to)
+}
+
+// ScanHistory returns the host's scan history.
+func (hdb *HostDB) ScanHistory(from, to time.Time) (history []ScanHistory, err error) {
+	return hdb.s.getScanHistory(from, to)
+}
+
+// Benchmarks returns the host's benchmark history.
+func (hdb *HostDB) Benchmarks(pk types.PublicKey, from, to time.Time) (benchmarks []HostBenchmark, err error) {
+	return hdb.s.getBenchmarks(pk, from, to)
+}
+
+// BenchmarkHistory returns the host's benchmark history.
+func (hdb *HostDB) BenchmarkHistory(from, to time.Time) (history []BenchmarkHistory, err error) {
+	return hdb.s.getBenchmarkHistory(from, to)
 }
 
 // Close shuts down HostDB.

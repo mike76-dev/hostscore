@@ -2,53 +2,21 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/mike76-dev/hostscore/hostdb"
+	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/syncer"
-	"github.com/mike76-dev/hostscore/wallet"
-	"go.sia.tech/core/consensus"
-	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/jape"
 )
 
-type (
-	// A ChainManager manages blockchain and txpool state.
-	ChainManager interface {
-		TipState() consensus.State
-		RecommendedFee() types.Currency
-		PoolTransactions() []types.Transaction
-		V2PoolTransactions() []types.V2Transaction
-		UnconfirmedParents(txn types.Transaction) []types.Transaction
-	}
-
-	// A Syncer can connect to other peers and synchronize the blockchain.
-	Syncer interface {
-		Addr() string
-		Peers() []*gateway.Peer
-		PeerInfo(peer string) (syncer.PeerInfo, bool)
-		Synced() bool
-	}
-
-	// A Wallet manages the wallet.
-	Wallet interface {
-		Address() types.Address
-		Key() types.PrivateKey
-		UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElement, error)
-		Annotate(pool []types.Transaction) ([]wallet.PoolTransaction, error)
-	}
-
-	// A HostDB manages the hosts database.
-	HostDB interface {
-		Hosts(offset, limit int) (hosts []hostdb.HostDBEntry)
-	}
-)
-
 type server struct {
-	cm  ChainManager
-	s   Syncer
-	w   Wallet
-	hdb HostDB
+	cm  *chain.Manager
+	s   *syncer.Syncer
+	w   *walletutil.Wallet
+	hdb *hostdb.HostDB
 }
 
 func (s *server) consensusNetworkHandler(jc jape.Context) {
@@ -158,8 +126,62 @@ func (s *server) hostDBHostsHandler(jc jape.Context) {
 	jc.Encode(hosts)
 }
 
+func (s *server) hostDBScansHandler(jc jape.Context) {
+	var from, to time.Time
+	var pk types.PublicKey
+	if jc.DecodeForm("from", &from) != nil ||
+		jc.DecodeForm("to", &to) != nil ||
+		jc.DecodeForm("host", &pk) != nil {
+		return
+	}
+	scans, err := s.hdb.Scans(pk, from, to)
+	if jc.Check("couldn't get scan history", err) != nil {
+		return
+	}
+	jc.Encode(scans)
+}
+
+func (s *server) hostDBScanHistoryHandler(jc jape.Context) {
+	var from, to time.Time
+	if jc.DecodeForm("from", &from) != nil || jc.DecodeForm("to", &to) != nil {
+		return
+	}
+	history, err := s.hdb.ScanHistory(from, to)
+	if jc.Check("couldn't get scan history", err) != nil {
+		return
+	}
+	jc.Encode(history)
+}
+
+func (s *server) hostDBBenchmarksHandler(jc jape.Context) {
+	var from, to time.Time
+	var pk types.PublicKey
+	if jc.DecodeForm("from", &from) != nil ||
+		jc.DecodeForm("to", &to) != nil ||
+		jc.DecodeForm("host", &pk) != nil {
+		return
+	}
+	benchmarks, err := s.hdb.Benchmarks(pk, from, to)
+	if jc.Check("couldn't get benchmark history", err) != nil {
+		return
+	}
+	jc.Encode(benchmarks)
+}
+
+func (s *server) hostDBBenchmarkHistoryHandler(jc jape.Context) {
+	var from, to time.Time
+	if jc.DecodeForm("from", &from) != nil || jc.DecodeForm("to", &to) != nil {
+		return
+	}
+	history, err := s.hdb.BenchmarkHistory(from, to)
+	if jc.Check("couldn't get benchmark history", err) != nil {
+		return
+	}
+	jc.Encode(history)
+}
+
 // NewServer returns an HTTP handler that serves the hsd API.
-func NewServer(cm ChainManager, s Syncer, w Wallet, hdb HostDB) http.Handler {
+func NewServer(cm *chain.Manager, s *syncer.Syncer, w *walletutil.Wallet, hdb *hostdb.HostDB) http.Handler {
 	srv := server{
 		cm:  cm,
 		s:   s,
@@ -181,6 +203,10 @@ func NewServer(cm ChainManager, s Syncer, w Wallet, hdb HostDB) http.Handler {
 		"GET    /wallet/txpool":  srv.walletTxpoolHandler,
 		"GET    /wallet/outputs": srv.walletOutputsHandler,
 
-		"GET    /hostdb/hosts": srv.hostDBHostsHandler,
+		"GET    /hostdb/hosts":              srv.hostDBHostsHandler,
+		"GET    /hostdb/scans":              srv.hostDBScansHandler,
+		"GET    /hostdb/scans/history":      srv.hostDBScanHistoryHandler,
+		"GET    /hostdb/benchmarks":         srv.hostDBBenchmarksHandler,
+		"GET    /hostdb/benchmarks/history": srv.hostDBBenchmarkHistoryHandler,
 	})
 }
