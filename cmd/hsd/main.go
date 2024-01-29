@@ -119,12 +119,12 @@ func main() {
 	rootCmd := flagg.Root
 	rootCmd.Usage = flagg.SimpleUsage(rootCmd, rootUsage)
 	rootCmd.StringVar(&name, "name", "", "name of the benchmarking node")
-	rootCmd.StringVar(&gatewayAddr, "addr", ":9981", "p2p address to listen on")
-	rootCmd.StringVar(&apiAddr, "api-addr", "localhost:9980", "address to serve API on")
-	rootCmd.StringVar(&dir, "dir", ".", "directory to store node state in")
+	rootCmd.StringVar(&gatewayAddr, "addr", "", "p2p address to listen on")
+	rootCmd.StringVar(&apiAddr, "api-addr", "", "address to serve API on")
+	rootCmd.StringVar(&dir, "dir", "", "directory to store node state in")
 	rootCmd.StringVar(&dbUser, "db-user", "", "username for accessing the database")
 	rootCmd.StringVar(&dbName, "db-name", "", "name of MYSQL database")
-	rootCmd.StringVar(&network, "network", "mainnet", "network to connect to")
+	rootCmd.StringVar(&network, "network", "", "network to connect to")
 	versionCmd := flagg.New("version", versionUsage)
 	seedCmd := flagg.New("seed", seedUsage)
 
