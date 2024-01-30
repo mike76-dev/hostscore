@@ -163,6 +163,7 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	}
 	writeJSON(w, scansResponse{
 		APIResponse: APIResponse{Status: "ok"},
+		PublicKey:   pk,
 		Scans:       scans,
 	})
 }
@@ -215,6 +216,7 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	}
 	writeJSON(w, benchmarksResponse{
 		APIResponse: APIResponse{Status: "ok"},
+		PublicKey:   pk,
 		Benchmarks:  benchmarks,
 	})
 }
