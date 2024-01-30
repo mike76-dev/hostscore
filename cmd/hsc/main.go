@@ -11,26 +11,7 @@ import (
 	"os/signal"
 
 	"github.com/mike76-dev/hostscore/internal/build"
-	"golang.org/x/term"
 )
-
-var apiPassword string
-
-func getAPIPassword() string {
-	pwd := os.Getenv("SATD_API_PASSWORD")
-	if pwd != "" {
-		fmt.Println("Using SATD_API_PASSWORD environment variable.")
-	} else {
-		fmt.Print("Enter API password: ")
-		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if err != nil {
-			log.Fatalf("Could not read API password: %v\n", err)
-		}
-		pwd = string(pw)
-	}
-	return pwd
-}
 
 func main() {
 	log.SetFlags(0)
@@ -38,8 +19,6 @@ func main() {
 	dir := flag.String("dir", ".", "directory to store files in")
 	portalPort := flag.String("portal", ":8080", "port number the portal server listens at")
 	flag.Parse()
-
-	apiPassword = getAPIPassword()
 
 	err := os.MkdirAll(*dir, 0700)
 	if err != nil {
@@ -53,12 +32,20 @@ func main() {
 		fmt.Println("Git Revision " + build.GitRevision)
 	}
 
+	s, err := newJSONStore(*dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	l, err := net.Listen("tcp", "127.0.0.1"+*portalPort)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	api := &portalAPI{}
+	api := newAPI(s)
+	for key, node := range s.nodes {
+		api.clients[key] = newClient(node.Address, node.Password)
+	}
 	api.buildHTTPRoutes()
 
 	closeChan := make(chan int, 1)
