@@ -325,6 +325,8 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 }
 
 func (s *DBStore) close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.tx != nil {
 		s.tx.Commit()
 	}

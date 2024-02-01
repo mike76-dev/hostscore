@@ -251,7 +251,7 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 		benchmark.Success,
 		benchmark.UploadSpeed,
 		benchmark.DownloadSpeed,
-		benchmark.TTFB.Seconds(),
+		benchmark.TTFB.Milliseconds(),
 		benchmark.Error,
 	)
 	if err != nil {
@@ -306,6 +306,8 @@ func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 }
 
 func (s *hostDBStore) close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.tx != nil {
 		if err := s.tx.Commit(); err != nil {
 			s.log.Println("[ERROR] couldn't commit transaction:", err)
@@ -548,7 +550,7 @@ func (s *hostDBStore) load() error {
 				Success:       success,
 				UploadSpeed:   ul,
 				DownloadSpeed: dl,
-				TTFB:          time.Duration(ttfb * float64(time.Second)),
+				TTFB:          time.Duration(ttfb) * time.Millisecond,
 				Error:         msg,
 			}
 		}
@@ -714,6 +716,9 @@ func (s *hostDBStore) getHostsForScan() {
 }
 
 func (s *hostDBStore) getScans(pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.tx == nil {
 		return nil, errors.New("there is no transaction")
 	}
@@ -772,6 +777,9 @@ func (s *hostDBStore) getScans(pk types.PublicKey, from, to time.Time) (scans []
 }
 
 func (s *hostDBStore) getScanHistory(from, to time.Time) (history []ScanHistory, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.tx == nil {
 		return nil, errors.New("there is no transaction")
 	}
@@ -829,6 +837,9 @@ func (s *hostDBStore) getScanHistory(from, to time.Time) (history []ScanHistory,
 }
 
 func (s *hostDBStore) getBenchmarks(pk types.PublicKey, from, to time.Time) (benchmarks []HostBenchmark, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.tx == nil {
 		return nil, errors.New("there is no transaction")
 	}
@@ -874,6 +885,9 @@ func (s *hostDBStore) getBenchmarks(pk types.PublicKey, from, to time.Time) (ben
 }
 
 func (s *hostDBStore) getBenchmarkHistory(from, to time.Time) (history []BenchmarkHistory, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.tx == nil {
 		return nil, errors.New("there is no transaction")
 	}
