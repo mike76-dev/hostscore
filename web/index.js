@@ -69,8 +69,8 @@ function renderHosts() {
 function isOnline(pk) {
 	let host = hosts.find(h => h.publicKey == pk);
 	if (host) {
-		return host.scanHistory.length > 0 && host.scanHistory[0].success &&
-			((host.scanHistory.length > 1 && host.scanHistory[1].success) ||
+		return host.scanHistory.length > 0 && host.scanHistory[0].success == true &&
+			((host.scanHistory.length > 1 && host.scanHistory[1].success == true) ||
 			host.scanHistory.length == 1);
 	}
 	return false;
@@ -121,7 +121,7 @@ function browseHost(obj) {
 				let average = 0;
 				let count = 0;
 				data.scans.forEach(scan => {
-					if (scan.success) {
+					if (scan.success == true) {
 						average += scan.latency / 1e6;
 						count++;
 					}
@@ -156,7 +156,7 @@ function browseHost(obj) {
 							let ttfb = 0;
 							let count = 0;
 							data.benchmarks.forEach(benchmark => {
-								if (benchmark.success) {
+								if (benchmark.success == true) {
 									ul += benchmark.uploadSpeed;
 									dl += benchmark.downloadSpeed;
 									ttfb += benchmark.ttfb / 1e9;
@@ -209,9 +209,9 @@ function browseHost(obj) {
 										let benchmark = benchmarks.find(b => b.location = location);
 										if (index < benchmark.data.length) {
 											row += '<td style="text-align:center">' +
-												'<span class="benchmark-' + (benchmark.data[index].success ? 'pass">' : 'fail">') +
+												'<span class="benchmark-' + (benchmark.data[index].success == true ? 'pass">' : 'fail">') +
 												new Date(benchmark.data[index].timestamp).toLocaleString() + '</span>' +
-												(benchmark.data[index].success ? '' : '<br>' +
+												(benchmark.data[index].success == true ? '' : '<br>' +
 												benchmark.data[index].error) + '</td>';
 											empty = false;
 										} else {
