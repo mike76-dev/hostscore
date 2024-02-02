@@ -305,6 +305,44 @@ func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 	return count
 }
 
+func (s *hostDBStore) saveLocation(pk types.PublicKey, info IPInfo) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tx == nil {
+		return errors.New("there is no transaction")
+	}
+
+	s.hosts[pk].IPInfo = info
+	_, err := s.tx.Exec(`
+		REPLACE INTO hdb_locations_`+s.network+` (
+			public_key,
+			ip,
+			host_name,
+			city,
+			region,
+			country,
+			loc,
+			isp,
+			zip,
+			time_zone
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		pk[:],
+		info.IP,
+		info.HostName,
+		info.City,
+		info.Region,
+		info.Country,
+		info.Location,
+		info.ISP,
+		info.ZIP,
+		info.TimeZone,
+	)
+
+	return err
+}
+
 func (s *hostDBStore) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -554,11 +592,52 @@ func (s *hostDBStore) load() error {
 				Error:         msg,
 			}
 		}
+
+		locRows, err := s.db.Query(`
+			SELECT
+				ip,
+				host_name,
+				city,
+				region,
+				country,
+				loc,
+				isp,
+				zip,
+				time_zone
+			FROM hdb_locations_`+s.network+`
+			WHERE public_key = ?
+		`, pk)
+		if err != nil {
+			rows.Close()
+			return utils.AddContext(err, "couldn't query locations")
+		}
+
+		for locRows.Next() {
+			var ip, name, city, region, country, location, isp, zip, tz string
+			if err := locRows.Scan(&ip, &name, &city, &region, &country, &location, &isp, &zip, &tz); err != nil {
+				locRows.Close()
+				rows.Close()
+				return utils.AddContext(err, "couldn't scan location")
+			}
+			host.IPInfo = IPInfo{
+				IP:       ip,
+				HostName: name,
+				City:     city,
+				Region:   region,
+				Country:  country,
+				Location: location,
+				ISP:      isp,
+				ZIP:      zip,
+				TimeZone: tz,
+			}
+		}
+		locRows.Close()
 		s.mu.Lock()
 		s.hosts[host.PublicKey] = host
 		s.mu.Unlock()
 	}
 	rows.Close()
+
 	s.log.Println("[INFO] loading complete")
 
 	s.tx, err = s.db.Begin()

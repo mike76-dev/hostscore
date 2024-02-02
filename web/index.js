@@ -236,6 +236,7 @@ function browseHost(obj) {
 	document.getElementById('current-id').innerHTML = host.id;
 	document.getElementById('current-key').innerHTML = host.publicKey;
 	document.getElementById('current-address').innerHTML = host.netaddress;
+	document.getElementById('current-location').innerHTML = getFlagEmoji(host.country);
 	document.getElementById('current-first').innerHTML = new Date(host.firstSeen).toDateString();
 	document.getElementById('current-last').innerHTML = host.lastSeen == '0001-01-01T00:00:00Z' ? 'N/A' : new Date(host.lastSeen).toDateString();
 	document.getElementById('current-uptime').innerHTML = host.downtime + host.uptime == 0 ? '0%' : (host.uptime * 100 / (host.uptime + host.downtime)).toFixed(1) + '%';
@@ -305,3 +306,12 @@ function convertPricePerBlock(value) {
 	if (result < 1e6) return (result / 1e3).toFixed(1) + ' KS/TB/month';
 	return (result / 1e6).toFixed(1) + ' MS/TB/month';
 }
+
+function getFlagEmoji(country) {
+	if (country == '') return N/AbortController;
+	const codePoints = country
+	  .toUpperCase()
+	  .split('')
+	  .map(char =>  127397 + char.charCodeAt());
+	return String.fromCodePoint(...codePoints);
+  }

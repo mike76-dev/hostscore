@@ -67,16 +67,19 @@ CREATE TABLE wt_sfes_anagami (
 );
 
 /* hostdb */
+DROP TABLE IF EXISTS hdb_locations_mainnet;
 DROP TABLE IF EXISTS hdb_scans_mainnet;
 DROP TABLE IF EXISTS hdb_benchmarks_mainnet;
 DROP TABLE IF EXISTS hdb_hosts_mainnet;
 DROP TABLE IF EXISTS hdb_domains_mainnet;
 DROP TABLE IF EXISTS hdb_tip_mainnet;
+DROP TABLE IF EXISTS hdb_locations_zen;
 DROP TABLE IF EXISTS hdb_scans_zen;
 DROP TABLE IF EXISTS hdb_benchmarks_zen;
 DROP TABLE IF EXISTS hdb_hosts_zen;
 DROP TABLE IF EXISTS hdb_domains_zen;
 DROP TABLE IF EXISTS hdb_tip_zen;
+DROP TABLE IF EXISTS hdb_locations_anagami;
 DROP TABLE IF EXISTS hdb_scans_anagami;
 DROP TABLE IF EXISTS hdb_benchmarks_anagami;
 DROP TABLE IF EXISTS hdb_hosts_anagami;
@@ -130,6 +133,20 @@ CREATE TABLE hdb_benchmarks_mainnet (
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
+);
+
+CREATE TABLE hdb_locations_mainnet (
+	public_key BINARY(32) NOT NULL,
+	ip         TEXT NOT NULL,
+	host_name  TEXT NOT NULL,
+	city       TEXT NOT NULL,
+	region     TEXT NOT NULL,
+	country    TEXT NOT NULL,
+	loc        TEXT NOT NULL,
+	isp        TEXT NOT NULL,
+	zip        TEXT NOT NULL,
+	time_zone  TEXT NOT NULL,
+	PRIMARY KEY (public_key)
 );
 
 CREATE TABLE hdb_domains_mainnet (
@@ -192,6 +209,20 @@ CREATE TABLE hdb_benchmarks_zen (
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
 );
 
+CREATE TABLE hdb_locations_zen (
+	public_key BINARY(32) NOT NULL,
+	ip         TEXT NOT NULL,
+	host_name  TEXT NOT NULL,
+	city       TEXT NOT NULL,
+	region     TEXT NOT NULL,
+	country    TEXT NOT NULL,
+	loc        TEXT NOT NULL,
+	isp        TEXT NOT NULL,
+	zip        TEXT NOT NULL,
+	time_zone  TEXT NOT NULL,
+	PRIMARY KEY (public_key)
+);
+
 CREATE TABLE hdb_domains_zen (
 	dom VARCHAR(255) NOT NULL
 );
@@ -250,6 +281,20 @@ CREATE TABLE hdb_benchmarks_anagami (
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_anagami(public_key)
+);
+
+CREATE TABLE hdb_locations_anagami (
+	public_key BINARY(32) NOT NULL,
+	ip         TEXT NOT NULL,
+	host_name  TEXT NOT NULL,
+	city       TEXT NOT NULL,
+	region     TEXT NOT NULL,
+	country    TEXT NOT NULL,
+	loc        TEXT NOT NULL,
+	isp        TEXT NOT NULL,
+	zip        TEXT NOT NULL,
+	time_zone  TEXT NOT NULL,
+	PRIMARY KEY (public_key)
 );
 
 CREATE TABLE hdb_domains_anagami (

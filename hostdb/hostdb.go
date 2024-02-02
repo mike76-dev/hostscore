@@ -37,6 +37,7 @@ type HostDBEntry struct {
 	Revision      types.FileContractRevision `json:"-"`
 	Settings      rhpv2.HostSettings         `json:"settings"`
 	PriceTable    rhpv3.HostPriceTable       `json:"priceTable"`
+	IPInfo
 }
 
 // HostInteractions combines historic and recent interactions.
@@ -166,6 +167,9 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 
 	// Start the scanning thread.
 	go hdb.scanHosts()
+
+	// Fetch host locations.
+	go hdb.fetchLocations()
 
 	return hdb, errChan
 }
