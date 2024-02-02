@@ -812,7 +812,7 @@ func (s *hostDBStore) getScans(pk types.PublicKey, from, to time.Time) (scans []
 	st += s.network
 	st += fmt.Sprintf(" WHERE ran_at>%d AND ran_at<%d", from.Unix(), to.Unix())
 	st += " AND public_key=0x" + hex.EncodeToString(pk[:])
-	st += " ORDER BY ran_at ASC"
+	st += " ORDER BY ran_at DESC"
 
 	rows, err := s.tx.Query(st)
 	if err != nil {
@@ -933,7 +933,7 @@ func (s *hostDBStore) getBenchmarks(pk types.PublicKey, from, to time.Time) (ben
 	st += s.network
 	st += fmt.Sprintf(" WHERE ran_at>%d AND ran_at<%d", from.Unix(), to.Unix())
 	st += " AND public_key=0x" + hex.EncodeToString(pk[:])
-	st += " ORDER BY ran_at ASC"
+	st += " ORDER BY ran_at DESC"
 
 	rows, err := s.tx.Query(st)
 	if err != nil {
