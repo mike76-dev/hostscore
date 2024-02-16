@@ -41,9 +41,10 @@ And enable your firewall:
 ```
 $ sudo ufw enable
 ```
-Now you need to allow incoming connections to port `9980` from the IP address of the client machine where `hsc` will be running:
+Now you need to allow incoming connections to ports `9980` and `9880` from the IP address of the client machine where `hsc` will be running:
 ```
 $ sudo ufw allow from <IP_address> proto tcp to any port 9980
+$ sudo ufw allow from <IP_address> proto tcp to any port 9880
 ```
 You can verify the change by checking the status:
 ```
@@ -57,6 +58,7 @@ Status: active
 To                         Action      From
 --                         ------      ----
 OpenSSH                    ALLOW       Anywhere
+9880/tcp                   ALLOW       <IP_address>
 9980/tcp                   ALLOW       <IP_address>
 OpenSSH (v6)               ALLOW       Anywhere (v6)
 ```
