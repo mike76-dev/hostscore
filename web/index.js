@@ -1,5 +1,5 @@
 const apiBaseURL = '/hostscore/api';
-var locations = ['EU'];
+var locations = ['EU', 'US'];
 var hosts = [];
 var offset = 0;
 
@@ -135,97 +135,99 @@ function browseHost(obj) {
 				if (latencies.length == locations.length) {
 					let header = '<tr><th></th>';
 					let row = '<tr><td>Latency</td>';
-					locations.forEach(location => {
-						latency = latencies.find(l => l.location == location);
+					locations.forEach(loc => {
+						latency = latencies.find(l => l.location == loc);
 						header += '<th>' + latency.location + '</th>';
 						row += '<td style="text-align:center">' + latency.latency + '</td>';
 					});
 					header += '</tr>';
 					row += '</tr>';
 					table.children[1].innerHTML = header + row;
-					fetch(apiBaseURL + '/benchmarks?location=' + location.toLowerCase() +
-						'&network=' + network +
-						'&host=' + key +
-						'&from=' + from.toISOString(), options)
-					.then(response => response.json())
-					.then(data => {
-						if (data.status != 'ok') console.log(data.message)
-						else {
-							let ul = 0;
-							let dl = 0;
-							let ttfb = 0;
-							let count = 0;
-							data.benchmarks.forEach(benchmark => {
-								if (benchmark.success == true) {
-									ul += benchmark.uploadSpeed;
-									dl += benchmark.downloadSpeed;
-									ttfb += benchmark.ttfb / 1e9;
-									count++;
+					locations.forEach(loc => {
+						fetch(apiBaseURL + '/benchmarks?location=' + loc.toLowerCase() +
+							'&network=' + network +
+							'&host=' + key +
+							'&from=' + from.toISOString(), options)
+						.then(response => response.json())
+						.then(data => {
+							if (data.status != 'ok') console.log(data.message)
+							else {
+								let ul = 0;
+								let dl = 0;
+								let ttfb = 0;
+								let count = 0;
+								data.benchmarks.forEach(benchmark => {
+									if (benchmark.success == true) {
+										ul += benchmark.uploadSpeed;
+										dl += benchmark.downloadSpeed;
+										ttfb += benchmark.ttfb / 1e9;
+										count++;
+									}
+								});
+								if (count > 0) {
+									ul /= count;
+									dl /= count;
+									ttfb /= count;
+									benchmarks.push({
+										location: loc,
+										upload: convertSize(ul) + '/s',
+										download: convertSize(dl) + '/s',
+										ttfb: ttfb.toFixed(2) + ' s',
+										data: data.benchmarks
+									});
+								} else {
+									benchmarks.push({
+										location: loc,
+										upload: 'N/A',
+										download: 'N/A',
+										ttfb: 'N/A',
+										data: data.benchmarks
+									});
 								}
-							});
-							if (count > 0) {
-								ul /= count;
-								dl /= count;
-								ttfb /= count;
-								benchmarks.push({
-									location: location,
-									upload: convertSize(ul) + '/s',
-									download: convertSize(dl) + '/s',
-									ttfb: ttfb.toFixed(2) + ' s',
-									data: data.benchmarks
-								});
-							} else {
-								benchmarks.push({
-									location: location,
-									upload: 'N/A',
-									download: 'N/A',
-									ttfb: 'N/A',
-									data: data.benchmarks
-								});
-							}
-							if (benchmarks.length == locations.length) {
-								let upload = '<tr><td>Upload Speed</td>';
-								let download = '<tr><td>Download Speed</td>';
-								let ttfb = '<tr><td>TTFB</td>';
-								let header = '<tr>';
-								locations.forEach(location => {
-									let benchmark = benchmarks.find(b => b.location == location);
-									upload += '<td style="text-align:center">' + benchmark.upload + '</td>';
-									download += '<td style="text-align:center">' + benchmark.download + '</td>';
-									ttfb += '<td style="text-align:center">' + benchmark.ttfb + '</td>';
-									header += '<th>' + location + '</th>';
-								});
-								header += '</tr>';
-								upload += '</tr>';
-								download += '</tr>';
-								ttfb += '</tr>';
-								table.children[1].innerHTML += upload + download + ttfb;
-								list.children[0].innerHTML = header;
-								let index = 0;
-								while (true) {
-									let row = '';
-									let empty = true;
-									locations.forEach(location => {
-										let benchmark = benchmarks.find(b => b.location = location);
-										if (index < benchmark.data.length) {
-											row += '<td style="text-align:center">' +
-												'<span class="benchmark-' + (benchmark.data[index].success == true ? 'pass">' : 'fail">') +
-												new Date(benchmark.data[index].timestamp).toLocaleString() + '</span>' +
-												(benchmark.data[index].success == true ? '' : '<br>' +
-												benchmark.data[index].error) + '</td>';
-											empty = false;
-										} else {
-											row += '<td></td>';
-										}
-									})
-									if (empty) break;
-									index++;
-									list.children[0].innerHTML += '<tr>' + row + '</tr>';
+								if (benchmarks.length == locations.length) {
+									let upload = '<tr><td>Upload Speed</td>';
+									let download = '<tr><td>Download Speed</td>';
+									let ttfb = '<tr><td>TTFB</td>';
+									let header = '<tr>';
+									locations.forEach(l => {
+										let benchmark = benchmarks.find(b => b.location == l);
+										upload += '<td style="text-align:center">' + benchmark.upload + '</td>';
+										download += '<td style="text-align:center">' + benchmark.download + '</td>';
+										ttfb += '<td style="text-align:center">' + benchmark.ttfb + '</td>';
+										header += '<th>' + l + '</th>';
+									});
+									header += '</tr>';
+									upload += '</tr>';
+									download += '</tr>';
+									ttfb += '</tr>';
+									table.children[1].innerHTML += upload + download + ttfb;
+									list.children[0].innerHTML = header;
+									let index = 0;
+									while (true) {
+										let row = '';
+										let empty = true;
+										locations.forEach(l => {
+											let benchmark = benchmarks.find(b => b.location == l);
+											if (index < benchmark.data.length) {
+												row += '<td style="text-align:center">' +
+													'<span class="benchmark-' + (benchmark.data[index].success == true ? 'pass">' : 'fail">') +
+													new Date(benchmark.data[index].timestamp).toLocaleString() + '</span>' +
+													(benchmark.data[index].success == true ? '' : '<br>' +
+													benchmark.data[index].error) + '</td>';
+												empty = false;
+											} else {
+												row += '<td></td>';
+											}
+										})
+										if (empty) break;
+										index++;
+										list.children[0].innerHTML += '<tr>' + row + '</tr>';
+									}
 								}
 							}
-						}
-					})
-					.catch(error => console.log(error));
+						})
+						.catch(error => console.log(error));
+					});
 					table.classList.remove('hidden');
 					list.classList.remove('hidden');
 				}
