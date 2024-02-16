@@ -18,7 +18,7 @@ import (
 var defaultConfig = persist.HSDConfig{
 	Name:        "",
 	GatewayAddr: ":9981",
-	APIAddr:     "localhost:9980",
+	APIAddr:     ":9980",
 	Dir:         ".",
 	DBUser:      "",
 	DBName:      "hostscore",
