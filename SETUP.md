@@ -191,7 +191,7 @@ First, choose a `name` of your hsd node. Fill in the `dbUser` and `dbName` field
 {
         "name": "",
         "gateway": ":9981",
-        "api": "localhost:9980",
+        "api": ":9980",
         "dir": "/usr/local/etc/hsd-mainnet",
         "dbUser": "hsuser",
         "dbName": "hostscore",
@@ -212,7 +212,7 @@ $ nano hsdconfig.json
 {
         "name": "",
         "gateway": ":9881",
-        "api": "localhost:9880",
+        "api": ":9880",
         "dir": "/usr/local/etc/hsd-zen",
         "dbUser": "hsuser",
         "dbName": "hostscore",
