@@ -13,19 +13,37 @@ const (
 	contractDuration = 7 * 144 // 7 days
 )
 
-var (
-	maxContractPrice = types.Siacoins(1)                                // 1 SC
-	maxUploadPrice   = types.Siacoins(1000)                             // 1 KS/TB
-	maxDownloadPrice = types.Siacoins(3000)                             // 3 KS/TB
-	maxStoragePrice  = types.Siacoins(1000).Div64(1e12).Div64(30 * 144) // 1 KS/TB/month
+// hostDBPriceLimits are meant to protect the node from malicious hosts
+// or from SC price spikes.
+type hostDBPriceLimits struct {
+	maxContractPrice     types.Currency
+	maxUploadPrice       types.Currency
+	maxDownloadPrice     types.Currency
+	maxStoragePrice      types.Currency
+	maxBaseRPCPrice      types.Currency
+	maxSectorAccessPrice types.Currency
+}
 
-	maxBaseRPCPrice      = types.Siacoins(1).Div64(100) // 10 mS
-	maxSectorAccessPrice = types.Siacoins(1).Div64(100) // 10 mS
+var (
+	maxContractPrice   = types.Siacoins(1)                                // 1 SC
+	maxUploadPriceSC   = types.Siacoins(1000)                             // 1 KS/TB
+	maxDownloadPriceSC = types.Siacoins(3000)                             // 3 KS/TB
+	maxStoragePriceSC  = types.Siacoins(1000).Div64(1e12).Div64(30 * 144) // 1 KS/TB/month
+
+	maxBaseRPCPriceSC      = types.Siacoins(1).Div64(100) // 10 mS
+	maxSectorAccessPriceSC = types.Siacoins(1).Div64(100) // 10 mS
+
+	maxUploadPriceUSD   = 6.0  // 6 USD/TB
+	maxDownloadPriceUSD = 18.0 // 18 USD/TB
+	maxStoragePriceUSD  = 6.0  // 6 USD/TB/month
+
+	maxBaseRPCPriceUSD      = 6e-5
+	maxSectorAccessPriceUSD = 6e-5
 )
 
 // checkGouging performs a number of gouging checks before forming
 // a contract with the host.
-func checkGouging(height uint64, hs *rhpv2.HostSettings, pt *rhpv3.HostPriceTable) (err error) {
+func checkGouging(height uint64, hs *rhpv2.HostSettings, pt *rhpv3.HostPriceTable, limits hostDBPriceLimits) (err error) {
 	if hs == nil {
 		return errors.New("host's settings unknown")
 	}
@@ -37,19 +55,19 @@ func checkGouging(height uint64, hs *rhpv2.HostSettings, pt *rhpv3.HostPriceTabl
 	if err = checkContractGougingRHPv2(*hs); err != nil {
 		return
 	}
-	if err = checkPriceGougingHS(*hs); err != nil {
+	if err = checkPriceGougingHS(*hs, limits); err != nil {
 		return
 	}
 
 	// Price table checks.
 	if pt != nil {
-		if err = checkDownloadGougingRHPv3(*pt); err != nil {
+		if err = checkDownloadGougingRHPv3(*pt, limits); err != nil {
 			return
 		}
-		if err = checkPriceGougingPT(*pt); err != nil {
+		if err = checkPriceGougingPT(*pt, limits); err != nil {
 			return
 		}
-		if err = checkUploadGougingRHPv3(*pt); err != nil {
+		if err = checkUploadGougingRHPv3(*pt, limits); err != nil {
 			return
 		}
 		if err = checkContractGougingRHPv3(*pt); err != nil {
@@ -60,45 +78,45 @@ func checkGouging(height uint64, hs *rhpv2.HostSettings, pt *rhpv3.HostPriceTabl
 	return nil
 }
 
-func checkPriceGougingHS(hs rhpv2.HostSettings) error {
+func checkPriceGougingHS(hs rhpv2.HostSettings, limits hostDBPriceLimits) error {
 	// Check base RPC price.
-	if hs.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
-		return fmt.Errorf("base RPC price exceeds limit: %v > %v", hs.BaseRPCPrice, maxBaseRPCPrice)
+	if hs.BaseRPCPrice.Cmp(limits.maxBaseRPCPrice) > 0 {
+		return fmt.Errorf("base RPC price exceeds limit: %v > %v", hs.BaseRPCPrice, limits.maxBaseRPCPrice)
 	}
 
 	// Check sector access price.
-	if hs.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
-		return fmt.Errorf("sector access price exceeds limit: %v > %v", hs.SectorAccessPrice, maxSectorAccessPrice)
+	if hs.SectorAccessPrice.Cmp(limits.maxSectorAccessPrice) > 0 {
+		return fmt.Errorf("sector access price exceeds limit: %v > %v", hs.SectorAccessPrice, limits.maxSectorAccessPrice)
 	}
 
 	// Check max storage price.
-	if hs.StoragePrice.Cmp(maxStoragePrice) > 0 {
-		return fmt.Errorf("storage price exceeds limit: %v > %v", hs.StoragePrice, maxStoragePrice)
+	if hs.StoragePrice.Cmp(limits.maxStoragePrice) > 0 {
+		return fmt.Errorf("storage price exceeds limit: %v > %v", hs.StoragePrice, limits.maxStoragePrice)
 	}
 
 	// Check contract price.
-	if hs.ContractPrice.Cmp(maxContractPrice) > 0 {
-		return fmt.Errorf("contract price exceeds limit: %v > %v", hs.ContractPrice, maxContractPrice)
+	if hs.ContractPrice.Cmp(limits.maxContractPrice) > 0 {
+		return fmt.Errorf("contract price exceeds limit: %v > %v", hs.ContractPrice, limits.maxContractPrice)
 	}
 
 	return nil
 }
 
 // checkPriceGougingPT checks the price table.
-func checkPriceGougingPT(pt rhpv3.HostPriceTable) error {
+func checkPriceGougingPT(pt rhpv3.HostPriceTable, limits hostDBPriceLimits) error {
 	// Check base RPC price.
-	if maxBaseRPCPrice.Cmp(pt.InitBaseCost) < 0 {
-		return fmt.Errorf("init base cost exceeds limit: %v > %v", pt.InitBaseCost, maxBaseRPCPrice)
+	if limits.maxBaseRPCPrice.Cmp(pt.InitBaseCost) < 0 {
+		return fmt.Errorf("init base cost exceeds limit: %v > %v", pt.InitBaseCost, limits.maxBaseRPCPrice)
 	}
 
 	// Check contract price.
-	if pt.ContractPrice.Cmp(maxContractPrice) > 0 {
-		return fmt.Errorf("contract price exceeds limit: %v > %v", pt.ContractPrice, maxContractPrice)
+	if pt.ContractPrice.Cmp(limits.maxContractPrice) > 0 {
+		return fmt.Errorf("contract price exceeds limit: %v > %v", pt.ContractPrice, limits.maxContractPrice)
 	}
 
 	// Check storage price.
-	if pt.WriteStoreCost.Cmp(maxStoragePrice) > 0 {
-		return fmt.Errorf("storage price exceeds limit: %v > %v", pt.WriteStoreCost, maxStoragePrice)
+	if pt.WriteStoreCost.Cmp(limits.maxStoragePrice) > 0 {
+		return fmt.Errorf("storage price exceeds limit: %v > %v", pt.WriteStoreCost, limits.maxStoragePrice)
 	}
 
 	return nil
@@ -124,7 +142,7 @@ func checkContractGougingRHPv3(pt rhpv3.HostPriceTable) error {
 }
 
 // checkDownloadGougingRHPv3 checks the price table.
-func checkDownloadGougingRHPv3(pt rhpv3.HostPriceTable) error {
+func checkDownloadGougingRHPv3(pt rhpv3.HostPriceTable, limits hostDBPriceLimits) error {
 	sectorDownloadPrice, overflow := sectorReadCostRHPv3(pt)
 	if overflow {
 		return errors.New("overflow detected when computing sector download price")
@@ -133,14 +151,14 @@ func checkDownloadGougingRHPv3(pt rhpv3.HostPriceTable) error {
 	if overflow {
 		return errors.New("overflow detected when computing download price per TiB")
 	}
-	if dpptb.Cmp(maxDownloadPrice) > 0 {
-		return fmt.Errorf("download price exceeds limit: %v > %v", dpptb, maxDownloadPrice)
+	if dpptb.Cmp(limits.maxDownloadPrice) > 0 {
+		return fmt.Errorf("download price exceeds limit: %v > %v", dpptb, limits.maxDownloadPrice)
 	}
 	return nil
 }
 
 // checkUploadGougingRHPv3 checks the price table.
-func checkUploadGougingRHPv3(pt rhpv3.HostPriceTable) error {
+func checkUploadGougingRHPv3(pt rhpv3.HostPriceTable, limits hostDBPriceLimits) error {
 	sectorUploadPricePerMonth, overflow := sectorUploadCostRHPv3(pt)
 	if overflow {
 		return errors.New("overflow detected when computing sector price")
@@ -149,8 +167,8 @@ func checkUploadGougingRHPv3(pt rhpv3.HostPriceTable) error {
 	if overflow {
 		return errors.New("overflow detected when computing upload price per TiB")
 	}
-	if uploadPrice.Cmp(maxUploadPrice) > 0 {
-		return fmt.Errorf("upload price exceeds limit: %v > %v", uploadPrice, maxUploadPrice)
+	if uploadPrice.Cmp(limits.maxUploadPrice) > 0 {
+		return fmt.Errorf("upload price exceeds limit: %v > %v", uploadPrice, limits.maxUploadPrice)
 	}
 	return nil
 }

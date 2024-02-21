@@ -38,6 +38,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	// Update historic interactions of the host if necessary.
 	hdb.mu.Lock()
 	hdb.updateHostHistoricInteractions(host)
+	limits := hdb.priceLimits
 	hdb.mu.Unlock()
 
 	key := hdb.w.Key()
@@ -57,7 +58,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		if (pt == rhpv3.HostPriceTable{}) {
 			return errors.New("couldn't fetch price table")
 		}
-		err := checkGouging(hdb.s.tip.Height, &settings, &pt)
+		err := checkGouging(hdb.s.tip.Height, &settings, &pt, limits)
 		if err != nil {
 			return err
 		}

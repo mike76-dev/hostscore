@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mike76-dev/hostscore/external"
 	siasync "github.com/mike76-dev/hostscore/internal/sync"
+	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
@@ -98,6 +100,7 @@ type HostDB struct {
 	benchmarkList        []*HostDBEntry
 	scanMap              map[types.PublicKey]bool
 	scanThreads          int
+	priceLimits          hostDBPriceLimits
 }
 
 // Hosts returns a list of HostDB's hosts.
@@ -162,8 +165,19 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 		s:       store,
 		log:     l,
 		scanMap: make(map[types.PublicKey]bool),
+		priceLimits: hostDBPriceLimits{
+			maxContractPrice:     maxContractPrice,
+			maxUploadPrice:       maxUploadPriceSC,
+			maxDownloadPrice:     maxDownloadPriceSC,
+			maxStoragePrice:      maxStoragePriceSC,
+			maxBaseRPCPrice:      maxBaseRPCPriceSC,
+			maxSectorAccessPrice: maxSectorAccessPriceSC,
+		},
 	}
 	hdb.s.hdb = hdb
+
+	// Fetch SC rate.
+	go hdb.updateSCRate()
 
 	// Start the scanning thread.
 	go hdb.scanHosts()
@@ -177,4 +191,49 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 // online returns if the HostDB is online.
 func (hdb *HostDB) online() bool {
 	return len(hdb.syncer.Peers()) > 0
+}
+
+// updateSCRate periodically fetches the SC exchange rate.
+func (hdb *HostDB) updateSCRate() {
+	if err := hdb.tg.Add(); err != nil {
+		hdb.log.Println("[ERROR] couldn't add thread", err)
+		return
+	}
+	defer hdb.tg.Done()
+
+	for {
+		rates, err := external.FetchSCRates()
+		if err != nil {
+			hdb.log.Println("[ERROR] couldn't fetch SC exchange rates", err)
+		}
+
+		if rates != nil {
+			rate := rates["usd"]
+			if rate != 0 {
+				hdb.mu.Lock()
+				if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > maxUploadPriceUSD {
+					hdb.priceLimits.maxUploadPrice = utils.FromFloat(maxUploadPriceUSD / rate)
+				}
+				if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > maxDownloadPriceUSD {
+					hdb.priceLimits.maxDownloadPrice = utils.FromFloat(maxDownloadPriceUSD / rate)
+				}
+				if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > maxDownloadPriceUSD {
+					hdb.priceLimits.maxStoragePrice = utils.FromFloat(maxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
+				}
+				if hdb.priceLimits.maxBaseRPCPrice.Siacoins()*rate > maxBaseRPCPriceUSD {
+					hdb.priceLimits.maxBaseRPCPrice = utils.FromFloat(maxBaseRPCPriceUSD / rate)
+				}
+				if hdb.priceLimits.maxSectorAccessPrice.Siacoins()*rate > maxSectorAccessPriceUSD {
+					hdb.priceLimits.maxSectorAccessPrice = utils.FromFloat(maxSectorAccessPriceUSD / rate)
+				}
+				hdb.mu.Unlock()
+			}
+		}
+
+		select {
+		case <-hdb.tg.StopChan():
+			return
+		case <-time.After(10 * time.Minute):
+		}
+	}
 }
