@@ -4,7 +4,7 @@ This guide describes the process of setting up a HostScore benchmarking node.
 
 ## Prerequisites
 
-You will need a server with the root access over SSH. The blockchain is quite large (around 50GB at the moment of writing), so you need to account for that. It is recommended to use an SSD, because it will affect the syncing speed.
+You will need a server with the root access over SSH. The blockchain is quite large (around 70GB at the moment of writing), so you need to account for that. It is recommended to use an SSD, because it will affect the syncing speed.
 
 This guide will assume that you use Ubuntu Server 22.04 LTS. If you run any other OS, the setup process may differ.
 
