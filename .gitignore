@@ -21,3 +21,5 @@
 go.work
 
 utils/
+
+web/node_modules

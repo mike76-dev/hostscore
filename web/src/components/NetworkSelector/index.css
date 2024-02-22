@@ -1,0 +1,19 @@
+.network-selector-container {
+    margin: 0 1rem;
+}
+
+.network-selector-select {
+    height: 1.5rem;
+    border-radius: 0.25rem;
+}
+
+.network-selector-select:focus {
+    border: 1px solid transparent;
+    outline: 2px solid var(--outlineLight);
+}
+
+@media screen and (max-width: 1000px) {
+    .network-selector-container {
+        margin: 0 0.5rem;
+    }
+}

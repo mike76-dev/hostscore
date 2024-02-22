@@ -1,0 +1,27 @@
+.header-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100vw;
+    padding: 0.25rem;
+    border-bottom: 1px solid var(--borderLight);
+}
+
+.header-dark-mode {
+	background-color: var(--backgroundDark);
+    border-bottom: 1px solid var(--borderDark);
+}
+
+.header-dark-mode a:focus {
+    outline: 2px solid var(--outlineDark);
+}
+
+.header-dark-mode select {
+    color: var(--textDark);
+    background-color: var(--selectDark);
+}
+
+.header-dark-mode select:focus {
+    border: 1px solid transparent;
+    outline: 2px solid var(--outlineDark);
+}
