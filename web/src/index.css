@@ -6,6 +6,8 @@
 	--borderDark: #7f7f7f;
 	--selectDark: #3f3f3f;
 	--textDark: #cfcfcf;
+	--siaLight: #1f1f1f;
+	--siaDark: #cfcfcf;
 }
 
 *, *::before, *::after {
@@ -24,6 +26,13 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+	display: flex;
+	flex-direction: column;
+	width: 100vw;
+	height: 100vh;
 }
 
 code {

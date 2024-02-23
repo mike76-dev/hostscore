@@ -4,6 +4,9 @@ import {
 	RouterProvider,
 } from 'react-router-dom'
 import Header from './components/Header'
+import Footer from './components/Footer'
+import Content from './components/Content'
+import About from './components/About';
 
 function App() {
 	let data = window.localStorage.getItem('darkMode')
@@ -24,6 +27,9 @@ function App() {
 						darkMode={darkMode}
 						toggleDarkMode={toggleDarkMode}
 					/>
+					<Content darkMode={darkMode}>
+					</Content>
+					<Footer darkMode={darkMode}/>
 				</>
 			),
 		},
@@ -37,6 +43,26 @@ function App() {
 						darkMode={darkMode}
 						toggleDarkMode={toggleDarkMode}
 					/>
+					<Content darkMode={darkMode}/>
+					<Footer darkMode={darkMode}/>
+				</>
+			),
+			
+		},
+		{
+			path: 'about',
+			element: (
+				<>
+					<Header
+						network={network}
+						switchNetwork={switchNetwork}
+						darkMode={darkMode}
+						toggleDarkMode={toggleDarkMode}
+					/>
+					<Content darkMode={darkMode}>
+						<About darkMode={darkMode}/>
+					</Content>
+					<Footer darkMode={darkMode}/>
 				</>
 			),
 		},

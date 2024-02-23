@@ -2,14 +2,13 @@
     display: flex;
     flex-direction: row;
     align-items: center;
-    width: 100vw;
     padding: 0.25rem;
-    border-bottom: 1px solid var(--borderLight);
+    border-bottom: 2px solid var(--borderLight);
 }
 
 .header-dark-mode {
 	background-color: var(--backgroundDark);
-    border-bottom: 1px solid var(--borderDark);
+    border-bottom: 2px solid var(--borderDark);
 }
 
 .header-dark-mode a:focus {

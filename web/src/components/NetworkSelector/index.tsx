@@ -22,6 +22,7 @@ const NetworkSelector = (props: NetworkSelectorProps) => {
                     navigate(event.target.value === 'mainnet' ? '/' : '/zen')
                 }}
                 value={network}
+                tabIndex={1}
             >
                 <option value="mainnet">Mainnet</option>
                 <option value="zen">Zen</option>
