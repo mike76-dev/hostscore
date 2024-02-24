@@ -1,6 +1,6 @@
 import './index.css'
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 type NetworkSelectorProps = {
     network: string,
@@ -8,8 +8,15 @@ type NetworkSelectorProps = {
 }
 
 const NetworkSelector = (props: NetworkSelectorProps) => {
+    const location = useLocation()
     const navigate = useNavigate()
     const [network, switchNetwork] = useState(props.network)
+    useEffect(() => {
+        if (location.pathname === '/about') return
+        if (location.pathname.indexOf('/zen') === 0) {
+            switchNetwork('zen')
+        } else switchNetwork('mainnet')
+    }, [location])
 	useEffect(() => {
 		switchNetwork(props.network)
 	}, [props.network])

@@ -21,6 +21,23 @@
     border-top: 2px solid var(--borderDark);
 }
 
+.footer-link {
+    margin: 0 1rem;
+    text-decoration: none;
+}
+
+.footer-link-dark {
+    color: var(--textDark);
+}
+
+.footer-link:visited {
+    color: inherit;
+}
+
+.footer-link-dark:visited {
+    color: var(--textDark);
+}
+
 .footer-container svg {
     width: 5rem;
     height: 5rem;
