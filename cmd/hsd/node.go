@@ -2,22 +2,17 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
-	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
-	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
-	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 )
@@ -61,59 +56,21 @@ var (
 		"147.135.39.109:9881",
 		"51.81.208.10:9881",
 	}
-
-	anagamiBootstrap = []string{
-		"147.135.16.182:9781",
-		"98.180.237.163:9981",
-		"98.180.237.163:11981",
-		"98.180.237.163:10981",
-		"94.130.139.59:9801",
-		"84.86.11.238:9801",
-		"69.131.14.86:9981",
-		"68.108.89.92:9981",
-		"62.30.63.93:9981",
-		"46.173.150.154:9111",
-		"195.252.198.117:9981",
-		"174.174.206.214:9981",
-		"172.58.232.54:9981",
-		"172.58.229.31:9981",
-		"172.56.200.90:9981",
-		"172.56.162.155:9981",
-		"163.172.13.180:9981",
-		"154.47.25.194:9981",
-		"138.201.19.49:9981",
-		"100.34.20.44:9981",
-	}
 )
 
 type node struct {
-	cm  *chain.Manager
-	s   *syncer.Syncer
-	w   *walletutil.Wallet
-	hdb *hostdb.HostDB
-	db  *sql.DB
+	cm    *chain.Manager
+	cmZen *chain.Manager
+	s     *syncer.Syncer
+	sZen  *syncer.Syncer
+	//w     *walletutil.Wallet
+	//hdb   *hostdb.HostDB
+	db *sql.DB
 
 	Start func() (stop func())
 }
 
-func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) {
-	var network *consensus.Network
-	var genesisBlock types.Block
-	var bootstrapPeers []string
-	switch config.Network {
-	case "mainnet":
-		network, genesisBlock = chain.Mainnet()
-		bootstrapPeers = mainnetBootstrap
-	case "zen":
-		network, genesisBlock = chain.TestnetZen()
-		bootstrapPeers = zenBootstrap
-	case "anagami":
-		network, genesisBlock = TestnetAnagami()
-		bootstrapPeers = anagamiBootstrap
-	default:
-		return nil, errors.New("invalid network: must be one of 'mainnet', 'zen', or 'anagami'")
-	}
-
+func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node, error) {
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
 		User:                 config.DBUser,
@@ -135,17 +92,39 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 	mdb.SetMaxOpenConns(10)
 	mdb.SetMaxIdleConns(10)
 
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(config.Dir, "consensus.db"))
+	// Make sure the path is an absolute one.
+	dir, err := filepath.Abs(config.Dir)
+	if err != nil {
+		log.Fatalf("Provided parameter is invalid: %v\n", config.Dir)
+	}
+
+	// Create the state directory if it does not yet exist.
+	// This also checks if the provided directory parameter is valid.
+	err = os.MkdirAll(dir, 0700)
+	if err != nil {
+		log.Fatalf("Provided parameter is invalid: %v\n", dir)
+	}
+
+	// Mainnet.
+	mainnet, genesisBlockMainnet := chain.Mainnet()
+
+	dirMainnet := filepath.Join(dir, "mainnet")
+	err = os.MkdirAll(dirMainnet, 0700)
+	if err != nil {
+		log.Fatalf("Provided parameter is invalid: %v\n", dirMainnet)
+	}
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dirMainnet, "consensus.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesisBlock)
+	dbstore, tipState, err := chain.NewDBStore(bdb, mainnet, genesisBlockMainnet)
 	if err != nil {
 		return nil, err
 	}
 	cm := chain.NewManager(dbstore, tipState)
 
-	l, err := net.Listen("tcp", config.GatewayAddr)
+	l, err := net.Listen("tcp", config.GatewayMainnet)
 	if err != nil {
 		return nil, err
 	}
@@ -157,48 +136,103 @@ func newNode(config *persist.HSDConfig, dbPassword, seed string) (*node, error) 
 		syncerAddr = net.JoinHostPort("127.0.0.1", port)
 	}
 
-	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(config.Dir, "peers.json"))
+	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(dirMainnet, "peers.json"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	for _, peer := range bootstrapPeers {
+	for _, peer := range mainnetBootstrap {
 		ps.AddPeer(peer)
 	}
 	header := gateway.Header{
-		GenesisID:  genesisBlock.ID(),
+		GenesisID:  genesisBlockMainnet.ID(),
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	s := syncer.New(l, cm, ps, header, syncer.WithLogger(config.Dir))
+	s := syncer.New(l, cm, ps, header, syncer.WithLogger(dirMainnet))
 
-	w, err := walletutil.NewWallet(mdb, seed, config.Network, config.Dir, cm, s)
+	// Zen.
+	zen, genesisBlockZen := chain.TestnetZen()
+
+	dirZen := filepath.Join(dir, "zen")
+	err = os.MkdirAll(dirZen, 0700)
+	if err != nil {
+		log.Fatalf("Provided parameter is invalid: %v\n", dirZen)
+	}
+
+	bdbZen, err := coreutils.OpenBoltChainDB(filepath.Join(dirZen, "consensus.db"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	dbstoreZen, tipStateZen, err := chain.NewDBStore(bdbZen, zen, genesisBlockZen)
+	if err != nil {
+		return nil, err
+	}
+	cmZen := chain.NewManager(dbstoreZen, tipStateZen)
+
+	lZen, err := net.Listen("tcp", config.GatewayZen)
 	if err != nil {
 		return nil, err
 	}
 
-	hdb, errChan := hostdb.NewHostDB(mdb, config.Network, config.Dir, cm, s, w)
-	if err := utils.PeekErr(errChan); err != nil {
-		return nil, err
+	// Peers will reject us if our hostname is empty or unspecified, so use loopback.
+	syncerAddrZen := lZen.Addr().String()
+	host, port, _ = net.SplitHostPort(syncerAddrZen)
+	if ip := net.ParseIP(host); ip == nil || ip.IsUnspecified() {
+		syncerAddrZen = net.JoinHostPort("127.0.0.1", port)
 	}
 
+	psZen, err := syncerutil.NewJSONPeerStore(filepath.Join(dirZen, "peers.json"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, peer := range zenBootstrap {
+		psZen.AddPeer(peer)
+	}
+	headerZen := gateway.Header{
+		GenesisID:  genesisBlockZen.ID(),
+		UniqueID:   gateway.GenerateUniqueID(),
+		NetAddress: syncerAddrZen,
+	}
+	sZen := syncer.New(lZen, cmZen, psZen, headerZen, syncer.WithLogger(dirZen))
+
+	/*w, err := walletutil.NewWallet(mdb, seed, seedZen, config.Dir, cm, cmZen, s, sZen)
+	if err != nil {
+		return nil, err
+	}*/
+
+	/*hdb, errChan := hostdb.NewHostDB(mdb, config.Dir, cm, cmZen, s, sZen, w)
+	if err := utils.PeekErr(errChan); err != nil {
+		return nil, err
+	}*/
+
 	return &node{
-		cm:  cm,
-		s:   s,
-		w:   w,
-		hdb: hdb,
-		db:  mdb,
+		cm:    cm,
+		cmZen: cmZen,
+		s:     s,
+		sZen:  sZen,
+		//w:     w,
+		//hdb:   hdb,
+		db: mdb,
 		Start: func() func() {
 			ch := make(chan struct{})
 			go func() {
 				s.Run()
 				close(ch)
 			}()
+			chZen := make(chan struct{})
+			go func() {
+				sZen.Run()
+				close(chZen)
+			}()
 			return func() {
 				l.Close()
 				<-ch
-				hdb.Close()
-				w.Close()
+				lZen.Close()
+				<-chZen
+				//hdb.Close()
+				//w.Close()
 				bdb.Close()
+				bdbZen.Close()
 				mdb.Close()
 			}
 		},

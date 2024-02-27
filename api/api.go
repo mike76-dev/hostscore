@@ -20,6 +20,7 @@ type GatewayPeer struct {
 
 // ConsensusTipResponse is the response type for /consensus/tip.
 type ConsensusTipResponse struct {
+	Network string        `json:"network"`
 	Height  uint64        `json:"height"`
 	BlockID types.BlockID `json:"id"`
 	Synced  bool          `json:"synced"`
