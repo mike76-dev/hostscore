@@ -94,6 +94,7 @@ func (w *Wallet) Close() {
 	}
 	w.s.close()
 	w.sZen.close()
+	w.log.Close()
 }
 
 // NewWallet returns a wallet that is stored in a MySQL database.

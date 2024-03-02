@@ -380,7 +380,6 @@ func (s *DBStore) close() {
 	if s.tx != nil {
 		s.tx.Commit()
 	}
-	s.log.Close()
 }
 
 // Annotate implements api.Wallet.
