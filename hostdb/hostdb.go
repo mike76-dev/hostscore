@@ -23,6 +23,7 @@ import (
 // aggregates the host's external settings and metrics with its public key.
 type HostDBEntry struct {
 	ID            int                        `json:"id"`
+	Network       string                     `json:"network"`
 	PublicKey     types.PublicKey            `json:"publicKey"`
 	FirstSeen     time.Time                  `json:"firstSeen"`
 	KnownSince    uint64                     `json:"knownSince"`
@@ -85,11 +86,14 @@ type BenchmarkHistory struct {
 
 // The HostDB is a database of hosts.
 type HostDB struct {
-	syncer *syncer.Syncer
-	cm     *chain.Manager
-	s      *hostDBStore
-	w      *walletutil.Wallet
-	log    *persist.Logger
+	syncer    *syncer.Syncer
+	syncerZen *syncer.Syncer
+	cm        *chain.Manager
+	cmZen     *chain.Manager
+	s         *hostDBStore
+	sZen      *hostDBStore
+	w         *walletutil.Wallet
+	log       *persist.Logger
 
 	tg siasync.ThreadGroup
 	mu sync.Mutex
@@ -101,30 +105,46 @@ type HostDB struct {
 	scanMap              map[types.PublicKey]bool
 	scanThreads          int
 	priceLimits          hostDBPriceLimits
+	blockedDomains       *blockedDomains
 }
 
 // Hosts returns a list of HostDB's hosts.
-func (hdb *HostDB) Hosts(offset, limit int) (hosts []HostDBEntry) {
+func (hdb *HostDB) Hosts(network string, offset, limit int) (hosts []HostDBEntry) {
+	if network == "zen" {
+		return hdb.sZen.getHosts(offset, limit)
+	}
 	return hdb.s.getHosts(offset, limit)
 }
 
 // Scans returns the host's scan history.
-func (hdb *HostDB) Scans(pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
+func (hdb *HostDB) Scans(network string, pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
+	if network == "zen" {
+		return hdb.sZen.getScans(pk, from, to)
+	}
 	return hdb.s.getScans(pk, from, to)
 }
 
 // ScanHistory returns the host's scan history.
-func (hdb *HostDB) ScanHistory(from, to time.Time) (history []ScanHistory, err error) {
+func (hdb *HostDB) ScanHistory(network string, from, to time.Time) (history []ScanHistory, err error) {
+	if network == "zen" {
+		return hdb.sZen.getScanHistory(from, to)
+	}
 	return hdb.s.getScanHistory(from, to)
 }
 
 // Benchmarks returns the host's benchmark history.
-func (hdb *HostDB) Benchmarks(pk types.PublicKey, from, to time.Time) (benchmarks []HostBenchmark, err error) {
+func (hdb *HostDB) Benchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []HostBenchmark, err error) {
+	if network == "zen" {
+		return hdb.sZen.getBenchmarks(pk, from, to)
+	}
 	return hdb.s.getBenchmarks(pk, from, to)
 }
 
 // BenchmarkHistory returns the host's benchmark history.
-func (hdb *HostDB) BenchmarkHistory(from, to time.Time) (history []BenchmarkHistory, err error) {
+func (hdb *HostDB) BenchmarkHistory(network string, from, to time.Time) (history []BenchmarkHistory, err error) {
+	if network == "zen" {
+		return hdb.sZen.getBenchmarkHistory(from, to)
+	}
 	return hdb.s.getBenchmarkHistory(from, to)
 }
 
@@ -134,16 +154,49 @@ func (hdb *HostDB) Close() {
 		hdb.log.Println("[ERROR] unable to stop threads:", err)
 	}
 	hdb.s.close()
+	hdb.sZen.close()
+	hdb.log.Close()
+}
+
+// loadBlockedDomains loads the list of blocked domains.
+func loadBlockedDomains(db *sql.DB) (*blockedDomains, error) {
+	var domains []string
+	rows, err := db.Query("SELECT dom FROM hdb_domains")
+	if err != nil {
+		return nil, utils.AddContext(err, "couldn't query blocked domains")
+	}
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			rows.Close()
+			return nil, utils.AddContext(err, "couldn't scan filtered domain")
+		}
+		domains = append(domains, domain)
+	}
+	rows.Close()
+	return newBlockedDomains(domains), nil
 }
 
 // NewHostDB returns a new HostDB.
-func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *syncer.Syncer, w *walletutil.Wallet) (*HostDB, <-chan error) {
+func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, syncer *syncer.Syncer, syncerZen *syncer.Syncer, w *walletutil.Wallet) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
 	l, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	store, tip, err := newHostDBStore(db, l, network)
+
+	domains, err := loadBlockedDomains(db)
+	if err != nil {
+		errChan <- err
+		return nil, errChan
+	}
+
+	store, tip, err := newHostDBStore(db, l, "mainnet", domains)
+	if err != nil {
+		errChan <- err
+		return nil, errChan
+	}
+	storeZen, tipZen, err := newHostDBStore(db, l, "zen", domains)
 	if err != nil {
 		errChan <- err
 		return nil, errChan
@@ -156,15 +209,22 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 		if err != nil {
 			errChan <- err
 		}
+		err = cmZen.AddSubscriber(storeZen, tipZen)
+		if err != nil {
+			errChan <- err
+		}
 	}()
 
 	hdb := &HostDB{
-		syncer:  syncer,
-		cm:      cm,
-		w:       w,
-		s:       store,
-		log:     l,
-		scanMap: make(map[types.PublicKey]bool),
+		syncer:    syncer,
+		syncerZen: syncerZen,
+		cm:        cm,
+		cmZen:     cmZen,
+		w:         w,
+		s:         store,
+		sZen:      storeZen,
+		log:       l,
+		scanMap:   make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
 			maxContractPrice:     maxContractPrice,
 			maxUploadPrice:       maxUploadPriceSC,
@@ -173,8 +233,10 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 			maxBaseRPCPrice:      maxBaseRPCPriceSC,
 			maxSectorAccessPrice: maxSectorAccessPriceSC,
 		},
+		blockedDomains: domains,
 	}
 	hdb.s.hdb = hdb
+	hdb.sZen.hdb = hdb
 
 	// Fetch SC rate.
 	go hdb.updateSCRate()
@@ -189,8 +251,19 @@ func NewHostDB(db *sql.DB, network, dir string, cm *chain.Manager, syncer *synce
 }
 
 // online returns if the HostDB is online.
-func (hdb *HostDB) online() bool {
+func (hdb *HostDB) online(network string) bool {
+	if network == "zen" {
+		return len(hdb.syncerZen.Peers()) > 0
+	}
 	return len(hdb.syncer.Peers()) > 0
+}
+
+func (hdb *HostDB) saveLocation(host *HostDBEntry, info IPInfo) error {
+
+	if host.Network == "zen" {
+		return hdb.sZen.updateHostLocation(host, info)
+	}
+	return hdb.s.updateHostLocation(host, info)
 }
 
 // updateSCRate periodically fetches the SC exchange rate.
@@ -236,4 +309,12 @@ func (hdb *HostDB) updateSCRate() {
 		case <-time.After(10 * time.Minute):
 		}
 	}
+}
+
+// synced returns true if HostDB is synced to the blockchain.
+func (hdb *HostDB) synced(network string) bool {
+	if network == "zen" {
+		return hdb.syncerZen.Synced() && time.Since(hdb.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
+	}
+	return hdb.syncer.Synced() && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
 }

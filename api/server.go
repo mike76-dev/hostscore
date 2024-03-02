@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/syncer"
 	"go.sia.tech/core/consensus"
@@ -20,7 +21,7 @@ type server struct {
 	s     *syncer.Syncer
 	sZen  *syncer.Syncer
 	w     *walletutil.Wallet
-	//hdb   *hostdb.HostDB
+	hdb   *hostdb.HostDB
 }
 
 func (s *server) consensusNetworkHandler(jc jape.Context) {
@@ -284,16 +285,35 @@ func (s *server) walletOutputsHandler(jc jape.Context) {
 	})
 }
 
-/*func (s *server) hostDBHostsHandler(jc jape.Context) {
+func (s *server) hostDBHostsHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
 	offset, limit := 0, -1
 	if jc.DecodeForm("offset", &offset) != nil || jc.DecodeForm("limit", &limit) != nil {
 		return
 	}
-	hosts := s.hdb.Hosts(offset, limit)
+	hosts := s.hdb.Hosts(network, offset, limit)
 	jc.Encode(hosts)
 }
 
 func (s *server) hostDBScansHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
 	var from, to time.Time
 	var pk types.PublicKey
 	if jc.DecodeForm("from", &from) != nil ||
@@ -301,7 +321,7 @@ func (s *server) hostDBScansHandler(jc jape.Context) {
 		jc.DecodeForm("host", &pk) != nil {
 		return
 	}
-	scans, err := s.hdb.Scans(pk, from, to)
+	scans, err := s.hdb.Scans(network, pk, from, to)
 	if jc.Check("couldn't get scan history", err) != nil {
 		return
 	}
@@ -309,11 +329,21 @@ func (s *server) hostDBScansHandler(jc jape.Context) {
 }
 
 func (s *server) hostDBScanHistoryHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
 	var from, to time.Time
 	if jc.DecodeForm("from", &from) != nil || jc.DecodeForm("to", &to) != nil {
 		return
 	}
-	history, err := s.hdb.ScanHistory(from, to)
+	history, err := s.hdb.ScanHistory(network, from, to)
 	if jc.Check("couldn't get scan history", err) != nil {
 		return
 	}
@@ -321,6 +351,16 @@ func (s *server) hostDBScanHistoryHandler(jc jape.Context) {
 }
 
 func (s *server) hostDBBenchmarksHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
 	var from, to time.Time
 	var pk types.PublicKey
 	if jc.DecodeForm("from", &from) != nil ||
@@ -328,7 +368,7 @@ func (s *server) hostDBBenchmarksHandler(jc jape.Context) {
 		jc.DecodeForm("host", &pk) != nil {
 		return
 	}
-	benchmarks, err := s.hdb.Benchmarks(pk, from, to)
+	benchmarks, err := s.hdb.Benchmarks(network, pk, from, to)
 	if jc.Check("couldn't get benchmark history", err) != nil {
 		return
 	}
@@ -336,26 +376,36 @@ func (s *server) hostDBBenchmarksHandler(jc jape.Context) {
 }
 
 func (s *server) hostDBBenchmarkHistoryHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
 	var from, to time.Time
 	if jc.DecodeForm("from", &from) != nil || jc.DecodeForm("to", &to) != nil {
 		return
 	}
-	history, err := s.hdb.BenchmarkHistory(from, to)
+	history, err := s.hdb.BenchmarkHistory(network, from, to)
 	if jc.Check("couldn't get benchmark history", err) != nil {
 		return
 	}
 	jc.Encode(history)
-}*/
+}
 
 // NewServer returns an HTTP handler that serves the hsd API.
-func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *syncer.Syncer, w *walletutil.Wallet) http.Handler { //, hdb *hostdb.HostDB) http.Handler {
+func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *syncer.Syncer, w *walletutil.Wallet, hdb *hostdb.HostDB) http.Handler {
 	srv := server{
 		cm:    cm,
 		cmZen: cmZen,
 		s:     s,
 		sZen:  sZen,
 		w:     w,
-		//hdb:   hdb,
+		hdb:   hdb,
 	}
 	return jape.Mux(map[string]jape.Handler{
 		"GET /consensus/network":  srv.consensusNetworkHandler,
@@ -372,10 +422,10 @@ func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *
 		"GET    /wallet/txpool":  srv.walletTxpoolHandler,
 		"GET    /wallet/outputs": srv.walletOutputsHandler,
 
-		//"GET    /hostdb/hosts":              srv.hostDBHostsHandler,
-		//"GET    /hostdb/scans":              srv.hostDBScansHandler,
-		//"GET    /hostdb/scans/history":      srv.hostDBScanHistoryHandler,
-		//"GET    /hostdb/benchmarks":         srv.hostDBBenchmarksHandler,
-		//"GET    /hostdb/benchmarks/history": srv.hostDBBenchmarkHistoryHandler,
+		"GET    /hostdb/hosts":              srv.hostDBHostsHandler,
+		"GET    /hostdb/scans":              srv.hostDBScansHandler,
+		"GET    /hostdb/scans/history":      srv.hostDBScanHistoryHandler,
+		"GET    /hostdb/benchmarks":         srv.hostDBBenchmarksHandler,
+		"GET    /hostdb/benchmarks/history": srv.hostDBBenchmarkHistoryHandler,
 	})
 }

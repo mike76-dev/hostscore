@@ -159,3 +159,10 @@ CREATE TABLE hdb_locations (
 CREATE TABLE hdb_domains (
 	dom VARCHAR(255) NOT NULL
 );
+
+INSERT INTO hdb_domains (dom)
+VALUES
+	('45.148.30.56'),
+	('51.158.108.244'),
+	('siacentral.ddnsfree.com'),
+	('siacentral.mooo.com');

@@ -26,16 +26,16 @@ type hostDBStore struct {
 	network string
 	hdb     *HostDB
 
-	hosts          map[types.PublicKey]*HostDBEntry
-	blockedHosts   map[types.PublicKey]struct{}
-	blockedDomains *blockedDomains
+	hosts        map[types.PublicKey]*HostDBEntry
+	blockedHosts map[types.PublicKey]struct{}
 
 	mu sync.Mutex
 
-	tip types.ChainIndex
+	tip           types.ChainIndex
+	lastCommitted time.Time
 }
 
-func newHostDBStore(db *sql.DB, logger *persist.Logger, network string) (*hostDBStore, types.ChainIndex, error) {
+func newHostDBStore(db *sql.DB, logger *persist.Logger, network string, domains *blockedDomains) (*hostDBStore, types.ChainIndex, error) {
 	s := &hostDBStore{
 		db:           db,
 		log:          logger,
@@ -43,7 +43,7 @@ func newHostDBStore(db *sql.DB, logger *persist.Logger, network string) (*hostDB
 		hosts:        make(map[types.PublicKey]*HostDBEntry),
 		blockedHosts: make(map[types.PublicKey]struct{}),
 	}
-	err := s.load()
+	err := s.load(domains)
 	if err != nil {
 		s.log.Println("[ERROR] couldn't load hosts:", err)
 		return nil, types.ChainIndex{}, err
@@ -57,7 +57,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 	if s.tx == nil {
 		return errors.New("there is no transaction")
 	}
-	if host.Blocked || s.blockedDomains.isBlocked(host.NetAddress) {
+	if host.Blocked || s.hdb.blockedDomains.isBlocked(host.NetAddress) {
 		host.Blocked = true
 		s.blockedHosts[host.PublicKey] = struct{}{}
 	} else {
@@ -305,44 +305,6 @@ func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 	return count
 }
 
-func (s *hostDBStore) saveLocation(pk types.PublicKey, info IPInfo) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.tx == nil {
-		return errors.New("there is no transaction")
-	}
-
-	s.hosts[pk].IPInfo = info
-	_, err := s.tx.Exec(`
-		REPLACE INTO hdb_locations_`+s.network+` (
-			public_key,
-			ip,
-			host_name,
-			city,
-			region,
-			country,
-			loc,
-			isp,
-			zip,
-			time_zone
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		pk[:],
-		info.IP,
-		info.HostName,
-		info.City,
-		info.Region,
-		info.Country,
-		info.Location,
-		info.ISP,
-		info.ZIP,
-		info.TimeZone,
-	)
-
-	return err
-}
-
 func (s *hostDBStore) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -351,40 +313,28 @@ func (s *hostDBStore) close() {
 			s.log.Println("[ERROR] couldn't commit transaction:", err)
 		}
 	}
-	s.log.Close()
 }
 
-func (s *hostDBStore) load() error {
+func (s *hostDBStore) load(domains *blockedDomains) error {
+	row := 1
+	if s.network == "zen" {
+		row = 2
+	}
+
 	var height uint64
 	id := make([]byte, 32)
 	err := s.db.QueryRow(`
 		SELECT height, bid
-		FROM hdb_tip_`+s.network+`
-		WHERE id = 1
-	`).Scan(&height, &id)
+		FROM hdb_tip
+		WHERE id = ?
+	`, row).Scan(&height, &id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return utils.AddContext(err, "couldn't load tip")
 	}
 	s.tip.Height = height
 	copy(s.tip.ID[:], id)
 
-	var domains []string
-	rows, err := s.db.Query("SELECT dom FROM hdb_domains_" + s.network)
-	if err != nil {
-		return utils.AddContext(err, "couldn't query blocked domains")
-	}
-	for rows.Next() {
-		var domain string
-		if err := rows.Scan(&domain); err != nil {
-			rows.Close()
-			return utils.AddContext(err, "couldn't scan filtered domain")
-		}
-		domains = append(domains, domain)
-	}
-	rows.Close()
-	s.blockedDomains = newBlockedDomains(domains)
-
-	rows, err = s.db.Query(`
+	rows, err := s.db.Query(`
 		SELECT
 			id,
 			public_key,
@@ -426,6 +376,7 @@ func (s *hostDBStore) load() error {
 		}
 		host := &HostDBEntry{
 			ID:           id,
+			Network:      s.network,
 			FirstSeen:    time.Unix(fs, 0),
 			KnownSince:   ks,
 			Blocked:      b,
@@ -465,7 +416,7 @@ func (s *hostDBStore) load() error {
 			}
 		}
 		s.mu.Lock()
-		if host.Blocked || s.blockedDomains.isBlocked(host.NetAddress) {
+		if host.Blocked || domains.isBlocked(host.NetAddress) {
 			host.Blocked = true
 			s.blockedHosts[host.PublicKey] = struct{}{}
 		}
@@ -604,7 +555,7 @@ func (s *hostDBStore) load() error {
 				isp,
 				zip,
 				time_zone
-			FROM hdb_locations_`+s.network+`
+			FROM hdb_locations
 			WHERE public_key = ?
 		`, pk)
 		if err != nil {
@@ -646,14 +597,23 @@ func (s *hostDBStore) load() error {
 
 // ProcessChainApplyUpdate implements chain.Subscriber.
 func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool) (err error) {
+	// Check if the update is for the right network.
+	if cau.State.Network.Name != s.network {
+		return nil
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.tip = cau.State.Index
+	row := 1
+	if s.network == "zen" {
+		row = 2
+	}
 	_, err = s.tx.Exec(`
-		REPLACE INTO hdb_tip_`+s.network+` (id, height, bid)
-		VALUES (1, ?, ?)
-	`, s.tip.Height, s.tip.ID[:])
+		REPLACE INTO hdb_tip (id, network, height, bid)
+		VALUES (?, ?, ?, ?)
+	`, row, s.network, s.tip.Height, s.tip.ID[:])
 	if err != nil {
 		s.log.Println("[ERROR] couldn't update tip:", err)
 		return err
@@ -678,6 +638,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			if !exists {
 				host = &HostDBEntry{
 					ID:         len(s.hosts) + 1,
+					Network:    s.network,
 					PublicKey:  pk,
 					FirstSeen:  cau.Block.Timestamp,
 					KnownSince: cau.State.Index.Height,
@@ -718,7 +679,10 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			host, exists := s.hosts[pk]
 			if !exists {
 				host = &HostDBEntry{
+					ID:         len(s.hosts) + 1,
+					Network:    s.network,
 					PublicKey:  pk,
+					FirstSeen:  cau.Block.Timestamp,
 					KnownSince: cau.State.Index.Height,
 				}
 			}
@@ -739,11 +703,12 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 		}
 	}
 
-	if mayCommit {
+	if mayCommit || time.Since(s.lastCommitted) >= 3*time.Second {
 		err = s.tx.Commit()
 		if err != nil {
 			return utils.AddContext(err, "couldn't commit transaction")
 		}
+		s.lastCommitted = time.Now()
 		s.tx, err = s.db.Begin()
 	}
 
@@ -1008,4 +973,44 @@ func (s *hostDBStore) getBenchmarkHistory(from, to time.Time) (history []Benchma
 	}
 
 	return
+}
+
+func (s *hostDBStore) updateHostLocation(host *HostDBEntry, info IPInfo) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tx == nil {
+		return errors.New("there is no transaction")
+	}
+
+	host.IPInfo = info
+	s.hosts[host.PublicKey] = host
+
+	_, err := s.tx.Exec(`
+		REPLACE INTO hdb_locations (
+			public_key,
+			ip,
+			host_name,
+			city,
+			region,
+			country,
+			loc,
+			isp,
+			zip,
+			time_zone
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`,
+		host.PublicKey[:],
+		info.IP,
+		info.HostName,
+		info.City,
+		info.Region,
+		info.Country,
+		info.Location,
+		info.ISP,
+		info.ZIP,
+		info.TimeZone,
+	)
+
+	return err
 }

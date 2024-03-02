@@ -137,7 +137,11 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	}
 
 	// Update the host database.
-	err = hdb.s.updateScanHistory(host, scan)
+	if host.Network == "zen" {
+		err = hdb.sZen.updateScanHistory(host, scan)
+	} else {
+		err = hdb.s.updateScanHistory(host, scan)
+	}
 	if err != nil {
 		hdb.log.Println("[ERROR] couldn't update scan history:", err)
 	}
@@ -170,7 +174,7 @@ func (hdb *HostDB) scanHosts() {
 	defer hdb.tg.Done()
 
 	for {
-		if hdb.syncer.Synced() {
+		if hdb.synced("mainnet") || hdb.synced("zen") {
 			break
 		}
 		select {
@@ -181,7 +185,13 @@ func (hdb *HostDB) scanHosts() {
 	}
 
 	for {
-		hdb.s.getHostsForScan()
+		if hdb.synced("mainnet") {
+			hdb.s.getHostsForScan()
+		}
+		if hdb.synced("zen") {
+			hdb.sZen.getHostsForScan()
+		}
+
 		for len(hdb.scanList) > 0 {
 			hdb.mu.Lock()
 			if hdb.scanThreads < maxScanThreads {

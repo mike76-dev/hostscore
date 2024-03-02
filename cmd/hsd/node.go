@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
+	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
@@ -65,8 +67,8 @@ type node struct {
 	s     *syncer.Syncer
 	sZen  *syncer.Syncer
 	w     *walletutil.Wallet
-	//hdb   *hostdb.HostDB
-	db *sql.DB
+	hdb   *hostdb.HostDB
+	db    *sql.DB
 
 	Start func() (stop func())
 }
@@ -198,16 +200,17 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	}
 	sZen := syncer.New(lZen, cmZen, psZen, headerZen, syncer.WithLogger(dirZen))
 
-	log.Println("Creating wallet...")
+	log.Println("Loading wallet...")
 	w, err := walletutil.NewWallet(mdb, seed, seedZen, config.Dir, cm, cmZen, s, sZen)
 	if err != nil {
 		return nil, err
 	}
 
-	/*hdb, errChan := hostdb.NewHostDB(mdb, config.Dir, cm, cmZen, s, sZen, w)
+	log.Println("Loading host database...")
+	hdb, errChan := hostdb.NewHostDB(mdb, config.Dir, cm, cmZen, s, sZen, w)
 	if err := utils.PeekErr(errChan); err != nil {
 		return nil, err
-	}*/
+	}
 
 	return &node{
 		cm:    cm,
@@ -215,8 +218,8 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		s:     s,
 		sZen:  sZen,
 		w:     w,
-		//hdb:   hdb,
-		db: mdb,
+		hdb:   hdb,
+		db:    mdb,
 		Start: func() func() {
 			ch := make(chan struct{})
 			go func() {
@@ -233,7 +236,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 				<-ch
 				lZen.Close()
 				<-chZen
-				//hdb.Close()
+				hdb.Close()
 				w.Close()
 				bdb.Close()
 				bdbZen.Close()
