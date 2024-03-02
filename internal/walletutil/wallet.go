@@ -463,8 +463,8 @@ func (w *Wallet) synced(network string) bool {
 func (w *Wallet) performWalletMaintenance(network string) {
 	redistribute := func() {
 		w.log.Println("[DEBUG] starting wallet maintenance:", network)
-		if (network == "zen" && len(w.cmZen.PoolTransactions()) > 0) ||
-			(network == "mainnet" && len(w.cm.PoolTransactions()) > 0) {
+		if (network == "zen" && relevantTransactions(w.cmZen.PoolTransactions(), w.sZen.addr)) ||
+			(network == "mainnet" && relevantTransactions(w.cm.PoolTransactions(), w.s.addr)) {
 			w.log.Printf("[DEBUG] pending transactions found on %s, skipping", network)
 			return
 		}
@@ -510,4 +510,16 @@ func (w *Wallet) performWalletMaintenance(network string) {
 			redistribute()
 		}
 	}
+}
+
+// relevantTransactions returns true if there is at least one relevant
+// transaction in the transaction set.
+func relevantTransactions(txnSet []types.Transaction, addr types.Address) bool {
+	for _, txn := range txnSet {
+		ptxn := wallet.Annotate(txn, addr)
+		if ptxn.Type != "unrelated" {
+			return true
+		}
+	}
+	return false
 }
