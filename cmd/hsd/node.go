@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
+	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/syncer"
 	"go.sia.tech/core/gateway"
@@ -63,7 +64,7 @@ type node struct {
 	cmZen *chain.Manager
 	s     *syncer.Syncer
 	sZen  *syncer.Syncer
-	//w     *walletutil.Wallet
+	w     *walletutil.Wallet
 	//hdb   *hostdb.HostDB
 	db *sql.DB
 
@@ -106,6 +107,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	}
 
 	// Mainnet.
+	log.Println("Connecting to Mainnet...")
 	mainnet, genesisBlockMainnet := chain.Mainnet()
 
 	dirMainnet := filepath.Join(dir, "mainnet")
@@ -151,6 +153,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(dirMainnet))
 
 	// Zen.
+	log.Println("Connecting to Zen...")
 	zen, genesisBlockZen := chain.TestnetZen()
 
 	dirZen := filepath.Join(dir, "zen")
@@ -195,10 +198,11 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	}
 	sZen := syncer.New(lZen, cmZen, psZen, headerZen, syncer.WithLogger(dirZen))
 
-	/*w, err := walletutil.NewWallet(mdb, seed, seedZen, config.Dir, cm, cmZen, s, sZen)
+	log.Println("Creating wallet...")
+	w, err := walletutil.NewWallet(mdb, seed, seedZen, config.Dir, cm, cmZen, s, sZen)
 	if err != nil {
 		return nil, err
-	}*/
+	}
 
 	/*hdb, errChan := hostdb.NewHostDB(mdb, config.Dir, cm, cmZen, s, sZen, w)
 	if err := utils.PeekErr(errChan); err != nil {
@@ -210,7 +214,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		cmZen: cmZen,
 		s:     s,
 		sZen:  sZen,
-		//w:     w,
+		w:     w,
 		//hdb:   hdb,
 		db: mdb,
 		Start: func() func() {
@@ -230,7 +234,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 				lZen.Close()
 				<-chZen
 				//hdb.Close()
-				//w.Close()
+				w.Close()
 				bdb.Close()
 				bdbZen.Close()
 				mdb.Close()

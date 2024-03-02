@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/syncer"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -17,7 +19,7 @@ type server struct {
 	cmZen *chain.Manager
 	s     *syncer.Syncer
 	sZen  *syncer.Syncer
-	//w     *walletutil.Wallet
+	w     *walletutil.Wallet
 	//hdb   *hostdb.HostDB
 }
 
@@ -59,6 +61,7 @@ func (s *server) consensusTipHandler(jc jape.Context) {
 		state = s.cmZen.TipState()
 		synced = s.sZen.Synced()
 	}
+	synced = synced && time.Since(state.PrevTimestamps[0]) < 24*time.Hour
 	resp := ConsensusTipResponse{
 		Network: network,
 		Height:  state.Index.Height,
@@ -176,17 +179,43 @@ func (s *server) txpoolFeeHandler(jc jape.Context) {
 	}
 }
 
-/*func (s *server) walletAddressHandlerGET(jc jape.Context) {
-	addr := s.w.Address()
+func (s *server) walletAddressHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+	addr := s.w.Address(network)
 	jc.Encode(addr)
 }
 
 func (s *server) walletBalanceHandler(jc jape.Context) {
-	scos, sfos, err := s.w.UnspentOutputs()
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
+	scos, sfos, err := s.w.UnspentOutputs(network)
 	if jc.Check("couldn't load outputs", err) != nil {
 		return
 	}
-	height := s.cm.TipState().Index.Height
+
+	var height uint64
+	if network == "zen" {
+		height = s.cmZen.TipState().Index.Height
+	} else {
+		height = s.cm.TipState().Index.Height
+	}
+
 	var sc, immature types.Currency
 	var sf uint64
 	for _, sco := range scos {
@@ -199,7 +228,9 @@ func (s *server) walletBalanceHandler(jc jape.Context) {
 	for _, sfo := range sfos {
 		sf += sfo.SiafundOutput.Value
 	}
+
 	jc.Encode(WalletBalanceResponse{
+		Network:          strings.ToUpper(string(network[0])) + network[1:],
 		Siacoins:         sc,
 		ImmatureSiacoins: immature,
 		Siafunds:         sf,
@@ -207,7 +238,24 @@ func (s *server) walletBalanceHandler(jc jape.Context) {
 }
 
 func (s *server) walletTxpoolHandler(jc jape.Context) {
-	pool, err := s.w.Annotate(s.cm.PoolTransactions())
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
+	var txns []types.Transaction
+	if network == "zen" {
+		txns = s.cmZen.PoolTransactions()
+	} else {
+		txns = s.cm.PoolTransactions()
+	}
+
+	pool, err := s.w.Annotate(network, txns)
 	if jc.Check("couldn't annotate pool", err) != nil {
 		return
 	}
@@ -215,17 +263,28 @@ func (s *server) walletTxpoolHandler(jc jape.Context) {
 }
 
 func (s *server) walletOutputsHandler(jc jape.Context) {
-	scos, sfos, err := s.w.UnspentOutputs()
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+
+	scos, sfos, err := s.w.UnspentOutputs(network)
 	if jc.Check("couldn't load outputs", err) != nil {
 		return
 	}
 	jc.Encode(WalletOutputsResponse{
+		Network:        strings.ToUpper(string(network[0])) + network[1:],
 		SiacoinOutputs: scos,
 		SiafundOutputs: sfos,
 	})
 }
 
-func (s *server) hostDBHostsHandler(jc jape.Context) {
+/*func (s *server) hostDBHostsHandler(jc jape.Context) {
 	offset, limit := 0, -1
 	if jc.DecodeForm("offset", &offset) != nil || jc.DecodeForm("limit", &limit) != nil {
 		return
@@ -289,13 +348,13 @@ func (s *server) hostDBBenchmarkHistoryHandler(jc jape.Context) {
 }*/
 
 // NewServer returns an HTTP handler that serves the hsd API.
-func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *syncer.Syncer) http.Handler { //, w *walletutil.Wallet, hdb *hostdb.HostDB) http.Handler {
+func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *syncer.Syncer, w *walletutil.Wallet) http.Handler { //, hdb *hostdb.HostDB) http.Handler {
 	srv := server{
 		cm:    cm,
 		cmZen: cmZen,
 		s:     s,
 		sZen:  sZen,
-		//w:     w,
+		w:     w,
 		//hdb:   hdb,
 	}
 	return jape.Mux(map[string]jape.Handler{
@@ -308,10 +367,10 @@ func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *
 		"GET  /txpool/transactions": srv.txpoolTransactionsHandler,
 		"GET  /txpool/fee":          srv.txpoolFeeHandler,
 
-		//"GET    /wallet/address": srv.walletAddressHandlerGET,
-		//"GET    /wallet/balance": srv.walletBalanceHandler,
-		//"GET    /wallet/txpool":  srv.walletTxpoolHandler,
-		//"GET    /wallet/outputs": srv.walletOutputsHandler,
+		"GET    /wallet/address": srv.walletAddressHandler,
+		"GET    /wallet/balance": srv.walletBalanceHandler,
+		"GET    /wallet/txpool":  srv.walletTxpoolHandler,
+		"GET    /wallet/outputs": srv.walletOutputsHandler,
 
 		//"GET    /hostdb/hosts":              srv.hostDBHostsHandler,
 		//"GET    /hostdb/scans":              srv.hostDBScansHandler,

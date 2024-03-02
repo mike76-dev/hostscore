@@ -16,6 +16,7 @@ import (
 	"github.com/mike76-dev/hostscore/syncer"
 	"github.com/mike76-dev/hostscore/wallet"
 	"gitlab.com/NebulousLabs/encoding"
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 )
@@ -41,10 +42,13 @@ const (
 var ErrInsufficientBalance = errors.New("insufficient balance")
 
 type Wallet struct {
-	s      *DBStore
-	cm     *chain.Manager
-	syncer *syncer.Syncer
-	log    *persist.Logger
+	s         *DBStore
+	sZen      *DBStore
+	cm        *chain.Manager
+	cmZen     *chain.Manager
+	syncer    *syncer.Syncer
+	syncerZen *syncer.Syncer
+	log       *persist.Logger
 
 	mu   sync.Mutex
 	tg   siasync.ThreadGroup
@@ -52,22 +56,34 @@ type Wallet struct {
 }
 
 // Address implements api.Wallet.
-func (w *Wallet) Address() types.Address {
+func (w *Wallet) Address(network string) types.Address {
+	if network == "zen" {
+		return w.sZen.Address()
+	}
 	return w.s.Address()
 }
 
 // Key implements api.Wallet.
-func (w *Wallet) Key() types.PrivateKey {
+func (w *Wallet) Key(network string) types.PrivateKey {
+	if network == "zen" {
+		return w.sZen.key
+	}
 	return w.s.key
 }
 
 // Annotate implements api.Wallet.
-func (w *Wallet) Annotate(txns []types.Transaction) ([]wallet.PoolTransaction, error) {
+func (w *Wallet) Annotate(network string, txns []types.Transaction) ([]wallet.PoolTransaction, error) {
+	if network == "zen" {
+		return w.sZen.Annotate(txns), nil
+	}
 	return w.s.Annotate(txns), nil
 }
 
 // UnspentOutputs implements api.Wallet.
-func (w *Wallet) UnspentOutputs() ([]types.SiacoinElement, []types.SiafundElement, error) {
+func (w *Wallet) UnspentOutputs(network string) ([]types.SiacoinElement, []types.SiafundElement, error) {
+	if network == "zen" {
+		return w.sZen.UnspentOutputs()
+	}
 	return w.s.UnspentOutputs()
 }
 
@@ -77,15 +93,17 @@ func (w *Wallet) Close() {
 		w.log.Println("[ERROR] unable to stop threads:", err)
 	}
 	w.s.close()
+	w.sZen.close()
 }
 
 // NewWallet returns a wallet that is stored in a MySQL database.
-func NewWallet(db *sql.DB, seed, network, dir string, cm *chain.Manager, syncer *syncer.Syncer) (*Wallet, error) {
+func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *chain.Manager, syncer *syncer.Syncer, syncerZen *syncer.Syncer) (*Wallet, error) {
 	l, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	store, tip, err := NewDBStore(db, seed, network, l)
+
+	store, tip, err := NewDBStore(db, seed, "mainnet", l)
 	if err != nil {
 		return nil, err
 	}
@@ -93,28 +111,40 @@ func NewWallet(db *sql.DB, seed, network, dir string, cm *chain.Manager, syncer 
 		return nil, err
 	}
 
-	w := &Wallet{
-		cm:     cm,
-		syncer: syncer,
-		log:    l,
-		s:      store,
-		used:   make(map[types.Hash256]bool),
+	storeZen, tipZen, err := NewDBStore(db, seedZen, "zen", l)
+	if err != nil {
+		return nil, err
+	}
+	if err := cmZen.AddSubscriber(storeZen, tipZen); err != nil {
+		return nil, err
 	}
 
-	go w.performWalletMaintenance()
+	w := &Wallet{
+		cm:        cm,
+		cmZen:     cmZen,
+		syncer:    syncer,
+		syncerZen: syncerZen,
+		log:       l,
+		s:         store,
+		sZen:      storeZen,
+		used:      make(map[types.Hash256]bool),
+	}
+
+	go w.performWalletMaintenance("mainnet")
+	go w.performWalletMaintenance("zen")
 
 	return w, nil
 }
 
 // Fund adds Siacoin inputs with the required amount to the transaction.
-func (w *Wallet) Fund(txn *types.Transaction, amount types.Currency) (parents []types.Transaction, toSign []types.Hash256, err error) {
+func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Currency) (parents []types.Transaction, toSign []types.Hash256, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if amount.IsZero() {
 		return nil, nil, nil
 	}
 
-	utxos, _, err := w.UnspentOutputs()
+	utxos, _, err := w.UnspentOutputs(network)
 	if err != nil {
 		return nil, nil, utils.AddContext(err, "couldn't get utxos to fund transaction")
 	}
@@ -124,7 +154,13 @@ func (w *Wallet) Fund(txn *types.Transaction, amount types.Currency) (parents []
 	})
 
 	inPool := make(map[types.Hash256]bool)
-	for _, ptxn := range w.cm.PoolTransactions() {
+	var txns []types.Transaction
+	if network == "zen" {
+		txns = w.cmZen.PoolTransactions()
+	} else {
+		txns = w.cm.PoolTransactions()
+	}
+	for _, ptxn := range txns {
 		for _, in := range ptxn.SiacoinInputs {
 			inPool[types.Hash256(in.ParentID)] = true
 		}
@@ -148,7 +184,7 @@ func (w *Wallet) Fund(txn *types.Transaction, amount types.Currency) (parents []
 	} else if outputSum.Cmp(amount) > 0 {
 		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 			Value:   outputSum.Sub(amount),
-			Address: w.Address(),
+			Address: w.Address(network),
 		})
 	}
 
@@ -156,12 +192,15 @@ func (w *Wallet) Fund(txn *types.Transaction, amount types.Currency) (parents []
 	for i, sce := range fundingElements {
 		txn.SiacoinInputs = append(txn.SiacoinInputs, types.SiacoinInput{
 			ParentID:         types.SiacoinOutputID(sce.ID),
-			UnlockConditions: types.StandardUnlockConditions(w.Key().PublicKey()),
+			UnlockConditions: types.StandardUnlockConditions(w.Key(network).PublicKey()),
 		})
 		toSign[i] = types.Hash256(sce.ID)
 		w.used[types.Hash256(sce.ID)] = true
 	}
 
+	if network == "zen" {
+		return w.cmZen.UnconfirmedParents(*txn), toSign, nil
+	}
 	return w.cm.UnconfirmedParents(*txn), toSign, nil
 }
 
@@ -216,8 +255,13 @@ func (w *Wallet) Reserve(scoids []types.SiacoinOutputID, sfoids []types.SiafundO
 }
 
 // Sign adds signatures corresponding to toSign elements to the transaction.
-func (w *Wallet) Sign(txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) error {
-	cs := w.cm.TipState()
+func (w *Wallet) Sign(network string, txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) error {
+	var cs consensus.State
+	if network == "zen" {
+		cs = w.cmZen.TipState()
+	} else {
+		cs = w.cm.TipState()
+	}
 	for _, id := range toSign {
 		ts := types.TransactionSignature{
 			ParentID:       id,
@@ -230,7 +274,7 @@ func (w *Wallet) Sign(txn *types.Transaction, toSign []types.Hash256, cf types.C
 		} else {
 			h = cs.PartialSigHash(*txn, cf)
 		}
-		sig := w.Key().SignHash(h)
+		sig := w.Key(network).SignHash(h)
 		ts.Signature = sig[:]
 		txn.Signatures = append(txn.Signatures, ts)
 	}
@@ -239,14 +283,24 @@ func (w *Wallet) Sign(txn *types.Transaction, toSign []types.Hash256, cf types.C
 
 // Redistribute creates a specified number of new outputs and distributes
 // the funds between them.
-func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
+func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int) error {
 	if outputs == 0 {
 		return errors.New("number of outputs must be greater than zero")
 	}
 
-	cs := w.cm.TipState()
-	fee := w.cm.RecommendedFee()
-	pool := w.cm.PoolTransactions()
+	var cs consensus.State
+	var fee types.Currency
+	var pool []types.Transaction
+
+	if network == "zen" {
+		cs = w.cmZen.TipState()
+		fee = w.cmZen.RecommendedFee()
+		pool = w.cmZen.PoolTransactions()
+	} else {
+		cs = w.cm.TipState()
+		fee = w.cm.RecommendedFee()
+		pool = w.cm.PoolTransactions()
+	}
 
 	// Build map of inputs currently in the tx pool.
 	inPool := make(map[types.Hash256]bool)
@@ -257,7 +311,7 @@ func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
 	}
 
 	// Fetch unspent transaction outputs.
-	utxos, _, err := w.UnspentOutputs()
+	utxos, _, err := w.UnspentOutputs(network)
 	if err != nil {
 		return err
 	}
@@ -292,7 +346,7 @@ func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
 		for i := 0; i < outputs && i < redistributeBatchSize; i++ {
 			txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 				Value:   amount,
-				Address: w.Address(),
+				Address: w.Address(network),
 			})
 		}
 		outputs -= len(txn.SiacoinOutputs)
@@ -335,8 +389,8 @@ func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
 		if sumOut := SumOutputs(inputs); sumOut.Cmp(want.Add(fee)) < 0 {
 			// In case of an error we need to free all inputs.
 			w.Release(txns)
-			return fmt.Errorf("%w: inputs %v < needed %v + txnFee %v (usable: %v, inUse: %v, sameValue: %v, notMatured: %v)",
-				ErrInsufficientBalance, sumOut.String(), want.String(), fee.String(), sumOut.String(), amtInUse.String(), amtSameValue.String(), amtNotMatured.String())
+			return fmt.Errorf("%w: inputs %v < needed %v + txnFee %v (usable: %v, inUse: %v, sameValue: %v, notMatured: %v, network: %s)",
+				ErrInsufficientBalance, sumOut.String(), want.String(), fee.String(), sumOut.String(), amtInUse.String(), amtSameValue.String(), amtNotMatured.String(), network)
 		}
 
 		// Set the miner fee.
@@ -347,7 +401,7 @@ func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
 		if !change.IsZero() {
 			txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 				Value:   change,
-				Address: w.Address(),
+				Address: w.Address(network),
 			})
 		}
 
@@ -355,7 +409,7 @@ func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
 		for _, sce := range inputs {
 			txn.SiacoinInputs = append(txn.SiacoinInputs, types.SiacoinInput{
 				ParentID:         types.SiacoinOutputID(sce.ID),
-				UnlockConditions: types.StandardUnlockConditions(w.Key().PublicKey()),
+				UnlockConditions: types.StandardUnlockConditions(w.Key(network).PublicKey()),
 			})
 			toSign = append(toSign, sce.ID)
 		}
@@ -364,19 +418,27 @@ func (w *Wallet) Redistribute(amount types.Currency, outputs int) error {
 	}
 
 	for i := 0; i < len(txns); i++ {
-		err = w.Sign(&txns[i], toSign, types.CoveredFields{WholeTransaction: true})
+		err = w.Sign(network, &txns[i], toSign, types.CoveredFields{WholeTransaction: true})
 		if err != nil {
 			w.Release(txns)
 			return utils.AddContext(err, "couldn't sign the transaction")
 		}
 	}
 
-	_, err = w.cm.AddPoolTransactions(txns)
+	if network == "zen" {
+		_, err = w.cmZen.AddPoolTransactions(txns)
+	} else {
+		_, err = w.cm.AddPoolTransactions(txns)
+	}
 	if err != nil {
 		w.Release(txns)
 		return utils.AddContext(err, "invalid transaction set")
 	}
-	w.syncer.BroadcastTransactionSet(txns)
+	if network == "zen" {
+		w.syncerZen.BroadcastTransactionSet(txns)
+	} else {
+		w.syncer.BroadcastTransactionSet(txns)
+	}
 
 	return nil
 }
@@ -389,27 +451,36 @@ func SumOutputs(outputs []types.SiacoinElement) (sum types.Currency) {
 	return
 }
 
+// synced returns true if the wallet is synced to the blockchain.
+func (w *Wallet) synced(network string) bool {
+	if network == "zen" {
+		return w.syncerZen.Synced() && time.Since(w.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
+	}
+	return w.syncer.Synced() && time.Since(w.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+}
+
 // performWalletMaintenance performs the wallet maintenance periodically.
-func (w *Wallet) performWalletMaintenance() {
+func (w *Wallet) performWalletMaintenance(network string) {
 	redistribute := func() {
-		w.log.Println("[DEBUG] starting wallet maintenance")
-		if len(w.cm.PoolTransactions()) > 0 {
-			w.log.Println("[DEBUG] pending transactions found, skipping")
+		w.log.Println("[DEBUG] starting wallet maintenance:", network)
+		if (network == "zen" && len(w.cmZen.PoolTransactions()) > 0) ||
+			(network == "mainnet" && len(w.cm.PoolTransactions()) > 0) {
+			w.log.Printf("[DEBUG] pending transactions found on %s, skipping", network)
 			return
 		}
-		utxos, _, err := w.UnspentOutputs()
+		utxos, _, err := w.UnspentOutputs(network)
 		if err != nil {
 			w.log.Println("[ERROR] couldn't get unspent outputs:", err)
 			return
 		}
 		balance := SumOutputs(utxos)
 		amount := balance.Div64(wantedOutputs).Div64(2)
-		err = w.Redistribute(amount, wantedOutputs)
+		err = w.Redistribute(network, amount, wantedOutputs)
 		if err != nil {
-			w.log.Printf("[ERROR] failed to redistribute wallet into %d outputs of amount %v, balance %v: %v", wantedOutputs, amount, balance, err)
+			w.log.Printf("[ERROR] failed to redistribute %s wallet into %d outputs of amount %v, balance %v: %v", network, wantedOutputs, amount, balance, err)
 			return
 		}
-		w.log.Println("[DEBUG] wallet maintenance succeeded")
+		w.log.Println("[DEBUG] wallet maintenance succeeded:", network)
 	}
 
 	if err := w.tg.Add(); err != nil {
@@ -419,7 +490,7 @@ func (w *Wallet) performWalletMaintenance() {
 	defer w.tg.Done()
 
 	for {
-		if w.syncer.Synced() {
+		if w.synced(network) {
 			break
 		}
 		select {
