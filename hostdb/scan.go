@@ -2,6 +2,7 @@ package hostdb
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -250,13 +251,13 @@ func calculateScanInterval(host *HostDBEntry) time.Duration {
 		return scanInterval // 30 minutes
 	}
 	if time.Since(host.LastSeen) > 28*24*time.Hour {
-		return scanInterval * 48 // 24 hours
+		return math.MaxInt64 // never
 	}
 	if time.Since(host.LastSeen) > 14*24*time.Hour {
-		return scanInterval * 24 // 12 hours
+		return scanInterval * 48 // 24 hours
 	}
 	if time.Since(host.LastSeen) > 7*24*time.Hour {
-		return scanInterval * 12 // 6 hours
+		return scanInterval * 24 // 12 hours
 	}
 	if time.Since(host.LastSeen) > 3*24*time.Hour {
 		return scanInterval * 8 // 4 hours
@@ -267,5 +268,5 @@ func calculateScanInterval(host *HostDBEntry) time.Duration {
 	if time.Since(host.LastSeen) > 24*time.Hour {
 		return scanInterval * 2 // 1 hour
 	}
-	return scanInterval // 30 minutes
+	return math.MaxInt64
 }

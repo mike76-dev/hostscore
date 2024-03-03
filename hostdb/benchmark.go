@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"net"
 	"strings"
 	"time"
@@ -283,7 +284,16 @@ func (s *hostDBStore) calculateBenchmarkInterval(host *HostDBEntry) time.Duratio
 	}
 
 	num := s.lastFailedBenchmarks(host)
-	if num > 10 {
+	if num > 13 && !host.ScanHistory[len(host.ScanHistory)-1].Success {
+		return math.MaxInt64 // never
+	}
+	if num > 11 {
+		return benchmarkInterval * 84 // 7 days
+	}
+	if num > 9 {
+		return benchmarkInterval * 36 // 3 days
+	}
+	if num > 7 {
 		return benchmarkInterval * 12 // 24 hours
 	}
 	if num > 5 {
@@ -292,7 +302,7 @@ func (s *hostDBStore) calculateBenchmarkInterval(host *HostDBEntry) time.Duratio
 	if num > 3 {
 		return benchmarkInterval * 2 // 4 hours
 	}
-	return benchmarkInterval // 2 hours
+	return math.MaxInt64
 }
 
 // benchmarkCost estimates the cost of running a single benchmark.
