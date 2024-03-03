@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS wt_sces;
 DROP TABLE IF EXISTS wt_sfes;
 
 CREATE TABLE wt_tip (
-	id      INT NOT NULL AUTO_INCREMENT,
+	id      INT NOT NULL,
 	network VARCHAR(8) NOT NULL,
 	height  BIGINT UNSIGNED NOT NULL,
 	bid     BINARY(32) NOT NULL,
@@ -135,7 +135,7 @@ CREATE TABLE hdb_benchmarks_zen (
 );
 
 CREATE TABLE hdb_tip (
-	id               INT NOT NULL AUTO_INCREMENT,
+	id               INT NOT NULL,
 	network VARCHAR(8) NOT NULL,
 	height           BIGINT UNSIGNED NOT NULL,
 	bid              BINARY(32) NOT NULL,
