@@ -277,13 +277,13 @@ func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 	var count int
 	err := s.tx.QueryRow(`
 		SELECT COUNT(*)
-		FROM hdb_scans`+s.network+` AS a
+		FROM hdb_scans_`+s.network+` AS a
 		WHERE a.public_key = ?
 		AND a.success = FALSE
 		AND (
 			a.ran_at > (
 				SELECT b.ran_at
-				FROM hdb_scans`+s.network+` AS b
+				FROM hdb_scans_`+s.network+` AS b
 				WHERE b.public_key = a.public_key
 				AND b.success = TRUE
 				ORDER BY b.ran_at DESC
@@ -291,7 +291,7 @@ func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 			)
 			OR (
 				SELECT COUNT(*)
-				FROM hdb_scans`+s.network+` AS c
+				FROM hdb_scans_`+s.network+` AS c
 				WHERE c.public_key = a.public_key
 				AND c.success = TRUE
 			) = 0
