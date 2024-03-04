@@ -58,7 +58,9 @@ func fetchIPInfo(addr string) (IPInfo, error) {
 
 func (hdb *HostDB) fetchLocations() {
 	getLocations := func() {
-		hosts := append(hdb.s.getHosts(0, -1), hdb.sZen.getHosts(0, -1)...)
+		hosts, _ := hdb.s.getHosts(false, 0, -1, "")
+		hostsZen, _ := hdb.sZen.getHosts(false, 0, -1, "")
+		hosts = append(hosts, hostsZen...)
 		for _, host := range hosts {
 			info, err := fetchIPInfo(host.NetAddress)
 			if err == nil {

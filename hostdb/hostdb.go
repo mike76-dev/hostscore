@@ -109,11 +109,11 @@ type HostDB struct {
 }
 
 // Hosts returns a list of HostDB's hosts.
-func (hdb *HostDB) Hosts(network string, offset, limit int) (hosts []HostDBEntry) {
+func (hdb *HostDB) Hosts(network string, all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool) {
 	if network == "zen" {
-		return hdb.sZen.getHosts(offset, limit)
+		return hdb.sZen.getHosts(all, offset, limit, query)
 	}
-	return hdb.s.getHosts(offset, limit)
+	return hdb.s.getHosts(all, offset, limit, query)
 }
 
 // Scans returns the host's scan history.

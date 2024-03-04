@@ -759,24 +759,35 @@ func (s *hostDBStore) ProcessChainRevertUpdate(_ *chain.RevertUpdate) error {
 	return nil
 }
 
-func (s *hostDBStore) getHosts(offset, limit int) (hosts []HostDBEntry) {
+func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if limit == -1 {
-		limit = len(s.hosts)
-	}
-	if offset > len(s.hosts) {
-		offset = len(s.hosts)
-	}
-	if offset+limit > len(s.hosts) {
-		limit = len(s.hosts) - offset
-	}
+
 	for _, host := range s.hosts {
-		if host.ID > offset && host.ID <= offset+limit {
-			hosts = append(hosts, *host)
+		if all || ((len(host.ScanHistory) > 0 && host.ScanHistory[len(host.ScanHistory)-1].Success) && (len(host.ScanHistory) > 1 && host.ScanHistory[len(host.ScanHistory)-2].Success || len(host.ScanHistory) == 1)) {
+			if query == "" || strings.Contains(host.NetAddress, query) {
+				hosts = append(hosts, *host)
+			}
 		}
 	}
+
 	slices.SortFunc(hosts, func(a, b HostDBEntry) int { return a.ID - b.ID })
+
+	if limit < 0 {
+		limit = len(hosts)
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(hosts) {
+		offset = len(hosts)
+	}
+	if offset+limit > len(hosts) {
+		limit = len(hosts) - offset
+	}
+	more = len(hosts) > offset+limit
+	hosts = hosts[offset : offset+limit]
+
 	return
 }
 
