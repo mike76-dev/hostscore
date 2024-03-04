@@ -58,11 +58,13 @@ func fetchIPInfo(addr string) (IPInfo, error) {
 
 func (hdb *HostDB) fetchLocations() {
 	getLocations := func() {
-		hosts := hdb.s.getHosts(0, -1)
+		hosts, _ := hdb.s.getHosts(false, 0, -1, "")
+		hostsZen, _ := hdb.sZen.getHosts(false, 0, -1, "")
+		hosts = append(hosts, hostsZen...)
 		for _, host := range hosts {
 			info, err := fetchIPInfo(host.NetAddress)
 			if err == nil {
-				if err := hdb.s.saveLocation(host.PublicKey, info); err != nil {
+				if err := hdb.saveLocation(&host, info); err != nil {
 					hdb.log.Println("[ERROR] couldn't save location:", err)
 				}
 			}

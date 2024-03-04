@@ -41,10 +41,9 @@ And enable your firewall:
 ```
 $ sudo ufw enable
 ```
-Now you need to allow incoming connections to ports `9980` and `9880` from the IP address of the client machine where `hsc` will be running:
+Now you need to allow incoming connections to port `9980` from the IP address of the client machine where `hsc` will be running:
 ```
 $ sudo ufw allow from <IP_address> proto tcp to any port 9980
-$ sudo ufw allow from <IP_address> proto tcp to any port 9880
 ```
 You can verify the change by checking the status:
 ```
@@ -58,7 +57,6 @@ Status: active
 To                         Action      From
 --                         ------      ----
 OpenSSH                    ALLOW       Anywhere
-9880/tcp                   ALLOW       <IP_address>
 9980/tcp                   ALLOW       <IP_address>
 OpenSSH (v6)               ALLOW       Anywhere (v6)
 ```
@@ -172,10 +170,9 @@ mysql> exit;
 
 ## Configuring HSD
 
-Create the config directories:
+Create the hsd directory:
 ```
-sudo mkdir /usr/local/etc/hsd-mainnet
-sudo mkdir /usr/local/etc/hsd-zen
+sudo mkdir /usr/local/etc/hsd
 sudo chown <user> /usr/local/etc/*
 ```
 where `user` is the name of the user that will be running the service.
@@ -184,43 +181,22 @@ Open the `hsdconfig.json` file:
 ```
 $ nano hsdconfig.json
 ```
-First, choose a `name` of your hsd node. Fill in the `dbUser` and `dbName` fields with the MySQL user name (`hsuser`) and the database name (`hostscore`). Set the directory to store the `hsd` metadata and log files (here it is `/usr/local/etc/hsd-mainnet`). You can also change the default port numbers:
+First, choose a `name` of your hsd node. Fill in the `dbUser` and `dbName` fields with the MySQL user name (`hsuser`) and the database name (`hostscore`). Set the directory to store the `hsd` metadata and log files (here it is `/usr/local/etc/hsd`). You can also change the default port numbers:
 ```
 "HSD Configuration"
-"0.1.0"
+"0.2.0"
 {
-        "name": "",
-        "gateway": ":9981",
+        "gatewayMainnet": ":9981",
+        "gatewayZen": ":9881",
         "api": ":9980",
-        "dir": "/usr/local/etc/hsd-mainnet",
+        "dir": "/usr/local/etc/hsd",
         "dbUser": "hsuser",
-        "dbName": "hostscore",
-        "network": "mainnet"
+        "dbName": "hostscore"
 }
 ```
 Save and exit. Now copy the file to its new location:
 ```
-$ cp hsdconfig.json /usr/local/etc/hsd-mainnet
-```
-Now repeat the same for the Zen network. Note that the port numbers are different:
-```
-$ nano hsdconfig.json
-```
-```
-"HSD Configuration"
-"0.1.0"
-{
-        "name": "",
-        "gateway": ":9881",
-        "api": ":9880",
-        "dir": "/usr/local/etc/hsd-zen",
-        "dbUser": "hsuser",
-        "dbName": "hostscore",
-        "network": "zen"
-}
-```
-```
-$ cp hsdconfig.json /usr/local/etc/hsd-zen
+$ cp hsdconfig.json /usr/local/etc/hsd
 ```
 Now copy the `hsd` binary over:
 ```
@@ -235,25 +211,25 @@ Output:
 Seed:    belt thought dignity indoor find judge field foot next robot impose layer
 Address: 5ea89aa7dd4a8f7db0bb9d5a7e9f11f2e141db9b964158c20e24462386b3925462b733f2fc44
 ```
-You will be using the same seed for both the Mainnet and the Zen network. Take a note of it as well as of the generated wallet address. Fund this address with Siacoin on both networks.
+This will be your Mainnet seed. Repeat the same command to generate a Zen seed. Take a note of both seeds as well as of the generated wallet addresses. Fund these addresses with Siacoin on both networks.
 
-The easiest way to run `hsd` is via `systemd`. You need to create two service file, one for each network:
+The easiest way to run `hsd` is via `systemd`. You need to create a service file first:
 ```
-$ sudo nano /etc/systemd/system/hsd-mainnet.service
+$ sudo nano /etc/systemd/system/hsd.service
 ```
 Enter the following lines. Replace:
 `<user>` with the name of the user that will be running `hsd`,
 `<api_password>` with the `hsd` API password of your choice,
 `<db_password>` with the MySQL user password created earlier,
-`<wallet_seed>` with the wallet seed generated at the previous step,
+`<wallet_seed>` and `<wallet_seed_zen>` with the wallet seeds generated at the previous step,
 ```
 [Unit]
-Description=hsd-mainnet
+Description=hsd
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd-mainnet
+ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd
 TimeoutStopSec=660
 Restart=always
 RestartSec=15
@@ -261,72 +237,53 @@ User=<user>
 Environment="HSD_API_PASSWORD=<api_password>"
 Environment="HSD_DB_PASSWORD=<db_password>"
 Environment="HSD_WALLET_SEED=<wallet_seed>"
-Environment="HSD_CONFIG_DIR=/usr/local/etc/hsd-mainnet"
+Environment="HSD_WALLET_SEED_ZEN=<wallet_seed_zen>"
+Environment="HSD_CONFIG_DIR=/usr/local/etc/hsd"
 LimitNOFILE=900000
 
 [Install]
 WantedBy=multi-user.target
-Alias=hsd-mainnet.service
+Alias=hsd.service
 ```
-Save and exit. Repeat the same for the Zen network:
+Save and exit. Now you are ready to start `hsd`:
 ```
-$ sudo nano /etc/systemd/system/hsd-zen.service
-```
-```
-[Unit]
-Description=hsd-zen
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd-zen
-TimeoutStopSec=660
-Restart=always
-RestartSec=15
-User=<user>
-Environment="HSD_API_PASSWORD=<api_password>"
-Environment="HSD_DB_PASSWORD=<db_password>"
-Environment="HSD_WALLET_SEED=<wallet_seed>"
-Environment="HSD_CONFIG_DIR=/usr/local/etc/hsd-zen"
-LimitNOFILE=900000
-
-[Install]
-WantedBy=multi-user.target
-Alias=hsd-zen.service
-```
-Now you are ready to start `hsd`:
-```
-$ sudo systemctl start hsd-mainnet
-$ sudo systemctl start hsd-zen
+$ sudo systemctl start hsd
 ```
 Open the `systemd` journal to see the log:
 ```
-$ journalctl -u hsd-zen -f
+$ journalctl -u hsd -f
 ```
 If everything went well, you should see the following output:
 ```
 Output:
-Feb 16 09:41:40 server systemd[1]: Started hsd-zen.
-Feb 16 09:41:40 server hsd[1330]: Using HSD_CONFIG_DIR environment variable to load config.
-Feb 16 09:41:40 server hsd[1330]: Using HSD_API_PASSWORD environment variable.
-Feb 16 09:41:40 server hsd[1330]: Using HSD_DB_PASSWORD environment variable.
-Feb 16 09:41:40 server hsd[1330]: Using HSD_WALLET_SEED environment variable.
-Feb 16 09:41:40 server hsd[1330]: hsd v0.1.0
-Feb 16 09:41:40 server hsd[1330]: Git Revision 047f00c
-Feb 16 09:41:40 server hsd[1330]: Loading...
-Feb 16 09:41:40 server hsd[1330]: Connecting to the SQL database...
-Feb 16 09:41:40 server hsd[1330]: p2p: Listening on [::]:9881
-Feb 16 09:41:40 server hsd[1330]: api: Listening on 127.0.0.1:9880
+Mar 03 12:37:29 server systemd[1]: Started hsd.
+Mar 03 12:37:29 server hsd[1945]: Using HSD_CONFIG_DIR environment variable to load config.
+Mar 03 12:37:29 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
+Mar 03 12:37:29 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
+Mar 03 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
+Mar 03 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
+Mar 03 12:37:29 server hsd[1945]: hsd v0.1.0
+Mar 03 12:37:29 server hsd[1945]: Git Revision 047f00c
+Mar 03 12:37:29 server hsd[1945]: Loading...
+Mar 03 12:37:29 server hsd[1945]: Connecting to the SQL database...
+Mar 03 12:37:29 server hsd[1945]: Connecting to Mainnet...
+Mar 03 12:37:29 server hsd[1945]: Connecting to Zen...
+Mar 03 12:37:29 server hsd[1945]: Loading wallet...
+Mar 03 12:37:29 server hsd[1945]: Loading host database...
+Mar 03 12:37:30 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
+Mar 03 12:37:30 server hsd[1945]: p2p Zen: Listening on [::]:9881
+Mar 03 12:37:30 server hsd[1945]: api: Listening on [::]:9980
 ```
 The daemon will now be syncing to the blockchain. You can monitor the progress with the following command:
 ```
-$ curl -u "":<api_password> http://localhost:9880/api/consensus/tip
+$ curl -u "":<api_password> "http://localhost:9980/api/consensus/tip?network=mainnet"
 ```
 ```
 Output:
 {
-	"height": 29110,
-	"id": "bid:0000000179cbc819da2cf4791d3c0ffa1d36f8e0ed1590e6811bbfcea88aafe3",
+	"network": "Mainnet",
+	"height": 38540,
+	"id": "bid:000000000000dedd2b77efddf81a92f633687ae26ef59580edae1446e2491319",
 	"synced": false
 }
 ```
@@ -334,19 +291,21 @@ Once the node is synced, the output will change:
 ```
 Output:
 {
-	"height": 57444,
-	"id": "bid:00000003609a4a84c93c50574410cf4457ce291a065148aa389899982c01d089",
+	"network": "Mainnet",
+	"height": 459803,
+	"id": "bid:0000000000000000a8240e67be4cab57db6a9b546524920ce1d8d22cd84ac9cd",
 	"synced": true
 }
 ```
-Check that the wallet has funds in it:
+Check that the wallet has funds in it (if you had it funded with 1KS earlier, for example):
 ```
-$ curl -u "":<api_password> http://localhost:9880/api/wallet/balance
+$ curl -u "":<api_password> "http://localhost:9980/api/wallet/balance?network=mainnet"
 ```
 ```
 Output:
 {
-	"siacoins": "50000000000000000000000000000",
+	"network": "Mainnet",
+	"siacoins": "1000000000000000000000000000",
 	"immatureSiacoins": "0",
 	"siafunds": 0
 }

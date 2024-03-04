@@ -12,7 +12,7 @@ import (
 )
 
 // startDaemon starts the hsd server.
-func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword, seed string) error {
+func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword, seed, seedZen string) error {
 	fmt.Printf("hsd v%v\n", build.NodeVersion)
 	if build.GitRevision == "" {
 		fmt.Println("WARN: compiled without build commit or version. To compile correctly, please use the makefile")
@@ -26,11 +26,12 @@ func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword, seed string
 	if err != nil {
 		log.Fatal(err)
 	}
-	n, err := newNode(config, dbPassword, seed)
+	n, err := newNode(config, dbPassword, seed, seedZen)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("p2p: Listening on", n.s.Addr())
+	log.Println("p2p Mainnet: Listening on", n.s.Addr())
+	log.Println("p2p Zen: Listening on", n.sZen.Addr())
 	stop := n.Start()
 	log.Println("api: Listening on", l.Addr())
 	go startWeb(l, n, apiPassword)

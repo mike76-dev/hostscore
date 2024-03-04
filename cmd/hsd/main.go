@@ -16,13 +16,12 @@ import (
 
 // Default config values.
 var defaultConfig = persist.HSDConfig{
-	Name:        "",
-	GatewayAddr: ":9981",
-	APIAddr:     ":9980",
-	Dir:         ".",
-	DBUser:      "",
-	DBName:      "hostscore",
-	Network:     "mainnet",
+	GatewayMainnet: ":9981",
+	GatewayZen:     ":9881",
+	APIAddr:        ":9980",
+	Dir:            ".",
+	DBUser:         "",
+	DBName:         "hostscore",
 }
 
 var config persist.HSDConfig
@@ -65,7 +64,23 @@ func getWalletSeed() string {
 	if seed != "" {
 		log.Println("Using HSD_WALLET_SEED environment variable.")
 	} else {
-		fmt.Print("Enter wallet seed: ")
+		fmt.Print("Enter Mainnet wallet seed: ")
+		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			log.Fatalf("Could not read wallet seed: %v\n", err)
+		}
+		seed = string(pw)
+	}
+	return seed
+}
+
+func getWalletSeedZen() string {
+	seed := os.Getenv("HSD_WALLET_SEED_ZEN")
+	if seed != "" {
+		log.Println("Using HSD_WALLET_SEED_ZEN environment variable.")
+	} else {
+		fmt.Print("Enter Zen wallet seed: ")
 		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
 		fmt.Println()
 		if err != nil {
@@ -114,17 +129,21 @@ func main() {
 		config = defaultConfig
 	}
 
-	var name, gatewayAddr, apiAddr, dir, dbUser, dbName, network string
+	var gatewayMainnet,
+		gatewayZen,
+		apiAddr,
+		dir,
+		dbUser,
+		dbName string
 
 	rootCmd := flagg.Root
 	rootCmd.Usage = flagg.SimpleUsage(rootCmd, rootUsage)
-	rootCmd.StringVar(&name, "name", "", "name of the benchmarking node")
-	rootCmd.StringVar(&gatewayAddr, "addr", "", "p2p address to listen on")
+	rootCmd.StringVar(&gatewayMainnet, "addr-mainnet", "", "Mainnet p2p address to listen on")
+	rootCmd.StringVar(&gatewayZen, "addr-zen", "", "Zen p2p address to listen on")
 	rootCmd.StringVar(&apiAddr, "api-addr", "", "address to serve API on")
 	rootCmd.StringVar(&dir, "dir", "", "directory to store node state in")
 	rootCmd.StringVar(&dbUser, "db-user", "", "username for accessing the database")
 	rootCmd.StringVar(&dbName, "db-name", "", "name of MYSQL database")
-	rootCmd.StringVar(&network, "network", "", "network to connect to")
 	versionCmd := flagg.New("version", versionUsage)
 	seedCmd := flagg.New("seed", seedUsage)
 
@@ -144,11 +163,11 @@ func main() {
 		}
 
 		// Parse command line flags. If set, they override the loaded config.
-		if name != "" {
-			config.Name = name
+		if gatewayMainnet != "" {
+			config.GatewayMainnet = gatewayMainnet
 		}
-		if gatewayAddr != "" {
-			config.GatewayAddr = gatewayAddr
+		if gatewayZen != "" {
+			config.GatewayZen = gatewayZen
 		}
 		if apiAddr != "" {
 			config.APIAddr = apiAddr
@@ -161,9 +180,6 @@ func main() {
 		}
 		if dbName != "" {
 			config.DBName = dbName
-		}
-		if network != "" {
-			config.Network = network
 		}
 
 		// Save the configuration.
@@ -178,8 +194,9 @@ func main() {
 		// Fetch DB password.
 		dbPassword := getDBPassword()
 
-		// Fetch wallet seed.
+		// Fetch wallet seeds.
 		seed := getWalletSeed()
+		seedZen := getWalletSeedZen()
 
 		// Create the directory if it does not yet exist.
 		// This also checks if the provided directory parameter is valid.
@@ -189,7 +206,7 @@ func main() {
 		}
 
 		// Start hsd. startDaemon will only return when it is shutting down.
-		err = startDaemon(&config, apiPassword, dbPassword, seed)
+		err = startDaemon(&config, apiPassword, dbPassword, seed, seedZen)
 		if err != nil {
 			log.Fatalln(err)
 		}

@@ -17,13 +17,12 @@ const configFilename = "hsdconfig.json"
 
 // HSDConfig contains the fields that are passed on to the new node.
 type HSDConfig struct {
-	Name        string `json:"name"`
-	GatewayAddr string `json:"gateway"`
-	APIAddr     string `json:"api"`
-	Dir         string `json:"dir"`
-	DBUser      string `json:"dbUser"`
-	DBName      string `json:"dbName"`
-	Network     string `json:"network"`
+	GatewayMainnet string `json:"gatewayMainnet"`
+	GatewayZen     string `json:"gatewayZen"`
+	APIAddr        string `json:"api"`
+	Dir            string `json:"dir"`
+	DBUser         string `json:"dbUser"`
+	DBName         string `json:"dbName"`
 }
 
 // hsdMetadata contains the header and version strings that identify the
@@ -36,7 +35,7 @@ type hsdMetadata = struct {
 // metadata contains the actual values.
 var metadata = hsdMetadata{
 	Header:  "HSD Configuration",
-	Version: "0.1.0",
+	Version: "0.2.0",
 }
 
 // Load loads the configuration from disk.

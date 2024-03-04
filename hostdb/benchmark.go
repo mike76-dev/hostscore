@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math"
 	"net"
 	"strings"
 	"time"
@@ -31,9 +32,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		host.IPNets = ipNets
 		host.LastIPChange = time.Now()
 	}
-	if err != nil {
-		hdb.log.Println("[ERROR] failed to look up IP nets:", err)
-	}
 
 	// Update historic interactions of the host if necessary.
 	hdb.mu.Lock()
@@ -41,7 +39,13 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	limits := hdb.priceLimits
 	hdb.mu.Unlock()
 
-	key := hdb.w.Key()
+	key := hdb.w.Key(host.Network)
+	var height uint64
+	if host.Network == "zen" {
+		height = hdb.sZen.tip.Height
+	} else {
+		height = hdb.s.tip.Height
+	}
 
 	timestamp := time.Now()
 	var success bool
@@ -58,7 +62,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		if (pt == rhpv3.HostPriceTable{}) {
 			return errors.New("couldn't fetch price table")
 		}
-		err := checkGouging(hdb.s.tip.Height, &settings, &pt, limits)
+		err := checkGouging(&settings, &pt, limits)
 		if err != nil {
 			return err
 		}
@@ -81,15 +85,8 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		var uploadCost, downloadCost types.Currency
 
 		// Check if we have a contract with this host and if it has enough money in it.
-		if host.Revision.WindowStart <= hdb.s.tip.Height ||
+		if host.Revision.WindowStart <= height ||
 			host.Revision.ValidRenterPayout().Cmp(hdb.benchmarkCost(host)) < 0 {
-			if host.Revision.WindowStart == 0 {
-				hdb.log.Printf("[DEBUG] forming a new contract with %s, because there is no contract yet\n", host.NetAddress)
-			} else if host.Revision.WindowStart <= hdb.s.tip.Height {
-				hdb.log.Printf("[DEBUG] forming a new contract with %s, because the existing contract has expired: %d <= %d\n", host.NetAddress, host.Revision.WindowStart, hdb.s.tip.Height)
-			} else {
-				hdb.log.Printf("[DEBUG] forming a new contract with %s, because the existing contract has run out of funds: %v < %v\n", host.NetAddress, host.Revision.ValidRenterPayout(), hdb.benchmarkCost(host))
-			}
 			var rev rhpv2.ContractRevision
 			var txnSet []types.Transaction
 			err = rhp.WithTransportV2(ctx, settings.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
@@ -110,15 +107,24 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 				return err
 			}
 
-			_, err := hdb.cm.AddPoolTransactions(txnSet)
-			if err != nil {
-				hdb.w.Release(txnSet)
-				return utils.AddContext(err, "invalid transaction set")
+			if host.Network == "zen" {
+				_, err := hdb.cmZen.AddPoolTransactions(txnSet)
+				if err != nil {
+					hdb.w.Release(txnSet)
+					return utils.AddContext(err, "invalid transaction set")
+				}
+				hdb.syncerZen.BroadcastTransactionSet(txnSet)
+			} else {
+				_, err := hdb.cm.AddPoolTransactions(txnSet)
+				if err != nil {
+					hdb.w.Release(txnSet)
+					return utils.AddContext(err, "invalid transaction set")
+				}
+				hdb.syncer.BroadcastTransactionSet(txnSet)
 			}
-			hdb.syncer.BroadcastTransactionSet(txnSet)
 
 			host.Revision = rev.Revision
-			hdb.log.Printf("[DEBUG] successfully formed contract with %s: %s\n", host.NetAddress, rev.Revision.ParentID)
+			hdb.log.Printf("[INFO] successfully formed contract with %s: %s\n", host.NetAddress, rev.Revision.ParentID)
 		} else {
 			// Fetch the latest revision.
 			err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
@@ -233,7 +239,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	} else {
 		errMsg = err.Error()
 		hdb.IncrementFailedInteractions(host)
-		hdb.log.Printf("[DEBUG] benchmark of %s failed: %v\n", host.NetAddress, err)
 	}
 
 	benchmark := HostBenchmark{
@@ -244,7 +249,11 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		DownloadSpeed: dl,
 		TTFB:          ttfb,
 	}
-	err = hdb.s.updateBenchmarks(host, benchmark)
+	if host.Network == "zen" {
+		err = hdb.sZen.updateBenchmarks(host, benchmark)
+	} else {
+		err = hdb.s.updateBenchmarks(host, benchmark)
+	}
 	if err != nil {
 		hdb.log.Println("[ERROR] couldn't update benchmarks:", err)
 	}
@@ -264,7 +273,16 @@ func (s *hostDBStore) calculateBenchmarkInterval(host *HostDBEntry) time.Duratio
 	}
 
 	num := s.lastFailedBenchmarks(host)
-	if num > 10 {
+	if num > 13 && !host.ScanHistory[len(host.ScanHistory)-1].Success {
+		return math.MaxInt64 // never
+	}
+	if num > 11 {
+		return benchmarkInterval * 84 // 7 days
+	}
+	if num > 9 {
+		return benchmarkInterval * 36 // 3 days
+	}
+	if num > 7 {
 		return benchmarkInterval * 12 // 24 hours
 	}
 	if num > 5 {
@@ -273,7 +291,7 @@ func (s *hostDBStore) calculateBenchmarkInterval(host *HostDBEntry) time.Duratio
 	if num > 3 {
 		return benchmarkInterval * 2 // 4 hours
 	}
-	return benchmarkInterval // 2 hours
+	return math.MaxInt64
 }
 
 // benchmarkCost estimates the cost of running a single benchmark.

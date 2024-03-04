@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 
+	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/internal/build"
 )
 
@@ -44,7 +45,7 @@ func main() {
 
 	api := newAPI(s)
 	for key, node := range s.nodes {
-		api.clients[key] = newClient(node.Address, node.Password)
+		api.clients[key] = client.NewClient(node.Address, node.Password)
 	}
 	api.buildHTTPRoutes()
 

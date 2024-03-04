@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 
+	"github.com/mike76-dev/hostscore/hostdb"
 	"go.sia.tech/core/types"
 )
 
@@ -20,6 +21,7 @@ type GatewayPeer struct {
 
 // ConsensusTipResponse is the response type for /consensus/tip.
 type ConsensusTipResponse struct {
+	Network string        `json:"network"`
 	Height  uint64        `json:"height"`
 	BlockID types.BlockID `json:"id"`
 	Synced  bool          `json:"synced"`
@@ -33,6 +35,7 @@ type TxpoolTransactionsResponse struct {
 
 // WalletBalanceResponse is the response type for /wallet/balance.
 type WalletBalanceResponse struct {
+	Network          string         `json:"network"`
 	Siacoins         types.Currency `json:"siacoins"`
 	ImmatureSiacoins types.Currency `json:"immatureSiacoins"`
 	Siafunds         uint64         `json:"siafunds"`
@@ -40,6 +43,13 @@ type WalletBalanceResponse struct {
 
 // WalletOutputsResponse is the response type for /wallet/outputs.
 type WalletOutputsResponse struct {
+	Network        string                 `json:"network"`
 	SiacoinOutputs []types.SiacoinElement `json:"siacoinOutputs"`
 	SiafundOutputs []types.SiafundElement `json:"siafundOutputs"`
+}
+
+// HostdbHostsResponse is the response type for /hostdb/hosts.
+type HostdbHostsResponse struct {
+	Hosts []hostdb.HostDBEntry `json:"hosts"`
+	More  bool                 `json:"more"`
 }

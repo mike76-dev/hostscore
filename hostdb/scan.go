@@ -2,6 +2,7 @@ package hostdb
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -14,7 +15,7 @@ import (
 
 const (
 	scanInterval      = 30 * time.Minute
-	scanCheckInterval = 15 * time.Second
+	scanCheckInterval = 1 * time.Second
 	maxScanThreads    = 100
 	minScans          = 25
 )
@@ -29,7 +30,13 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 		return
 	}
 	// Put the entry in the scan list.
-	toBenchmark := len(host.ScanHistory) > 0 && time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) < calculateScanInterval(host)
+	var interval time.Duration
+	if host.Network == "zen" {
+		interval = hdb.sZen.calculateScanInterval(host)
+	} else {
+		interval = hdb.s.calculateScanInterval(host)
+	}
+	toBenchmark := len(host.ScanHistory) > 0 && time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) < interval
 	hdb.scanMap[host.PublicKey] = toBenchmark
 	if toBenchmark {
 		hdb.benchmarkList = append(hdb.benchmarkList, host)
@@ -49,9 +56,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
 		host.IPNets = ipNets
 		host.LastIPChange = time.Now()
-	}
-	if err != nil {
-		hdb.log.Println("[ERROR] failed to look up IP nets:", err)
 	}
 
 	// Update historic interactions of the host if necessary.
@@ -124,7 +128,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	} else {
 		errMsg = err.Error()
 		hdb.IncrementFailedInteractions(host)
-		hdb.log.Printf("[DEBUG] scan of %s failed: %v\n", host.NetAddress, err)
 	}
 
 	scan := HostScan{
@@ -137,7 +140,11 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	}
 
 	// Update the host database.
-	err = hdb.s.updateScanHistory(host, scan)
+	if host.Network == "zen" {
+		err = hdb.sZen.updateScanHistory(host, scan)
+	} else {
+		err = hdb.s.updateScanHistory(host, scan)
+	}
 	if err != nil {
 		hdb.log.Println("[ERROR] couldn't update scan history:", err)
 	}
@@ -170,7 +177,7 @@ func (hdb *HostDB) scanHosts() {
 	defer hdb.tg.Done()
 
 	for {
-		if hdb.syncer.Synced() {
+		if hdb.synced("mainnet") || hdb.synced("zen") {
 			break
 		}
 		select {
@@ -181,7 +188,13 @@ func (hdb *HostDB) scanHosts() {
 	}
 
 	for {
-		hdb.s.getHostsForScan()
+		if hdb.synced("mainnet") {
+			hdb.s.getHostsForScan()
+		}
+		if hdb.synced("zen") {
+			hdb.sZen.getHostsForScan()
+		}
+
 		for len(hdb.scanList) > 0 {
 			hdb.mu.Lock()
 			if hdb.scanThreads < maxScanThreads {
@@ -235,27 +248,32 @@ func (hdb *HostDB) scanHosts() {
 
 // calculateScanInterval calculates a scan interval depending on how long ago
 // the host was seen online.
-func calculateScanInterval(host *HostDBEntry) time.Duration {
-	if host.LastSeen.IsZero() {
+func (s *hostDBStore) calculateScanInterval(host *HostDBEntry) time.Duration {
+	if host.LastSeen.IsZero() || len(host.ScanHistory) == 0 {
 		return scanInterval // 30 minutes
 	}
-	if time.Since(host.LastSeen) > 28*24*time.Hour {
+
+	num := s.lastFailedScans(host)
+	if num > 18 && (host.LastSeen.IsZero() || time.Since(host.LastSeen) >= 21*24*time.Hour) {
+		return math.MaxInt64 // never
+	}
+	if num > 15 {
 		return scanInterval * 48 // 24 hours
 	}
-	if time.Since(host.LastSeen) > 14*24*time.Hour {
-		return scanInterval * 24 // 12 hours
+	if num > 11 {
+		return scanInterval * 32 // 16 hours
 	}
-	if time.Since(host.LastSeen) > 7*24*time.Hour {
-		return scanInterval * 12 // 6 hours
+	if num > 9 {
+		return scanInterval * 16 // 8 hours
 	}
-	if time.Since(host.LastSeen) > 3*24*time.Hour {
+	if num > 7 {
 		return scanInterval * 8 // 4 hours
 	}
-	if time.Since(host.LastSeen) > 2*24*time.Hour {
+	if num > 5 {
 		return scanInterval * 4 // 2 hours
 	}
-	if time.Since(host.LastSeen) > 24*time.Hour {
+	if num > 3 {
 		return scanInterval * 2 // 1 hour
 	}
-	return scanInterval // 30 minutes
+	return math.MaxInt64
 }

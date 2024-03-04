@@ -10,7 +10,6 @@ type node struct {
 	Location string `json:"location"`
 	Address  string `json:"address"`
 	Password string `json:"password"`
-	Network  string `json:"network"`
 }
 
 type persistData struct {
@@ -42,7 +41,7 @@ func (s *jsonStore) load(dir string) error {
 		return err
 	}
 	for _, n := range p.Nodes {
-		s.nodes[n.Location+"-"+n.Network] = n
+		s.nodes[n.Location] = n
 	}
 	return nil
 }
