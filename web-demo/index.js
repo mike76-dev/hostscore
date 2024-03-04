@@ -1,6 +1,7 @@
 const apiBaseURL = '/hostscore/api';
-var locations = ['EU', 'US'];
+var locations = ['EU'];//, 'US'];
 var hosts = [];
+var moreHosts = false;
 var offset = 0;
 
 loadHosts();
@@ -14,15 +15,22 @@ function loadHosts() {
 		}
 	}
 	let network = document.getElementById('select-network').value;
+	let all = document.getElementById('select-hosts').value;
+	let query = document.getElementById('search-host').value;
 	hosts = [];
-	offset = 0;
+	moreHosts = false;
 	let location = locations[0];
-	fetch(apiBaseURL + '/hosts?location=' + location + '&network=' + network, options)
+	let url = '/hosts?location=' + location + '&network=' + network;
+	url += '&all=' + (all == 'all' ? 'true' : 'false');
+	url += '&offset=' + offset + '&limit=10';
+	if (query != '') url += '&query=' + query;
+	fetch(apiBaseURL + url, options)
 	.then(response => response.json())
 	.then(data => {
 		if (data.status != 'ok') console.log(data.message)
 		else {
 			hosts = data.hosts;
+			moreHosts = data.more;
 			renderHosts();
 		}
 	})
@@ -31,16 +39,10 @@ function loadHosts() {
 
 function renderHosts() {
 	let table = document.getElementById('hosts-table');
-	let all = document.getElementById('select-hosts').value == 'all';
 	let nav = document.getElementById('nav');
 	nav.classList.add('hidden');
 	table.innerHTML = '<tr><th style="text-align:left">ID</th><th style="text-align:left">Address</th><th>Status</th></tr>';
-	let filter = document.getElementById('search-host').value;
-	let filteredHosts = hosts.filter(host => (all || isOnline(host.publicKey)) &&
-		(filter == '' || host.netaddress.indexOf(filter) >= 0));
-	for (let i = 0; i < 10; i++) {
-		if (offset + i >= filteredHosts.length) break;
-		let host = filteredHosts[offset + i];
+	hosts.forEach(host => {
 		let online = isOnline(host.publicKey);
 		let row = document.createElement('tr');
 		row.setAttribute('key', host.publicKey);
@@ -52,17 +54,17 @@ function renderHosts() {
 			(online ? 'medium' : 'bad')) +
 			'"></div></td>';
 		table.appendChild(row);
-	}
+	});
 	nav.classList.remove('hidden');
 	if (offset == 0) {
 		document.getElementById('hosts-prev').classList.add('disabled');
 	} else {
 		document.getElementById('hosts-prev').classList.remove('disabled');
 	}
-	if (offset + 10 >= filteredHosts.length) {
-		document.getElementById('hosts-next').classList.add('disabled');
-	} else {
+	if (moreHosts) {
 		document.getElementById('hosts-next').classList.remove('disabled');
+	} else {
+		document.getElementById('hosts-next').classList.add('disabled');
 	}
 }
 
@@ -78,17 +80,17 @@ function isOnline(pk) {
 
 function prevHosts() {
 	offset -= 10;
-	renderHosts();
+	loadHosts();
 }
 
 function nextHosts() {
 	offset += 10;
-	renderHosts();
+	loadHosts();
 }
 
 function hostSelectionChange() {
 	offset = 0;
-	renderHosts();
+	loadHosts();
 }
 
 function browseHost(obj) {
@@ -310,7 +312,7 @@ function convertPricePerBlock(value) {
 }
 
 function getFlagEmoji(country) {
-	if (country == '') return N/AbortController;
+	if (country == '') return 'N/A';
 	const codePoints = country
 	  .toUpperCase()
 	  .split('')
