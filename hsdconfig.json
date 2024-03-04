@@ -1,0 +1,10 @@
+"HSD Configuration"
+"0.2.0"
+{
+        "gatewayMainnet": ":9981",
+        "gatewayZen": ":9881",
+        "api": ":9980",
+        "dir": "/usr/local/etc/hsd",
+        "dbUser": "hsuser",
+        "dbName": "hostscore"
+}
