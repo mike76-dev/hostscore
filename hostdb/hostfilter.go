@@ -35,17 +35,6 @@ func (bd *blockedDomains) addDomains(domains []string) {
 	}
 }
 
-func (bd *blockedDomains) getBlockedDomains() []string {
-	bd.mu.Lock()
-	defer bd.mu.Unlock()
-	var domains []string
-	for domain := range bd.domains {
-		domains = append(domains, domain)
-	}
-
-	return domains
-}
-
 func (bd *blockedDomains) isBlocked(addr string) bool {
 	bd.mu.Lock()
 	defer bd.mu.Unlock()
