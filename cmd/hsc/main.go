@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"log"
@@ -9,15 +10,36 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
+	"github.com/go-sql-driver/mysql"
 	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/internal/build"
+	"golang.org/x/term"
 )
+
+func getDBPassword() string {
+	dbPassword := os.Getenv("HSC_DB_PASSWORD")
+	if dbPassword != "" {
+		log.Println("Using HSC_DB_PASSWORD environment variable.")
+	} else {
+		fmt.Print("Enter database password: ")
+		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+		fmt.Println()
+		if err != nil {
+			log.Fatalf("Could not read database password: %v\n", err)
+		}
+		dbPassword = string(pw)
+	}
+	return dbPassword
+}
 
 func main() {
 	log.SetFlags(0)
 
 	dir := flag.String("dir", ".", "directory to store files in")
+	dbName := flag.String("db-name", "", "name of the MySQL database")
+	dbUser := flag.String("db-user", "", "name of the database user")
 	portalPort := flag.String("portal", ":8080", "port number the portal server listens at")
 	flag.Parse()
 
@@ -33,6 +55,35 @@ func main() {
 		fmt.Println("Git Revision " + build.GitRevision)
 	}
 
+	dbPassword := getDBPassword()
+
+	log.Println("Connecting to the SQL database...")
+	cfg := mysql.Config{
+		User:                 *dbUser,
+		Passwd:               dbPassword,
+		Net:                  "tcp",
+		Addr:                 "127.0.0.1:3306",
+		DBName:               *dbName,
+		AllowNativePasswords: true,
+	}
+	db, err := sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		log.Fatalf("Could not connect to the database: %v\n", err)
+	}
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("MySQL database not responding: %v\n", err)
+	}
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+	defer db.Close()
+
+	apiToken := os.Getenv("HSC_API_TOKEN")
+	if apiToken != "" {
+		log.Println("Using HSC_API_TOKEN environment variable.")
+	}
+
 	s, err := newJSONStore(*dir)
 	if err != nil {
 		log.Fatal(err)
@@ -43,7 +94,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	api := newAPI(s)
+	api := newAPI(s, db, apiToken)
 	for key, node := range s.nodes {
 		api.clients[key] = client.NewClient(node.Address, node.Password)
 	}
