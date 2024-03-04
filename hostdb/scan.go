@@ -254,7 +254,7 @@ func (s *hostDBStore) calculateScanInterval(host *HostDBEntry) time.Duration {
 	}
 
 	num := s.lastFailedScans(host)
-	if num > 18 {
+	if num > 18 && (host.LastSeen.IsZero() || time.Since(host.LastSeen) >= 21*24*time.Hour) {
 		return math.MaxInt64 // never
 	}
 	if num > 15 {
