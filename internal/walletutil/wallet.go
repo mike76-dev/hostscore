@@ -460,10 +460,8 @@ func (w *Wallet) synced(network string) bool {
 // performWalletMaintenance performs the wallet maintenance periodically.
 func (w *Wallet) performWalletMaintenance(network string) {
 	redistribute := func() {
-		w.log.Println("[DEBUG] starting wallet maintenance:", network)
 		if (network == "zen" && relevantTransactions(w.cmZen.PoolTransactions(), w.sZen.addr)) ||
 			(network == "mainnet" && relevantTransactions(w.cm.PoolTransactions(), w.s.addr)) {
-			w.log.Printf("[DEBUG] pending transactions found on %s, skipping", network)
 			return
 		}
 		utxos, _, err := w.UnspentOutputs(network)
@@ -478,7 +476,6 @@ func (w *Wallet) performWalletMaintenance(network string) {
 			w.log.Printf("[ERROR] failed to redistribute %s wallet into %d outputs of amount %v, balance %v: %v", network, wantedOutputs, amount, balance, err)
 			return
 		}
-		w.log.Println("[DEBUG] wallet maintenance succeeded:", network)
 	}
 
 	if err := w.tg.Add(); err != nil {
