@@ -65,7 +65,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		if (pt == rhpv3.HostPriceTable{}) {
 			return errors.New("couldn't fetch price table")
 		}
-		err := checkGouging(height, &settings, &pt, limits)
+		err := checkGouging(&settings, &pt, limits)
 		if err != nil {
 			return err
 		}
@@ -90,13 +90,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		// Check if we have a contract with this host and if it has enough money in it.
 		if host.Revision.WindowStart <= height ||
 			host.Revision.ValidRenterPayout().Cmp(hdb.benchmarkCost(host)) < 0 {
-			if host.Revision.WindowStart == 0 {
-				hdb.log.Printf("[DEBUG] forming a new contract with %s, because there is no contract yet\n", host.NetAddress)
-			} else if host.Revision.WindowStart <= height {
-				hdb.log.Printf("[DEBUG] forming a new contract with %s, because the existing contract has expired: %d <= %d\n", host.NetAddress, host.Revision.WindowStart, height)
-			} else {
-				hdb.log.Printf("[DEBUG] forming a new contract with %s, because the existing contract has run out of funds: %v < %v\n", host.NetAddress, host.Revision.ValidRenterPayout(), hdb.benchmarkCost(host))
-			}
 			var rev rhpv2.ContractRevision
 			var txnSet []types.Transaction
 			err = rhp.WithTransportV2(ctx, settings.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
@@ -134,7 +127,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			}
 
 			host.Revision = rev.Revision
-			hdb.log.Printf("[DEBUG] successfully formed contract with %s: %s\n", host.NetAddress, rev.Revision.ParentID)
+			hdb.log.Printf("[INFO] successfully formed contract with %s: %s\n", host.NetAddress, rev.Revision.ParentID)
 		} else {
 			// Fetch the latest revision.
 			err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
@@ -249,7 +242,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	} else {
 		errMsg = err.Error()
 		hdb.IncrementFailedInteractions(host)
-		hdb.log.Printf("[DEBUG] benchmark of %s failed: %v\n", host.NetAddress, err)
 	}
 
 	benchmark := HostBenchmark{

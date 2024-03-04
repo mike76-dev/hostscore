@@ -131,7 +131,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	} else {
 		errMsg = err.Error()
 		hdb.IncrementFailedInteractions(host)
-		hdb.log.Printf("[DEBUG] scan of %s failed: %v\n", host.NetAddress, err)
 	}
 
 	scan := HostScan{
