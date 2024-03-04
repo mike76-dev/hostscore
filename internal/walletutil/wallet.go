@@ -34,7 +34,7 @@ const (
 	walletMaintenanceInterval = 10 * time.Minute
 
 	// wantedOutputs is how many unspent SiacoinOutputs we want to have.
-	wantedOutputs = 10
+	wantedOutputs = 100
 )
 
 // ErrInsufficientBalance is returned when there aren't enough unused outputs to
@@ -340,10 +340,10 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 
 	// Prepare all outputs.
 	var txns []types.Transaction
-	var toSign []types.Hash256
 
 	for outputs > 0 {
 		var txn types.Transaction
+		var toSign []types.Hash256
 		for i := 0; i < outputs && i < redistributeBatchSize; i++ {
 			txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
 				Value:   amount,
@@ -415,11 +415,8 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 			toSign = append(toSign, sce.ID)
 		}
 
+		err = w.Sign(network, &txn, toSign, types.CoveredFields{WholeTransaction: true})
 		txns = append(txns, txn)
-	}
-
-	for i := 0; i < len(txns); i++ {
-		err = w.Sign(network, &txns[i], toSign, types.CoveredFields{WholeTransaction: true})
 		if err != nil {
 			w.Release(txns)
 			return utils.AddContext(err, "couldn't sign the transaction")
