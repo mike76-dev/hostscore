@@ -266,6 +266,45 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 	return nil
 }
 
+// lastFailedScans returns the number of scans failed in a row.
+// NOTE: a lock must be acquired before calling this function.
+func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
+	if s.tx == nil {
+		s.log.Println("[ERROR] there is no transaction")
+		return 0
+	}
+
+	var count int
+	err := s.tx.QueryRow(`
+		SELECT COUNT(*)
+		FROM hdb_scans`+s.network+` AS a
+		WHERE a.public_key = ?
+		AND a.success = FALSE
+		AND (
+			a.ran_at > (
+				SELECT b.ran_at
+				FROM hdb_scans`+s.network+` AS b
+				WHERE b.public_key = a.public_key
+				AND b.success = TRUE
+				ORDER BY b.ran_at DESC
+				LIMIT 1
+			)
+			OR (
+				SELECT COUNT(*)
+				FROM hdb_scans`+s.network+` AS c
+				WHERE c.public_key = a.public_key
+				AND c.success = TRUE
+			) = 0
+		)
+	`, host.PublicKey[:]).Scan(&count)
+	if err != nil {
+		s.log.Println("[ERROR] couldn't query scans:", err)
+		return 0
+	}
+
+	return count
+}
+
 // lastFailedBenchmarks returns the number of benchmarks failed in a row.
 // NOTE: a lock must be acquired before calling this function.
 func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
@@ -748,7 +787,7 @@ func (s *hostDBStore) getHostsForScan() {
 		if host.Blocked {
 			continue
 		}
-		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= calculateScanInterval(host) {
+		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= s.calculateScanInterval(host) {
 			s.hdb.queueScan(host)
 			continue
 		}

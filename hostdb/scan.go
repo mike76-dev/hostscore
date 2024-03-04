@@ -15,7 +15,7 @@ import (
 
 const (
 	scanInterval      = 30 * time.Minute
-	scanCheckInterval = 15 * time.Second
+	scanCheckInterval = 1 * time.Second
 	maxScanThreads    = 100
 	minScans          = 25
 )
@@ -30,7 +30,13 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 		return
 	}
 	// Put the entry in the scan list.
-	toBenchmark := len(host.ScanHistory) > 0 && time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) < calculateScanInterval(host)
+	var interval time.Duration
+	if host.Network == "zen" {
+		interval = hdb.sZen.calculateScanInterval(host)
+	} else {
+		interval = hdb.s.calculateScanInterval(host)
+	}
+	toBenchmark := len(host.ScanHistory) > 0 && time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) < interval
 	hdb.scanMap[host.PublicKey] = toBenchmark
 	if toBenchmark {
 		hdb.benchmarkList = append(hdb.benchmarkList, host)
@@ -246,26 +252,31 @@ func (hdb *HostDB) scanHosts() {
 
 // calculateScanInterval calculates a scan interval depending on how long ago
 // the host was seen online.
-func calculateScanInterval(host *HostDBEntry) time.Duration {
-	if host.LastSeen.IsZero() {
+func (s *hostDBStore) calculateScanInterval(host *HostDBEntry) time.Duration {
+	if host.LastSeen.IsZero() || len(host.ScanHistory) == 0 {
 		return scanInterval // 30 minutes
 	}
-	if time.Since(host.LastSeen) > 28*24*time.Hour {
+
+	num := s.lastFailedScans(host)
+	if num > 18 {
 		return math.MaxInt64 // never
 	}
-	if time.Since(host.LastSeen) > 14*24*time.Hour {
+	if num > 15 {
 		return scanInterval * 48 // 24 hours
 	}
-	if time.Since(host.LastSeen) > 7*24*time.Hour {
-		return scanInterval * 24 // 12 hours
+	if num > 11 {
+		return scanInterval * 32 // 16 hours
 	}
-	if time.Since(host.LastSeen) > 3*24*time.Hour {
+	if num > 9 {
+		return scanInterval * 16 // 8 hours
+	}
+	if num > 7 {
 		return scanInterval * 8 // 4 hours
 	}
-	if time.Since(host.LastSeen) > 2*24*time.Hour {
+	if num > 5 {
 		return scanInterval * 4 // 2 hours
 	}
-	if time.Since(host.LastSeen) > 24*time.Hour {
+	if num > 3 {
 		return scanInterval * 2 // 1 hour
 	}
 	return math.MaxInt64
