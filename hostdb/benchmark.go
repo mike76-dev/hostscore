@@ -32,9 +32,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		host.IPNets = ipNets
 		host.LastIPChange = time.Now()
 	}
-	if err != nil {
-		hdb.log.Println("[ERROR] failed to look up IP nets:", err)
-	}
 
 	// Update historic interactions of the host if necessary.
 	hdb.mu.Lock()
