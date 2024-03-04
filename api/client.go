@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/wallet"
@@ -84,9 +86,33 @@ func (c *Client) Outputs(network string) (sc []types.SiacoinElement, sf []types.
 }
 
 // Hosts returns a list of HostDB hosts.
-func (c *Client) Hosts(network string, offset, limit int) (resp []hostdb.HostDBEntry, err error) {
-	err = c.c.GET(fmt.Sprintf("/hostdb/hosts?network=%s&offset=%d&limit=%d", network, offset, limit), &resp)
+func (c *Client) Hosts(network string, all bool, offset, limit int, query string) (resp HostdbHostsResponse, err error) {
+	var allHosts string
+	if all {
+		allHosts = "true"
+	} else {
+		allHosts = "false"
+	}
+	err = c.c.GET(fmt.Sprintf("/hostdb/hosts?network=%s&all=%s&offset=%d&limit=%d&query=%s", network, allHosts, offset, limit, query), &resp)
 	return
+}
+
+func (c *Client) Scans(network string, pk types.PublicKey, from, to time.Time) (scans []hostdb.HostScan, err error) {
+	err = c.c.GET(fmt.Sprintf("/hostdb/scans?network=%s&host=%s&from=%v&to=%v", network, pk, encodeTime(from), encodeTime(to)), &scans)
+	return
+}
+
+func (c *Client) Benchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []hostdb.HostBenchmark, err error) {
+	err = c.c.GET(fmt.Sprintf("/hostdb/benchmarks?network=%s&host=%s&from=%v&to=%v", network, pk, encodeTime(from), encodeTime(to)), &benchmarks)
+	return
+}
+
+func encodeTime(t time.Time) string {
+	b, err := t.MarshalText()
+	if err != nil {
+		return ""
+	}
+	return strings.Replace(string(b), "+", "%2B", 1)
 }
 
 // NewClient returns a client that communicates with a hsd server listening

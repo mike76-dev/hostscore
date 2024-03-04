@@ -190,6 +190,9 @@ func (s *server) walletAddressHandler(jc jape.Context) {
 		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
 		return
 	}
+	if network == "" {
+		network = "mainnet"
+	}
 	addr := s.w.Address(network)
 	jc.Encode(addr)
 }
@@ -203,6 +206,9 @@ func (s *server) walletBalanceHandler(jc jape.Context) {
 	if network != "" && network != "mainnet" && network != "zen" {
 		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
 		return
+	}
+	if network == "" {
+		network = "mainnet"
 	}
 
 	scos, sfos, err := s.w.UnspentOutputs(network)
@@ -248,6 +254,9 @@ func (s *server) walletTxpoolHandler(jc jape.Context) {
 		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
 		return
 	}
+	if network == "" {
+		network = "mainnet"
+	}
 
 	var txns []types.Transaction
 	if network == "zen" {
@@ -273,6 +282,9 @@ func (s *server) walletOutputsHandler(jc jape.Context) {
 		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
 		return
 	}
+	if network == "" {
+		network = "mainnet"
+	}
 
 	scos, sfos, err := s.w.UnspentOutputs(network)
 	if jc.Check("couldn't load outputs", err) != nil {
@@ -286,21 +298,37 @@ func (s *server) walletOutputsHandler(jc jape.Context) {
 }
 
 func (s *server) hostDBHostsHandler(jc jape.Context) {
-	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	var network, query, allHosts string
+	if jc.DecodeForm("network", &network) != nil ||
+		jc.DecodeForm("query", &query) != nil ||
+		jc.DecodeForm("all", &allHosts) != nil {
 		return
 	}
+
 	network = strings.ToLower(network)
 	if network != "" && network != "mainnet" && network != "zen" {
 		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
 		return
 	}
+	if network == "" {
+		network = "mainnet"
+	}
+
 	offset, limit := 0, -1
 	if jc.DecodeForm("offset", &offset) != nil || jc.DecodeForm("limit", &limit) != nil {
 		return
 	}
-	hosts := s.hdb.Hosts(network, offset, limit)
-	jc.Encode(hosts)
+
+	var all bool
+	if allHosts == "true" {
+		all = true
+	}
+
+	hosts, more := s.hdb.Hosts(network, all, offset, limit, query)
+	jc.Encode(HostdbHostsResponse{
+		Hosts: hosts,
+		More:  more,
+	})
 }
 
 func (s *server) hostDBScansHandler(jc jape.Context) {

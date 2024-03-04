@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/julienschmidt/httprouter"
+	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/hostdb"
 	"go.sia.tech/core/types"
 )
@@ -22,6 +23,7 @@ type APIResponse struct {
 type hostsResponse struct {
 	APIResponse
 	Hosts []hostdb.HostDBEntry `json:"hosts"`
+	More  bool                 `json:"more"`
 }
 
 type scansResponse struct {
@@ -39,14 +41,14 @@ type benchmarksResponse struct {
 type portalAPI struct {
 	router  httprouter.Router
 	store   *jsonStore
-	clients map[string]*client
+	clients map[string]*client.Client
 	mu      sync.RWMutex
 }
 
 func newAPI(s *jsonStore) *portalAPI {
 	return &portalAPI{
 		store:   s,
-		clients: make(map[string]*client),
+		clients: make(map[string]*client.Client),
 	}
 }
 
@@ -81,6 +83,12 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		writeError(w, "node location or network not provided", http.StatusBadRequest)
 		return
 	}
+	query := strings.ToLower(req.FormValue("query"))
+	allHosts := strings.ToLower(req.FormValue("all"))
+	var all bool
+	if allHosts == "true" {
+		all = true
+	}
 	offset, limit := int64(0), int64(-1)
 	var err error
 	off := req.FormValue("offset")
@@ -99,19 +107,20 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	client, ok := api.clients[location+"-"+network]
+	client, ok := api.clients[location]
 	if !ok {
 		writeError(w, "node not found", http.StatusBadRequest)
 		return
 	}
-	hosts, err := client.hosts(int(offset), int(limit))
+	resp, err := client.Hosts(network, all, int(offset), int(limit), query)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, hostsResponse{
 		APIResponse: APIResponse{Status: "ok"},
-		Hosts:       hosts,
+		Hosts:       resp.Hosts,
+		More:        resp.More,
 	})
 }
 
@@ -151,12 +160,12 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	client, ok := api.clients[location+"-"+network]
+	client, ok := api.clients[location]
 	if !ok {
 		writeError(w, "node not found", http.StatusBadRequest)
 		return
 	}
-	scans, err := client.scans(pk, from, to)
+	scans, err := client.Scans(network, pk, from, to)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
@@ -204,12 +213,12 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 	}
-	client, ok := api.clients[location+"-"+network]
+	client, ok := api.clients[location]
 	if !ok {
 		writeError(w, "node not found", http.StatusBadRequest)
 		return
 	}
-	benchmarks, err := client.benchmarks(pk, from, to)
+	benchmarks, err := client.Benchmarks(network, pk, from, to)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
