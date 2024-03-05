@@ -12,11 +12,11 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
-	"github.com/mike76-dev/hostscore/syncer"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/syncer"
 )
 
 // A HostDBEntry represents one host entry in the HostDB. It
@@ -320,10 +320,20 @@ func (hdb *HostDB) updateSCRate() {
 	}
 }
 
+func isSynced(s *syncer.Syncer) bool {
+	var count int
+	for _, p := range s.Peers() {
+		if p.Synced() {
+			count++
+		}
+	}
+	return count >= 5
+}
+
 // synced returns true if HostDB is synced to the blockchain.
 func (hdb *HostDB) synced(network string) bool {
 	if network == "zen" {
-		return hdb.syncerZen.Synced() && time.Since(hdb.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
+		return isSynced(hdb.syncerZen) && time.Since(hdb.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
 	}
-	return hdb.syncer.Synced() && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+	return isSynced(hdb.syncer) && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
 }

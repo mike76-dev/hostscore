@@ -7,7 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mike76-dev/hostscore/syncer"
+	"github.com/mike76-dev/hostscore/internal/utils"
+	"go.sia.tech/coreutils/syncer"
 )
 
 type peerBan struct {
@@ -46,37 +47,42 @@ func (eps *EphemeralPeerStore) banned(peer string) bool {
 }
 
 // AddPeer implements PeerStore.
-func (eps *EphemeralPeerStore) AddPeer(peer string) {
+func (eps *EphemeralPeerStore) AddPeer(addr string) error {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	if _, ok := eps.peers[peer]; !ok {
-		eps.peers[peer] = syncer.PeerInfo{FirstSeen: time.Now()}
+	if _, ok := eps.peers[addr]; !ok {
+		eps.peers[addr] = syncer.PeerInfo{
+			Address:   addr,
+			FirstSeen: time.Now(),
+		}
 	}
+	return nil
 }
 
 // Peers implements PeerStore.
-func (eps *EphemeralPeerStore) Peers() []string {
+func (eps *EphemeralPeerStore) Peers() ([]syncer.PeerInfo, error) {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	var peers []string
-	for p := range eps.peers {
-		if !eps.banned(p) {
+	var peers []syncer.PeerInfo
+	for addr, p := range eps.peers {
+		if !eps.banned(addr) {
 			peers = append(peers, p)
 		}
 	}
-	return peers
+	return peers, nil
 }
 
 // UpdatePeerInfo implements PeerStore.
-func (eps *EphemeralPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerInfo)) {
+func (eps *EphemeralPeerStore) UpdatePeerInfo(addr string, fn func(*syncer.PeerInfo)) error {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	info, ok := eps.peers[peer]
+	info, ok := eps.peers[addr]
 	if !ok {
-		return
+		return syncer.ErrPeerNotFound
 	}
 	fn(&info)
-	eps.peers[peer] = info
+	eps.peers[addr] = info
+	return nil
 }
 
 // PeerInfo implements PeerStore.
@@ -88,21 +94,22 @@ func (eps *EphemeralPeerStore) PeerInfo(peer string) (syncer.PeerInfo, bool) {
 }
 
 // Ban implements PeerStore.
-func (eps *EphemeralPeerStore) Ban(peer string, duration time.Duration, reason string) {
+func (eps *EphemeralPeerStore) Ban(addr string, duration time.Duration, reason string) error {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	// canonicalize
-	if _, ipnet, err := net.ParseCIDR(peer); err == nil {
-		peer = ipnet.String()
+	// Canonicalize.
+	if _, ipnet, err := net.ParseCIDR(addr); err == nil {
+		addr = ipnet.String()
 	}
-	eps.bans[peer] = peerBan{Expiry: time.Now().Add(duration), Reason: reason}
+	eps.bans[addr] = peerBan{Expiry: time.Now().Add(duration), Reason: reason}
+	return nil
 }
 
 // Banned implements PeerStore.
-func (eps *EphemeralPeerStore) Banned(peer string) bool {
+func (eps *EphemeralPeerStore) Banned(addr string) (bool, error) {
 	eps.mu.Lock()
 	defer eps.mu.Unlock()
-	return eps.banned(peer)
+	return eps.banned(addr), nil
 }
 
 // NewEphemeralPeerStore initializes an EphemeralPeerStore.
@@ -168,11 +175,11 @@ func (jps *JSONPeerStore) save() error {
 		return err
 	}
 	defer f.Close()
-	if _, err = f.Write(js); err != nil {
+	if _, err := f.Write(js); err != nil {
 		return err
-	} else if f.Sync(); err != nil {
+	} else if err := f.Sync(); err != nil {
 		return err
-	} else if f.Close(); err != nil {
+	} else if err := f.Close(); err != nil {
 		return err
 	} else if err := os.Rename(jps.path+"_tmp", jps.path); err != nil {
 		return err
@@ -181,21 +188,18 @@ func (jps *JSONPeerStore) save() error {
 }
 
 // AddPeer implements PeerStore.
-func (jps *JSONPeerStore) AddPeer(peer string) {
-	jps.EphemeralPeerStore.AddPeer(peer)
-	jps.save()
+func (jps *JSONPeerStore) AddPeer(addr string) error {
+	return utils.ComposeErrors(jps.EphemeralPeerStore.AddPeer(addr), jps.save())
 }
 
 // UpdatePeerInfo implements PeerStore.
-func (jps *JSONPeerStore) UpdatePeerInfo(peer string, fn func(*syncer.PeerInfo)) {
-	jps.EphemeralPeerStore.UpdatePeerInfo(peer, fn)
-	jps.save()
+func (jps *JSONPeerStore) UpdatePeerInfo(addr string, fn func(*syncer.PeerInfo)) error {
+	return utils.ComposeErrors(jps.EphemeralPeerStore.UpdatePeerInfo(addr, fn), jps.save())
 }
 
 // Ban implements PeerStore.
-func (jps *JSONPeerStore) Ban(peer string, duration time.Duration, reason string) {
-	jps.EphemeralPeerStore.Ban(peer, duration, reason)
-	jps.save()
+func (jps *JSONPeerStore) Ban(addr string, duration time.Duration, reason string) error {
+	return utils.ComposeErrors(jps.EphemeralPeerStore.Ban(addr, duration, reason), jps.save())
 }
 
 // NewJSONPeerStore returns a JSONPeerStore backed by the specified file.

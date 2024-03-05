@@ -13,12 +13,12 @@ import (
 	siasync "github.com/mike76-dev/hostscore/internal/sync"
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/persist"
-	"github.com/mike76-dev/hostscore/syncer"
 	"github.com/mike76-dev/hostscore/wallet"
 	"gitlab.com/NebulousLabs/encoding"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/syncer"
 )
 
 const (
@@ -451,10 +451,19 @@ func SumOutputs(outputs []types.SiacoinElement) (sum types.Currency) {
 
 // synced returns true if the wallet is synced to the blockchain.
 func (w *Wallet) synced(network string) bool {
-	if network == "zen" {
-		return w.syncerZen.Synced() && time.Since(w.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
+	isSynced := func(s *syncer.Syncer) bool {
+		var count int
+		for _, p := range s.Peers() {
+			if p.Synced() {
+				count++
+			}
+		}
+		return count >= 5
 	}
-	return w.syncer.Synced() && time.Since(w.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+	if network == "zen" {
+		return isSynced(w.syncerZen) && time.Since(w.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
+	}
+	return isSynced(w.syncer) && time.Since(w.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
 }
 
 // performWalletMaintenance performs the wallet maintenance periodically.
