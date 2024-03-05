@@ -1,8 +1,6 @@
 package api
 
 import (
-	"time"
-
 	"github.com/mike76-dev/hostscore/hostdb"
 	"go.sia.tech/core/types"
 )
@@ -12,11 +10,6 @@ type GatewayPeer struct {
 	Addr    string `json:"addr"`
 	Inbound bool   `json:"inbound"`
 	Version string `json:"version"`
-
-	FirstSeen      time.Time     `json:"firstSeen"`
-	ConnectedSince time.Time     `json:"connectedSince"`
-	SyncedBlocks   uint64        `json:"syncedBlocks"`
-	SyncDuration   time.Duration `json:"syncDuration"`
 }
 
 // ConsensusTipResponse is the response type for /consensus/tip.

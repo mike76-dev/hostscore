@@ -694,7 +694,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				s.log.Println("[ERROR] couldn't update host:", err)
 				return err
 			}
-			if (!exists || s.hdb.syncer.Synced()) && !host.Blocked {
+			if (!exists || isSynced(s.hdb.syncer)) && !host.Blocked {
 				s.hdb.queueScan(host)
 			}
 		}
@@ -736,7 +736,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				s.log.Println("[ERROR] couldn't update host:", err)
 				return err
 			}
-			if (!exists || s.hdb.syncer.Synced()) && !host.Blocked {
+			if (!exists || isSynced(s.hdb.syncer)) && !host.Blocked {
 				s.hdb.queueScan(host)
 			}
 		}

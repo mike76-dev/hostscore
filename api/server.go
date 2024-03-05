@@ -8,10 +8,10 @@ import (
 
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
-	"github.com/mike76-dev/hostscore/syncer"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/jape"
 )
 
@@ -22,6 +22,16 @@ type server struct {
 	sZen  *syncer.Syncer
 	w     *walletutil.Wallet
 	hdb   *hostdb.HostDB
+}
+
+func isSynced(s *syncer.Syncer) bool {
+	var count int
+	for _, p := range s.Peers() {
+		if p.Synced() {
+			count++
+		}
+	}
+	return count >= 5
 }
 
 func (s *server) consensusNetworkHandler(jc jape.Context) {
@@ -56,11 +66,11 @@ func (s *server) consensusTipHandler(jc jape.Context) {
 	if network == "" || network == "mainnet" {
 		network = "Mainnet"
 		state = s.cm.TipState()
-		synced = s.s.Synced()
+		synced = isSynced(s.s)
 	} else {
 		network = "Zen"
 		state = s.cmZen.TipState()
-		synced = s.sZen.Synced()
+		synced = isSynced(s.sZen)
 	}
 	synced = synced && time.Since(state.PrevTimestamps[0]) < 24*time.Hour
 	resp := ConsensusTipResponse{
@@ -100,40 +110,18 @@ func (s *server) syncerPeersHandler(jc jape.Context) {
 		return
 	}
 	var peers []GatewayPeer
+	var ps []*syncer.Peer
 	if network == "" || network == "mainnet" {
-		for _, p := range s.s.Peers() {
-			info, ok := s.s.PeerInfo(p.Addr)
-			if !ok {
-				continue
-			}
-			peers = append(peers, GatewayPeer{
-				Addr:    p.Addr,
-				Inbound: p.Inbound,
-				Version: p.Version,
-
-				FirstSeen:      info.FirstSeen,
-				ConnectedSince: info.LastConnect,
-				SyncedBlocks:   info.SyncedBlocks,
-				SyncDuration:   info.SyncDuration,
-			})
-		}
+		ps = s.s.Peers()
 	} else {
-		for _, p := range s.sZen.Peers() {
-			info, ok := s.sZen.PeerInfo(p.Addr)
-			if !ok {
-				continue
-			}
-			peers = append(peers, GatewayPeer{
-				Addr:    p.Addr,
-				Inbound: p.Inbound,
-				Version: p.Version,
-
-				FirstSeen:      info.FirstSeen,
-				ConnectedSince: info.LastConnect,
-				SyncedBlocks:   info.SyncedBlocks,
-				SyncDuration:   info.SyncDuration,
-			})
-		}
+		ps = s.sZen.Peers()
+	}
+	for _, p := range ps {
+		peers = append(peers, GatewayPeer{
+			Addr:    p.Addr(),
+			Inbound: p.Inbound,
+			Version: p.Version(),
+		})
 	}
 	jc.Encode(peers)
 }
