@@ -25,20 +25,9 @@ const (
 
 // benchmarkHost runs an up/download benchmark on a host.
 func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
-	// Resolve the host's used subnets and update the timestamp if they
-	// changed. We only update the timestamp if resolving the ipNets was
-	// successful.
-	ipNets, err := utils.LookupIPNets(host.NetAddress)
-	if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
-		host.IPNets = ipNets
-		host.LastIPChange = time.Now()
-	}
-
 	// Update historic interactions of the host if necessary.
-	hdb.mu.Lock()
 	hdb.updateHostHistoricInteractions(host)
 	limits := hdb.priceLimits
-	hdb.mu.Unlock()
 
 	key := hdb.w.Key(host.Network)
 	var height uint64
@@ -53,7 +42,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	var ul, dl float64
 	var ttfb time.Duration
 	var errMsg string
-	err = func() error {
+	err := func() error {
 		// Do some checks first.
 		settings := host.Settings
 		if (settings == rhpv2.HostSettings{}) {

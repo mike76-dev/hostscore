@@ -15,10 +15,9 @@ import (
 )
 
 const (
-	scanInterval      = 30 * time.Minute
-	scanCheckInterval = 1 * time.Second
-	maxScanThreads    = 100
-	minScans          = 25
+	scanInterval   = 30 * time.Minute
+	maxScanThreads = 100
+	minScans       = 25
 )
 
 // queueScan will add a host to the queue to be scanned.
@@ -60,9 +59,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	}
 
 	// Update historic interactions of the host if necessary.
-	hdb.mu.Lock()
 	hdb.updateHostHistoricInteractions(host)
-	hdb.mu.Unlock()
 
 	var settings rhpv2.HostSettings
 	var pt rhpv3.HostPriceTable
@@ -72,7 +69,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	var start time.Time
 	err = func() error {
 		timeout := 2 * time.Minute
-		hdb.mu.Lock()
 		if len(hdb.initialScanLatencies) > minScans {
 			hdb.log.Error("initialScanLatencies too large", zap.Int("limit", minScans))
 		}
@@ -83,7 +79,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 				timeout = 2 * time.Minute
 			}
 		}
-		hdb.mu.Unlock()
 
 		// Create a context and set up its cancelling.
 		ctx, cancel := context.WithTimeout(context.Background(), timeout+4*time.Minute)
@@ -184,7 +179,7 @@ func (hdb *HostDB) scanHosts() {
 		select {
 		case <-hdb.tg.StopChan():
 			return
-		case <-time.After(scanCheckInterval):
+		case <-time.After(time.Second):
 		}
 	}
 
@@ -202,9 +197,9 @@ func (hdb *HostDB) scanHosts() {
 				hdb.scanThreads++
 				entry := hdb.scanList[0]
 				hdb.scanList = hdb.scanList[1:]
+				hdb.mu.Unlock()
 				go func() {
 					if err := hdb.tg.Add(); err != nil {
-						hdb.mu.Unlock()
 						return
 					}
 					defer hdb.tg.Done()
@@ -214,8 +209,6 @@ func (hdb *HostDB) scanHosts() {
 				hdb.mu.Unlock()
 				break
 			}
-			hdb.mu.Unlock()
-
 		}
 
 		for len(hdb.benchmarkList) > 0 {
@@ -224,9 +217,9 @@ func (hdb *HostDB) scanHosts() {
 				hdb.benchmarking = true
 				entry := hdb.benchmarkList[0]
 				hdb.benchmarkList = hdb.benchmarkList[1:]
+				hdb.mu.Unlock()
 				go func() {
 					if err := hdb.tg.Add(); err != nil {
-						hdb.mu.Unlock()
 						return
 					}
 					defer hdb.tg.Done()
@@ -236,13 +229,12 @@ func (hdb *HostDB) scanHosts() {
 				hdb.mu.Unlock()
 				break
 			}
-			hdb.mu.Unlock()
 		}
 
 		select {
 		case <-hdb.tg.StopChan():
 			return
-		case <-time.After(scanCheckInterval):
+		case <-time.After(1 * time.Millisecond):
 		}
 	}
 }

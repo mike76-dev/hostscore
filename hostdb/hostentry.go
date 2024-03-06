@@ -84,9 +84,6 @@ func (hdb *HostDB) updateHostHistoricInteractions(host *HostDBEntry) {
 // IncrementSuccessfulInteractions increments the number of successful
 // interactions with a given host.
 func (hdb *HostDB) IncrementSuccessfulInteractions(host *HostDBEntry) error {
-	hdb.mu.Lock()
-	defer hdb.mu.Unlock()
-
 	// Update historic values if necessary.
 	hdb.updateHostHistoricInteractions(host)
 
@@ -99,9 +96,6 @@ func (hdb *HostDB) IncrementSuccessfulInteractions(host *HostDBEntry) error {
 // IncrementFailedInteractions increments the number of failed interactions with
 // a given host.
 func (hdb *HostDB) IncrementFailedInteractions(host *HostDBEntry) error {
-	hdb.mu.Lock()
-	defer hdb.mu.Unlock()
-
 	// If we are offline it probably wasn't the host's fault.
 	if !hdb.online(host.Network) {
 		return nil
