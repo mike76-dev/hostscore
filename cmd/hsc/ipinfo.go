@@ -111,16 +111,16 @@ func getLocation(db *sql.DB, host hostdb.HostDBEntry, token string) (info hostdb
 		FROM locations
 		WHERE public_key = ?
 	`, host.PublicKey[:]).Scan(
-		info.IP,
-		info.HostName,
-		info.City,
-		info.Region,
-		info.Country,
-		info.Location,
-		info.ISP,
-		info.ZIP,
-		info.TimeZone,
-		lf,
+		&info.IP,
+		&info.HostName,
+		&info.City,
+		&info.Region,
+		&info.Country,
+		&info.Location,
+		&info.ISP,
+		&info.ZIP,
+		&info.TimeZone,
+		&lf,
 	)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return hostdb.IPInfo{}, time.Time{}, utils.AddContext(err, "couldn't query locations")

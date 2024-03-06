@@ -267,14 +267,6 @@ func (hdb *HostDB) online(network string) bool {
 	return len(hdb.syncer.Peers()) > 0
 }
 
-func (hdb *HostDB) saveLocation(host *HostDBEntry, info IPInfo) error {
-
-	if host.Network == "zen" {
-		return hdb.sZen.updateHostLocation(host, info)
-	}
-	return hdb.s.updateHostLocation(host, info)
-}
-
 // updateSCRate periodically fetches the SC exchange rate.
 func (hdb *HostDB) updateSCRate() {
 	if err := hdb.tg.Add(); err != nil {
