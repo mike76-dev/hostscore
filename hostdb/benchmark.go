@@ -14,6 +14,7 @@ import (
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
+	"go.uber.org/zap"
 	"lukechampine.com/frand"
 )
 
@@ -124,7 +125,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			}
 
 			host.Revision = rev.Revision
-			hdb.log.Printf("[INFO] successfully formed contract with %s: %s\n", host.NetAddress, rev.Revision.ParentID)
+			hdb.log.Info("successfully formed contract", zap.String("host", host.NetAddress), zap.Stringer("id", rev.Revision.ParentID))
 		} else {
 			// Fetch the latest revision.
 			err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
@@ -255,7 +256,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		err = hdb.s.updateBenchmarks(host, benchmark)
 	}
 	if err != nil {
-		hdb.log.Println("[ERROR] couldn't update benchmarks:", err)
+		hdb.log.Error("couldn't update benchmarks", zap.Error(err))
 	}
 
 	// Delete the host from scanMap.

@@ -19,6 +19,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
+	"go.uber.org/zap"
 )
 
 const (
@@ -48,7 +49,8 @@ type Wallet struct {
 	cmZen     *chain.Manager
 	syncer    *syncer.Syncer
 	syncerZen *syncer.Syncer
-	log       *persist.Logger
+	log       *zap.Logger
+	closeFn   func()
 
 	mu   sync.Mutex
 	tg   siasync.ThreadGroup
@@ -90,16 +92,16 @@ func (w *Wallet) UnspentOutputs(network string) ([]types.SiacoinElement, []types
 // Close shuts down the wallet.
 func (w *Wallet) Close() {
 	if err := w.tg.Stop(); err != nil {
-		w.log.Println("[ERROR] unable to stop threads:", err)
+		w.log.Error("unable to stop threads", zap.Error(err))
 	}
 	w.s.close()
 	w.sZen.close()
-	w.log.Close()
+	w.closeFn()
 }
 
 // NewWallet returns a wallet that is stored in a MySQL database.
 func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *chain.Manager, syncer *syncer.Syncer, syncerZen *syncer.Syncer) (*Wallet, error) {
-	l, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
+	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -126,6 +128,7 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 		syncer:    syncer,
 		syncerZen: syncerZen,
 		log:       l,
+		closeFn:   closeFn,
 		s:         store,
 		sZen:      storeZen,
 		used:      make(map[types.Hash256]bool),
@@ -475,20 +478,20 @@ func (w *Wallet) performWalletMaintenance(network string) {
 		}
 		utxos, _, err := w.UnspentOutputs(network)
 		if err != nil {
-			w.log.Println("[ERROR] couldn't get unspent outputs:", err)
+			w.log.Error("couldn't get unspent outputs", zap.Error(err))
 			return
 		}
 		balance := SumOutputs(utxos)
 		amount := balance.Div64(wantedOutputs).Div64(2)
 		err = w.Redistribute(network, amount, wantedOutputs)
 		if err != nil {
-			w.log.Printf("[ERROR] failed to redistribute %s wallet into %d outputs of amount %v, balance %v: %v", network, wantedOutputs, amount, balance, err)
+			w.log.Error("failed to redistribute wallet", zap.String("network", network), zap.Int("outputs", wantedOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
 			return
 		}
 	}
 
 	if err := w.tg.Add(); err != nil {
-		w.log.Println("[ERROR] couldn't add a thread:", err)
+		w.log.Error("couldn't add a thread", zap.Error(err))
 		return
 	}
 	defer w.tg.Done()

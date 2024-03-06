@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/mike76-dev/hostscore/hostdb"
-	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
@@ -19,8 +18,6 @@ import (
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 // Network bootstraps.
@@ -74,44 +71,6 @@ type node struct {
 	db    *sql.DB
 
 	Start func() (stop func())
-}
-
-func printCommitHash(logger *zap.Logger) {
-	if build.GitRevision != "" {
-		logger.Sugar().Infof("STARTUP: commit hash %v", build.GitRevision)
-	} else {
-		logger.Sugar().Info("STARTUP: unknown commit hash")
-	}
-}
-
-func newFileLogger(logFilename string) (*zap.Logger, func(), error) {
-	writer, closeFn, err := zap.Open(logFilename)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	config := zap.NewProductionEncoderConfig()
-	config.EncodeTime = zapcore.RFC3339TimeEncoder
-	config.StacktraceKey = ""
-	fileEncoder := zapcore.NewJSONEncoder(config)
-
-	core := zapcore.NewTee(
-		zapcore.NewCore(fileEncoder, writer, zapcore.DebugLevel),
-	)
-
-	logger := zap.New(
-		core,
-		zap.AddCaller(),
-		zap.AddStacktrace(zapcore.ErrorLevel),
-	)
-
-	printCommitHash(logger)
-
-	return logger, func() {
-		logger.Sugar().Info("logging terminated")
-		logger.Sync()
-		closeFn()
-	}, nil
 }
 
 func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node, error) {
@@ -195,7 +154,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	logger, closeFn, err := newFileLogger(filepath.Join(dirMainnet, "syncer.log"))
+	logger, closeFn, err := persist.NewFileLogger(filepath.Join(dirMainnet, "syncer.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -247,7 +206,7 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddrZen,
 	}
-	loggerZen, closeFnZen, err := newFileLogger(filepath.Join(dirZen, "syncer.log"))
+	loggerZen, closeFnZen, err := persist.NewFileLogger(filepath.Join(dirZen, "syncer.log"))
 	if err != nil {
 		log.Fatal(err)
 	}

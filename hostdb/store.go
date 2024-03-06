@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/persist"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.uber.org/zap"
 )
 
 type hostDBStore struct {
 	db      *sql.DB
 	tx      *sql.Tx
-	log     *persist.Logger
+	log     *zap.Logger
 	network string
 	hdb     *HostDB
 
@@ -35,7 +35,7 @@ type hostDBStore struct {
 	lastCommitted time.Time
 }
 
-func newHostDBStore(db *sql.DB, logger *persist.Logger, network string, domains *blockedDomains) (*hostDBStore, types.ChainIndex, error) {
+func newHostDBStore(db *sql.DB, logger *zap.Logger, network string, domains *blockedDomains) (*hostDBStore, types.ChainIndex, error) {
 	s := &hostDBStore{
 		db:           db,
 		log:          logger,
@@ -45,7 +45,7 @@ func newHostDBStore(db *sql.DB, logger *persist.Logger, network string, domains 
 	}
 	err := s.load(domains)
 	if err != nil {
-		s.log.Println("[ERROR] couldn't load hosts:", err)
+		s.log.Error("couldn't load hosts", zap.String("network", s.network), zap.Error(err))
 		return nil, types.ChainIndex{}, err
 	}
 	return s, s.tip, nil
@@ -270,7 +270,7 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 // NOTE: a lock must be acquired before calling this function.
 func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 	if s.tx == nil {
-		s.log.Println("[ERROR] there is no transaction")
+		s.log.Error("there is no transaction", zap.String("network", s.network))
 		return 0
 	}
 
@@ -298,7 +298,7 @@ func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 		)
 	`, host.PublicKey[:]).Scan(&count)
 	if err != nil {
-		s.log.Println("[ERROR] couldn't query scans:", err)
+		s.log.Error("couldn't query scans", zap.String("network", s.network), zap.Error(err))
 		return 0
 	}
 
@@ -309,7 +309,7 @@ func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 // NOTE: a lock must be acquired before calling this function.
 func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 	if s.tx == nil {
-		s.log.Println("[ERROR] there is no transaction")
+		s.log.Error("there is no transaction", zap.String("network", s.network))
 		return 0
 	}
 
@@ -337,7 +337,7 @@ func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 		)
 	`, host.PublicKey[:]).Scan(&count)
 	if err != nil {
-		s.log.Println("[ERROR] couldn't query benchmarks:", err)
+		s.log.Error("couldn't query benchmarks", zap.String("network", s.network), zap.Error(err))
 		return 0
 	}
 
@@ -349,7 +349,7 @@ func (s *hostDBStore) close() {
 	defer s.mu.Unlock()
 	if s.tx != nil {
 		if err := s.tx.Commit(); err != nil {
-			s.log.Println("[ERROR] couldn't commit transaction:", err)
+			s.log.Error("couldn't commit transaction", zap.String("network", s.network), zap.Error(err))
 		}
 	}
 }
@@ -588,7 +588,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 	}
 	rows.Close()
 
-	s.log.Println("[INFO] loading complete")
+	s.log.Info("loading complete", zap.String("network", s.network))
 
 	s.tx, err = s.db.Begin()
 	return err
@@ -614,7 +614,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 		VALUES (?, ?, ?, ?)
 	`, row, s.network, s.tip.Height, s.tip.ID[:])
 	if err != nil {
-		s.log.Println("[ERROR] couldn't update tip:", err)
+		s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
 		return err
 	}
 
@@ -651,7 +651,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			}
 			err = s.update(host)
 			if err != nil {
-				s.log.Println("[ERROR] couldn't update host:", err)
+				s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
 				return err
 			}
 			if (!exists || isSynced(s.hdb.syncer)) && !host.Blocked {
@@ -693,7 +693,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 			}
 			err = s.update(host)
 			if err != nil {
-				s.log.Println("[ERROR] couldn't update host:", err)
+				s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
 				return err
 			}
 			if (!exists || isSynced(s.hdb.syncer)) && !host.Blocked {
