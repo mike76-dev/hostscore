@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/internal/build"
+	"github.com/mike76-dev/hostscore/persist"
 	"golang.org/x/term"
 )
 
@@ -94,7 +96,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	api := newAPI(s, db, apiToken)
+	logger, closeFn, err := persist.NewFileLogger(filepath.Join(*dir, "hsc.log"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer closeFn()
+
+	api := newAPI(s, db, apiToken, logger)
 	for key, node := range s.nodes {
 		api.clients[key] = client.NewClient(node.Address, node.Password)
 	}
