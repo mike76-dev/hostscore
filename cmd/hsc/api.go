@@ -12,6 +12,7 @@ import (
 
 	"github.com/julienschmidt/httprouter"
 	client "github.com/mike76-dev/hostscore/api"
+	"github.com/mike76-dev/hostscore/external"
 	"github.com/mike76-dev/hostscore/hostdb"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
@@ -134,13 +135,13 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 		if resp.Hosts[i].LastIPChange.After(lastFetched) {
-			newInfo, err := fetchIPInfo(resp.Hosts[i].NetAddress, api.token)
+			newInfo, err := external.FetchIPInfo(resp.Hosts[i].NetAddress, api.token)
 			if err != nil {
 				api.log.Error("couldn't fetch host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
 				writeError(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			if (newInfo != hostdb.IPInfo{}) {
+			if (newInfo != external.IPInfo{}) {
 				info = newInfo
 				err = saveLocation(api.db, resp.Hosts[i].PublicKey, info)
 				if err != nil {

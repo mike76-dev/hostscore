@@ -41,19 +41,7 @@ type HostDBEntry struct {
 	Revision      types.FileContractRevision `json:"-"`
 	Settings      rhpv2.HostSettings         `json:"settings"`
 	PriceTable    rhpv3.HostPriceTable       `json:"priceTable"`
-	IPInfo
-}
-
-type IPInfo struct {
-	IP       string `json:"ip"`
-	HostName string `json:"hostname"`
-	City     string `json:"city"`
-	Region   string `json:"region"`
-	Country  string `json:"country"`
-	Location string `json:"loc"`
-	ISP      string `json:"org"`
-	ZIP      string `json:"postal"`
-	TimeZone string `json:"timezone"`
+	external.IPInfo
 }
 
 // HostInteractions combines historic and recent interactions.
