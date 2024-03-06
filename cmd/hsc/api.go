@@ -14,6 +14,7 @@ import (
 	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/hostdb"
 	"go.sia.tech/core/types"
+	"go.uber.org/zap"
 )
 
 type APIResponse struct {
@@ -44,15 +45,17 @@ type portalAPI struct {
 	store   *jsonStore
 	db      *sql.DB
 	token   string
+	log     *zap.Logger
 	clients map[string]*client.Client
 	mu      sync.RWMutex
 }
 
-func newAPI(s *jsonStore, db *sql.DB, token string) *portalAPI {
+func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger) *portalAPI {
 	return &portalAPI{
 		store:   s,
 		db:      db,
 		token:   token,
+		log:     logger,
 		clients: make(map[string]*client.Client),
 	}
 }
@@ -119,18 +122,21 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	}
 	resp, err := client.Hosts(network, all, int(offset), int(limit), query)
 	if err != nil {
+		api.log.Error("couldn't get hosts", zap.Error(err))
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	for i := range resp.Hosts {
 		info, lastFetched, err := getLocation(api.db, resp.Hosts[i], api.token)
 		if err != nil {
+			api.log.Error("couldn't get host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
 			writeError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		if resp.Hosts[i].LastIPChange.After(lastFetched) {
 			newInfo, err := fetchIPInfo(resp.Hosts[i].NetAddress, api.token)
 			if err != nil {
+				api.log.Error("couldn't fetch host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
 				writeError(w, "internal error", http.StatusInternalServerError)
 				return
 			}
@@ -138,9 +144,12 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 				info = newInfo
 				err = saveLocation(api.db, resp.Hosts[i].PublicKey, info)
 				if err != nil {
+					api.log.Error("couldn't update host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
 					writeError(w, "internal error", http.StatusInternalServerError)
 					return
 				}
+			} else {
+				api.log.Debug("empty host location received", zap.String("host", resp.Hosts[i].NetAddress))
 			}
 		}
 		resp.Hosts[i].IPInfo = info
@@ -195,6 +204,7 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	}
 	scans, err := client.Scans(network, pk, from, to)
 	if err != nil {
+		api.log.Error("couldn't get scan history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
@@ -248,6 +258,7 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	}
 	benchmarks, err := client.Benchmarks(network, pk, from, to)
 	if err != nil {
+		api.log.Error("couldn't get benchmark history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}

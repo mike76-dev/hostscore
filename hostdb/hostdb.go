@@ -17,6 +17,7 @@ import (
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
+	"go.uber.org/zap"
 )
 
 // A HostDBEntry represents one host entry in the HostDB. It
@@ -105,7 +106,8 @@ type HostDB struct {
 	s         *hostDBStore
 	sZen      *hostDBStore
 	w         *walletutil.Wallet
-	log       *persist.Logger
+	log       *zap.Logger
+	closeFn   func()
 
 	tg siasync.ThreadGroup
 	mu sync.Mutex
@@ -163,11 +165,11 @@ func (hdb *HostDB) BenchmarkHistory(network string, from, to time.Time) (history
 // Close shuts down HostDB.
 func (hdb *HostDB) Close() {
 	if err := hdb.tg.Stop(); err != nil {
-		hdb.log.Println("[ERROR] unable to stop threads:", err)
+		hdb.log.Error("unable to stop threads", zap.Error(err))
 	}
 	hdb.s.close()
 	hdb.sZen.close()
-	hdb.log.Close()
+	hdb.closeFn()
 }
 
 // loadBlockedDomains loads the list of blocked domains.
@@ -192,7 +194,7 @@ func loadBlockedDomains(db *sql.DB) (*blockedDomains, error) {
 // NewHostDB returns a new HostDB.
 func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, syncer *syncer.Syncer, syncerZen *syncer.Syncer, w *walletutil.Wallet) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
-	l, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
+	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -236,6 +238,7 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 		s:         store,
 		sZen:      storeZen,
 		log:       l,
+		closeFn:   closeFn,
 		scanMap:   make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
 			maxContractPrice:     maxContractPrice,
@@ -270,7 +273,7 @@ func (hdb *HostDB) online(network string) bool {
 // updateSCRate periodically fetches the SC exchange rate.
 func (hdb *HostDB) updateSCRate() {
 	if err := hdb.tg.Add(); err != nil {
-		hdb.log.Println("[ERROR] couldn't add thread", err)
+		hdb.log.Error("couldn't add thread", zap.Error(err))
 		return
 	}
 	defer hdb.tg.Done()
@@ -278,7 +281,7 @@ func (hdb *HostDB) updateSCRate() {
 	for {
 		rates, err := external.FetchSCRates()
 		if err != nil {
-			hdb.log.Println("[ERROR] couldn't fetch SC exchange rates", err)
+			hdb.log.Error("couldn't fetch SC exchange rates", zap.Error(err))
 		}
 
 		if rates != nil {

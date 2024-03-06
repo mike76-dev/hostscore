@@ -1,38 +1,48 @@
 package persist
 
 import (
-	"log"
-	"os"
-
 	"github.com/mike76-dev/hostscore/internal/build"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-// Logger is a wrapper for log.Logger.
-type Logger struct {
-	*log.Logger
-}
-
 // printCommitHash logs build.GitRevision at startup.
-func printCommitHash(logger *log.Logger) {
+func printCommitHash(logger *zap.Logger) {
 	if build.GitRevision != "" {
-		logger.Printf("[STARTUP] commit hash %v\n", build.GitRevision)
+		logger.Sugar().Infof("STARTUP: commit hash %v", build.GitRevision)
 	} else {
-		logger.Println("[STARTUP] unknown commit hash")
+		logger.Sugar().Info("STARTUP: unknown commit hash")
 	}
 }
 
-// NewFileLogger returns a logger that logs to logFilename. The file is opened
-// in append mode, and created if it does not exist.
-func NewFileLogger(logFilename string) (*Logger, error) {
-	logFile, err := os.OpenFile(logFilename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+// NewFileLogger returns a logger that logs to logFilename.
+func NewFileLogger(logFilename string) (*zap.Logger, func(), error) {
+	writer, closeFn, err := zap.Open(logFilename)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	logger := log.New(logFile, "", log.LstdFlags|log.Lshortfile)
-	printCommitHash(logger)
-	return &Logger{logger}, nil
-}
 
-func (logger *Logger) Close() {
-	logger.Println("[SHUTDOWN] logging has terminated")
+	config := zap.NewProductionEncoderConfig()
+	config.EncodeTime = zapcore.RFC3339TimeEncoder
+	config.StacktraceKey = ""
+	fileEncoder := zapcore.NewJSONEncoder(config)
+
+	core := zapcore.NewTee(
+		zapcore.NewCore(fileEncoder, writer, zapcore.DebugLevel),
+	)
+
+	logger := zap.New(
+		core,
+		zap.AddCaller(),
+		zap.AddStacktrace(zapcore.ErrorLevel),
+	)
+
+	printCommitHash(logger)
+
+	return logger, func() {
+		logger.Sugar().Info("SHUTDOWN: logging terminated")
+		logger.Sync()
+		closeFn()
+	}, nil
 }

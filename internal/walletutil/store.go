@@ -4,15 +4,14 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
+	"go.uber.org/zap"
 )
 
 // A DBStore stores wallet state in a MySQL database.
@@ -25,7 +24,7 @@ type DBStore struct {
 	mu            sync.Mutex
 	db            *sql.DB
 	tx            *sql.Tx
-	log           *persist.Logger
+	log           *zap.Logger
 	network       string
 	lastCommitted time.Time
 }
@@ -148,7 +147,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 
 	events := wallet.AppliedEvents(cau.State, cau.Block, cau, s.addr)
 	for _, event := range events {
-		s.log.Printf("[INFO] %s: found %s\n", strings.ToUpper(string(s.network[0]))+s.network[1:], event.String())
+		s.log.Info("found new event", zap.String("network", s.network), zap.Stringer("event", event))
 	}
 
 	// Add/remove outputs.
@@ -162,7 +161,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 					AND network = ?
 				`, sce.ID[:], s.network)
 				if err != nil {
-					s.log.Println("[ERROR] couldn't delete SC output:", err)
+					s.log.Error("couldn't delete SC output", zap.String("network", s.network), zap.Error(err))
 				}
 			} else {
 				sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
@@ -176,7 +175,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 					VALUES (?, ?, ?)
 				`, sce.ID[:], s.network, buf.Bytes())
 				if err != nil {
-					s.log.Println("[ERROR] couldn't add SC output:", err)
+					s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
 				}
 			}
 		}
@@ -191,7 +190,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 					AND network = ?
 				`, sfe.ID[:], s.network)
 				if err != nil {
-					s.log.Println("[ERROR] couldn't delete SF output:", err)
+					s.log.Error("couldn't delete SF output", zap.String("network", s.network), zap.Error(err))
 				}
 			} else {
 				sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
@@ -205,7 +204,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 					VALUES (?, ?, ?)
 				`, sfe.ID[:], s.network, buf.Bytes())
 				if err != nil {
-					s.log.Println("[ERROR] couldn't add SF output:", err)
+					s.log.Error("couldn't add SF output", zap.String("network", s.network), zap.Error(err))
 				}
 			}
 		}
@@ -226,7 +225,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 			AND network = ?
 		`, buf.Bytes(), sce.ID[:], s.network)
 		if err != nil {
-			s.log.Println("[ERROR] couldn't update SC element proof:", err)
+			s.log.Error("couldn't update SC element proof", zap.String("network", s.network), zap.Error(err))
 		}
 	}
 	for id, sfe := range s.sfes {
@@ -243,7 +242,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 			AND network = ?
 		`, buf.Bytes(), sfe.ID[:], s.network)
 		if err != nil {
-			s.log.Println("[ERROR] couldn't update SF element proof:", err)
+			s.log.Error("couldn't update SF element proof", zap.String("network", s.network), zap.Error(err))
 		}
 	}
 
@@ -266,7 +265,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 	defer s.mu.Unlock()
 
 	for _, event := range wallet.AppliedEvents(cru.State, cru.Block, cru, s.addr) {
-		s.log.Printf("[INFO] %s: reverting %s\n", strings.ToUpper(string(s.network[0]))+s.network[1:], event.String())
+		s.log.Info("reverting event", zap.String("network", s.network), zap.Stringer("event", event))
 	}
 
 	cru.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
@@ -279,7 +278,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 					AND network = ?
 				`, sce.ID[:], s.network)
 				if err != nil {
-					s.log.Println("[ERROR] couldn't delete SC output:", err)
+					s.log.Error("couldn't delete SC output", zap.String("network", s.network), zap.Error(err))
 				}
 			} else {
 				sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
@@ -293,7 +292,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 					VALUES (?, ?, ?)
 				`, sce.ID[:], s.network, buf.Bytes())
 				if err != nil {
-					s.log.Println("[ERROR] couldn't add SC output:", err)
+					s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
 				}
 			}
 		}
@@ -308,7 +307,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 					AND network = ?
 				`, sfe.ID[:], s.network)
 				if err != nil {
-					s.log.Println("[ERROR] couldn't delete SF output:", err)
+					s.log.Error("couldn't delete SF output", zap.String("network", s.network), zap.Error(err))
 				}
 			} else {
 				sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
@@ -322,7 +321,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 					VALUES (?, ?, ?)
 				`, sfe.ID[:], s.network, buf.Bytes())
 				if err != nil {
-					s.log.Println("[ERROR] couldn't add SF output:", err)
+					s.log.Error("couldn't add SF output", zap.String("network", s.network), zap.Error(err))
 				}
 			}
 		}
@@ -343,7 +342,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 			AND network = ?
 		`, buf.Bytes(), sce.ID[:], s.network)
 		if err != nil {
-			s.log.Println("[ERROR] couldn't update SC element proof:", err)
+			s.log.Error("couldn't update SC element proof", zap.String("network", s.network), zap.Error(err))
 		}
 	}
 	for id, sfe := range s.sfes {
@@ -360,7 +359,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 			AND network = ?
 		`, buf.Bytes(), sfe.ID[:], s.network)
 		if err != nil {
-			s.log.Println("[ERROR] couldn't update SF element proof:", err)
+			s.log.Error("couldn't update SF element proof", zap.String("network", s.network), zap.Error(err))
 		}
 	}
 
@@ -368,7 +367,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 
 	err = s.save()
 	if err != nil {
-		s.log.Println("[ERROR] couldn't save wallet:", err)
+		s.log.Error("couldn't save wallet", zap.String("network", s.network), zap.Error(err))
 	}
 
 	return nil
@@ -412,7 +411,7 @@ func (s *DBStore) Address() types.Address {
 }
 
 // NewDBStore returns a new DBStore.
-func NewDBStore(db *sql.DB, seed, network string, logger *persist.Logger) (*DBStore, types.ChainIndex, error) {
+func NewDBStore(db *sql.DB, seed, network string, logger *zap.Logger) (*DBStore, types.ChainIndex, error) {
 	sk, err := wallet.KeyFromPhrase(seed)
 	if err != nil {
 		return nil, types.ChainIndex{}, err
@@ -429,7 +428,7 @@ func NewDBStore(db *sql.DB, seed, network string, logger *persist.Logger) (*DBSt
 
 	err = s.load()
 	if err != nil {
-		s.log.Println("[ERROR] couldn't load wallet:", err)
+		s.log.Error("couldn't load wallet", zap.String("network", s.network), zap.Error(err))
 	}
 
 	return s, s.tip, err

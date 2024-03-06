@@ -149,7 +149,7 @@ func (*EventMinerPayout) eventType() string        { return "miner payout" }
 func (*EventMissedFileContract) eventType() string { return "missed file contract" }
 
 // String implements fmt.Stringer.
-func (e *Event) String() string {
+func (e Event) String() string {
 	return fmt.Sprintf("%s at %s: %s", e.Val.eventType(), e.Timestamp, e.Val)
 }
 
@@ -206,7 +206,7 @@ type EventMissedFileContract struct {
 }
 
 // String implements fmt.Stringer.
-func (et *EventTransaction) String() string {
+func (et EventTransaction) String() string {
 	result := et.ID.String()
 	if len(et.SiacoinOutputs) > 0 {
 		result += ": Siacoin outputs: "
@@ -232,7 +232,7 @@ func (et *EventTransaction) String() string {
 }
 
 // String implements fmt.Stringer.
-func (emp *EventMinerPayout) String() string {
+func (emp EventMinerPayout) String() string {
 	return fmt.Sprintf("%s (%s)",
 		emp.SiacoinOutput.SiacoinOutput.Address.String(),
 		emp.SiacoinOutput.SiacoinOutput.Value,
@@ -240,7 +240,7 @@ func (emp *EventMinerPayout) String() string {
 }
 
 // String implements fmt.Stringer.
-func (emfc *EventMissedFileContract) String() string {
+func (emfc EventMissedFileContract) String() string {
 	return emfc.FileContract.ID.String()
 }
 

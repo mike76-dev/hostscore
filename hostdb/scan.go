@@ -11,6 +11,7 @@ import (
 	"github.com/mike76-dev/hostscore/rhp"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	"go.uber.org/zap"
 )
 
 const (
@@ -73,7 +74,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		timeout := 2 * time.Minute
 		hdb.mu.Lock()
 		if len(hdb.initialScanLatencies) > minScans {
-			hdb.log.Printf("[ERROR] initialScanLatencies should never be greater than %d\n", minScans)
+			hdb.log.Error("initialScanLatencies too large", zap.Int("limit", minScans))
 		}
 		if len(hdb.initialScanLatencies) == minScans {
 			timeout = hdb.initialScanLatencies[len(hdb.initialScanLatencies)/2]
@@ -146,7 +147,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		err = hdb.s.updateScanHistory(host, scan)
 	}
 	if err != nil {
-		hdb.log.Println("[ERROR] couldn't update scan history:", err)
+		hdb.log.Error("couldn't update scan history", zap.Error(err))
 	}
 
 	// Add the scan to the initialScanLatencies if it was successful.
@@ -171,7 +172,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 // periodically.
 func (hdb *HostDB) scanHosts() {
 	if err := hdb.tg.Add(); err != nil {
-		hdb.log.Println("[ERROR] couldn't add a thread:", err)
+		hdb.log.Error("couldn't add a thread", zap.Error(err))
 		return
 	}
 	defer hdb.tg.Done()
