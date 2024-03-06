@@ -26,7 +26,6 @@ CREATE TABLE wt_sfes (
 );
 
 /* hostdb */
-DROP TABLE IF EXISTS hdb_locations;
 DROP TABLE IF EXISTS hdb_domains;
 DROP TABLE IF EXISTS hdb_tip;
 DROP TABLE IF EXISTS hdb_scans_mainnet;
@@ -140,20 +139,6 @@ CREATE TABLE hdb_tip (
 	height           BIGINT UNSIGNED NOT NULL,
 	bid              BINARY(32) NOT NULL,
 	PRIMARY KEY (id)
-);
-
-CREATE TABLE hdb_locations (
-	public_key BINARY(32) NOT NULL,
-	ip         TEXT NOT NULL,
-	host_name  TEXT NOT NULL,
-	city       TEXT NOT NULL,
-	region     TEXT NOT NULL,
-	country    TEXT NOT NULL,
-	loc        TEXT NOT NULL,
-	isp        TEXT NOT NULL,
-	zip        TEXT NOT NULL,
-	time_zone  TEXT NOT NULL,
-	PRIMARY KEY (public_key)
 );
 
 CREATE TABLE hdb_domains (

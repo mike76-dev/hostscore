@@ -582,46 +582,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				Error:         msg,
 			}
 		}
-
-		locRows, err := s.db.Query(`
-			SELECT
-				ip,
-				host_name,
-				city,
-				region,
-				country,
-				loc,
-				isp,
-				zip,
-				time_zone
-			FROM hdb_locations
-			WHERE public_key = ?
-		`, pk)
-		if err != nil {
-			rows.Close()
-			return utils.AddContext(err, "couldn't query locations")
-		}
-
-		for locRows.Next() {
-			var ip, name, city, region, country, location, isp, zip, tz string
-			if err := locRows.Scan(&ip, &name, &city, &region, &country, &location, &isp, &zip, &tz); err != nil {
-				locRows.Close()
-				rows.Close()
-				return utils.AddContext(err, "couldn't scan location")
-			}
-			host.IPInfo = IPInfo{
-				IP:       ip,
-				HostName: name,
-				City:     city,
-				Region:   region,
-				Country:  country,
-				Location: location,
-				ISP:      isp,
-				ZIP:      zip,
-				TimeZone: tz,
-			}
-		}
-		locRows.Close()
 		s.mu.Lock()
 		s.hosts[host.PublicKey] = host
 		s.mu.Unlock()
@@ -1023,44 +983,4 @@ func (s *hostDBStore) getBenchmarkHistory(from, to time.Time) (history []Benchma
 	}
 
 	return
-}
-
-func (s *hostDBStore) updateHostLocation(host *HostDBEntry, info IPInfo) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.tx == nil {
-		return errors.New("there is no transaction")
-	}
-
-	host.IPInfo = info
-	s.hosts[host.PublicKey] = host
-
-	_, err := s.tx.Exec(`
-		REPLACE INTO hdb_locations (
-			public_key,
-			ip,
-			host_name,
-			city,
-			region,
-			country,
-			loc,
-			isp,
-			zip,
-			time_zone
-		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		host.PublicKey[:],
-		info.IP,
-		info.HostName,
-		info.City,
-		info.Region,
-		info.Country,
-		info.Location,
-		info.ISP,
-		info.ZIP,
-		info.TimeZone,
-	)
-
-	return err
 }

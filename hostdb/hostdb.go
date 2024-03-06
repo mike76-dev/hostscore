@@ -43,6 +43,18 @@ type HostDBEntry struct {
 	IPInfo
 }
 
+type IPInfo struct {
+	IP       string `json:"ip"`
+	HostName string `json:"hostname"`
+	City     string `json:"city"`
+	Region   string `json:"region"`
+	Country  string `json:"country"`
+	Location string `json:"loc"`
+	ISP      string `json:"org"`
+	ZIP      string `json:"postal"`
+	TimeZone string `json:"timezone"`
+}
+
 // HostInteractions combines historic and recent interactions.
 type HostInteractions struct {
 	HistoricSuccesses float64 `json:"historicSuccessfulInteractions"`
@@ -244,9 +256,6 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 	// Start the scanning thread.
 	go hdb.scanHosts()
 
-	// Fetch host locations.
-	go hdb.fetchLocations()
-
 	return hdb, errChan
 }
 
@@ -256,14 +265,6 @@ func (hdb *HostDB) online(network string) bool {
 		return len(hdb.syncerZen.Peers()) > 0
 	}
 	return len(hdb.syncer.Peers()) > 0
-}
-
-func (hdb *HostDB) saveLocation(host *HostDBEntry, info IPInfo) error {
-
-	if host.Network == "zen" {
-		return hdb.sZen.updateHostLocation(host, info)
-	}
-	return hdb.s.updateHostLocation(host, info)
 }
 
 // updateSCRate periodically fetches the SC exchange rate.

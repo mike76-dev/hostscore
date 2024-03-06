@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -41,13 +42,17 @@ type benchmarksResponse struct {
 type portalAPI struct {
 	router  httprouter.Router
 	store   *jsonStore
+	db      *sql.DB
+	token   string
 	clients map[string]*client.Client
 	mu      sync.RWMutex
 }
 
-func newAPI(s *jsonStore) *portalAPI {
+func newAPI(s *jsonStore, db *sql.DB, token string) *portalAPI {
 	return &portalAPI{
 		store:   s,
+		db:      db,
+		token:   token,
 		clients: make(map[string]*client.Client),
 	}
 }
@@ -116,6 +121,29 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	for i := range resp.Hosts {
+		info, lastFetched, err := getLocation(api.db, resp.Hosts[i], api.token)
+		if err != nil {
+			writeError(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if resp.Hosts[i].LastIPChange.After(lastFetched) {
+			newInfo, err := fetchIPInfo(resp.Hosts[i].NetAddress, api.token)
+			if err != nil {
+				writeError(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			if (newInfo != hostdb.IPInfo{}) {
+				info = newInfo
+				err = saveLocation(api.db, resp.Hosts[i].PublicKey, info)
+				if err != nil {
+					writeError(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+		resp.Hosts[i].IPInfo = info
 	}
 	writeJSON(w, hostsResponse{
 		APIResponse: APIResponse{Status: "ok"},
