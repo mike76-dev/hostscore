@@ -17,8 +17,8 @@ import (
 
 const (
 	scanInterval   = 30 * time.Minute
-	scanBatchSize  = 100
-	maxScanThreads = 100
+	scanBatchSize  = 20
+	maxScanThreads = 1000
 	minScans       = 25
 )
 
@@ -242,7 +242,7 @@ func (hdb *HostDB) scanHosts() {
 		select {
 		case <-hdb.tg.StopChan():
 			return
-		case <-time.After(1 * time.Millisecond):
+		case <-time.After(30 * time.Second):
 		}
 	}
 }
