@@ -131,23 +131,20 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		info, lastFetched, err := getLocation(api.db, resp.Hosts[i], api.token)
 		if err != nil {
 			api.log.Error("couldn't get host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
-			writeError(w, "internal error", http.StatusInternalServerError)
-			return
+			continue
 		}
 		if resp.Hosts[i].LastIPChange.After(lastFetched) {
 			newInfo, err := external.FetchIPInfo(resp.Hosts[i].NetAddress, api.token)
 			if err != nil {
 				api.log.Error("couldn't fetch host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
-				writeError(w, "internal error", http.StatusInternalServerError)
-				return
+				continue
 			}
 			if (newInfo != external.IPInfo{}) {
 				info = newInfo
 				err = saveLocation(api.db, resp.Hosts[i].PublicKey, info)
 				if err != nil {
 					api.log.Error("couldn't update host location", zap.String("host", resp.Hosts[i].NetAddress), zap.Error(err))
-					writeError(w, "internal error", http.StatusInternalServerError)
-					return
+					continue
 				}
 			} else {
 				api.log.Debug("empty host location received", zap.String("host", resp.Hosts[i].NetAddress))
