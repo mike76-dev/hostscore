@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
@@ -16,6 +17,7 @@ import (
 
 const (
 	scanInterval   = 30 * time.Minute
+	scanBatchSize  = 100
 	maxScanThreads = 100
 	minScans       = 25
 )
@@ -68,20 +70,20 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	var errMsg string
 	var start time.Time
 	err = func() error {
-		timeout := 2 * time.Minute
+		timeout := 10 * time.Second
 		if len(hdb.initialScanLatencies) > minScans {
 			hdb.log.Error("initialScanLatencies too large", zap.Int("limit", minScans))
 		}
 		if len(hdb.initialScanLatencies) == minScans {
 			timeout = hdb.initialScanLatencies[len(hdb.initialScanLatencies)/2]
 			timeout *= 5
-			if timeout > 2*time.Minute {
-				timeout = 2 * time.Minute
+			if timeout > 10*time.Second {
+				timeout = 10 * time.Second
 			}
 		}
 
 		// Create a context and set up its cancelling.
-		ctx, cancel := context.WithTimeout(context.Background(), timeout+4*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		connCloseChan := make(chan struct{})
 		go func() {
 			select {
@@ -191,19 +193,24 @@ func (hdb *HostDB) scanHosts() {
 			hdb.sZen.getHostsForScan()
 		}
 
+		var wg sync.WaitGroup
 		for len(hdb.scanList) > 0 {
 			hdb.mu.Lock()
 			if hdb.scanThreads < maxScanThreads {
 				hdb.scanThreads++
-				entry := hdb.scanList[0]
-				hdb.scanList = hdb.scanList[1:]
+				batchSize := scanBatchSize
+				if batchSize > len(hdb.scanList) {
+					batchSize = len(hdb.scanList)
+				}
+				list := hdb.scanList[:batchSize]
+				hdb.scanList = hdb.scanList[batchSize:]
 				hdb.mu.Unlock()
+				wg.Add(1)
 				go func() {
-					if err := hdb.tg.Add(); err != nil {
-						return
+					for _, entry := range list {
+						hdb.scanHost(entry)
 					}
-					defer hdb.tg.Done()
-					hdb.scanHost(entry)
+					wg.Done()
 				}()
 			} else {
 				hdb.mu.Unlock()
@@ -211,6 +218,7 @@ func (hdb *HostDB) scanHosts() {
 			}
 		}
 
+		wg.Wait()
 		for len(hdb.benchmarkList) > 0 {
 			hdb.mu.Lock()
 			if !hdb.benchmarking {
