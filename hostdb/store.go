@@ -454,12 +454,10 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				return utils.AddContext(err, "couldn't decode host price table")
 			}
 		}
-		s.mu.Lock()
 		if host.Blocked || domains.isBlocked(host.NetAddress) {
 			host.Blocked = true
 			s.blockedHosts[host.PublicKey] = struct{}{}
 		}
-		s.mu.Unlock()
 
 		scanRows, err := s.db.Query(`
 			SELECT ran_at, success, latency, error, settings, price_table
@@ -582,9 +580,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				Error:         msg,
 			}
 		}
-		s.mu.Lock()
 		s.hosts[host.PublicKey] = host
-		s.mu.Unlock()
 	}
 	rows.Close()
 

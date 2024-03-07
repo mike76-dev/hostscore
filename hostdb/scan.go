@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
@@ -15,10 +16,10 @@ import (
 )
 
 const (
-	scanInterval      = 30 * time.Minute
-	scanCheckInterval = 1 * time.Second
-	maxScanThreads    = 100
-	minScans          = 25
+	scanInterval   = 30 * time.Minute
+	scanBatchSize  = 20
+	maxScanThreads = 1000
+	minScans       = 25
 )
 
 // queueScan will add a host to the queue to be scanned.
@@ -60,9 +61,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	}
 
 	// Update historic interactions of the host if necessary.
-	hdb.mu.Lock()
 	hdb.updateHostHistoricInteractions(host)
-	hdb.mu.Unlock()
 
 	var settings rhpv2.HostSettings
 	var pt rhpv3.HostPriceTable
@@ -71,22 +70,20 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	var errMsg string
 	var start time.Time
 	err = func() error {
-		timeout := 2 * time.Minute
-		hdb.mu.Lock()
+		timeout := 10 * time.Second
 		if len(hdb.initialScanLatencies) > minScans {
 			hdb.log.Error("initialScanLatencies too large", zap.Int("limit", minScans))
 		}
 		if len(hdb.initialScanLatencies) == minScans {
 			timeout = hdb.initialScanLatencies[len(hdb.initialScanLatencies)/2]
 			timeout *= 5
-			if timeout > 2*time.Minute {
-				timeout = 2 * time.Minute
+			if timeout > 10*time.Second {
+				timeout = 10 * time.Second
 			}
 		}
-		hdb.mu.Unlock()
 
 		// Create a context and set up its cancelling.
-		ctx, cancel := context.WithTimeout(context.Background(), timeout+4*time.Minute)
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		connCloseChan := make(chan struct{})
 		go func() {
 			select {
@@ -184,7 +181,7 @@ func (hdb *HostDB) scanHosts() {
 		select {
 		case <-hdb.tg.StopChan():
 			return
-		case <-time.After(scanCheckInterval):
+		case <-time.After(time.Second):
 		}
 	}
 
@@ -196,37 +193,41 @@ func (hdb *HostDB) scanHosts() {
 			hdb.sZen.getHostsForScan()
 		}
 
+		var wg sync.WaitGroup
 		for len(hdb.scanList) > 0 {
 			hdb.mu.Lock()
 			if hdb.scanThreads < maxScanThreads {
 				hdb.scanThreads++
-				entry := hdb.scanList[0]
-				hdb.scanList = hdb.scanList[1:]
+				batchSize := scanBatchSize
+				if batchSize > len(hdb.scanList) {
+					batchSize = len(hdb.scanList)
+				}
+				list := hdb.scanList[:batchSize]
+				hdb.scanList = hdb.scanList[batchSize:]
+				hdb.mu.Unlock()
+				wg.Add(1)
 				go func() {
-					if err := hdb.tg.Add(); err != nil {
-						hdb.mu.Unlock()
-						return
+					for _, entry := range list {
+						hdb.scanHost(entry)
 					}
-					defer hdb.tg.Done()
-					hdb.scanHost(entry)
+					wg.Done()
 				}()
 			} else {
 				hdb.mu.Unlock()
 				break
 			}
-			hdb.mu.Unlock()
-
 		}
 
+		wg.Wait()
 		for len(hdb.benchmarkList) > 0 {
 			hdb.mu.Lock()
 			if !hdb.benchmarking {
 				hdb.benchmarking = true
 				entry := hdb.benchmarkList[0]
 				hdb.benchmarkList = hdb.benchmarkList[1:]
+				hdb.mu.Unlock()
 				go func() {
 					if err := hdb.tg.Add(); err != nil {
-						hdb.mu.Unlock()
 						return
 					}
 					defer hdb.tg.Done()
@@ -236,13 +237,12 @@ func (hdb *HostDB) scanHosts() {
 				hdb.mu.Unlock()
 				break
 			}
-			hdb.mu.Unlock()
 		}
 
 		select {
 		case <-hdb.tg.StopChan():
 			return
-		case <-time.After(scanCheckInterval):
+		case <-time.After(30 * time.Second):
 		}
 	}
 }

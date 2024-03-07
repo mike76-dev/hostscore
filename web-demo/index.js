@@ -42,6 +42,7 @@ function renderHosts() {
 	let nav = document.getElementById('nav');
 	nav.classList.add('hidden');
 	table.innerHTML = '<tr><th style="text-align:left">ID</th><th style="text-align:left">Address</th><th>Status</th></tr>';
+	if (!hosts) return;
 	hosts.forEach(host => {
 		let online = isOnline(host.publicKey);
 		let row = document.createElement('tr');
@@ -71,6 +72,7 @@ function renderHosts() {
 function isOnline(pk) {
 	let host = hosts.find(h => h.publicKey == pk);
 	if (host) {
+		if (!host.scanHistory) return false;
 		return host.scanHistory.length > 0 && host.scanHistory[0].success == true &&
 			((host.scanHistory.length > 1 && host.scanHistory[1].success == true) ||
 			host.scanHistory.length == 1);
