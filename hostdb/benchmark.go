@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/rhp"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
@@ -267,7 +267,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		})
 		return err
 	}()
-	if err != nil && errors.Is(err, walletutil.ErrInsufficientBalance) {
+	if err != nil && strings.Contains(err.Error(), "insufficient balance") {
 		// Not the host's fault.
 		hdb.mu.Lock()
 		delete(hdb.scanMap, host.PublicKey)
