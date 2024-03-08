@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
+	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/rhp"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
@@ -57,18 +58,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			return err
 		}
 
-		// Create a context and set up its cancelling.
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		connCloseChan := make(chan struct{})
-		go func() {
-			select {
-			case <-hdb.tg.StopChan():
-			case <-connCloseChan:
-			}
-			cancel()
-		}()
-		defer close(connCloseChan)
-
 		h, _, _ := net.SplitHostPort(host.NetAddress)
 		addr := net.JoinHostPort(h, host.Settings.SiaMuxPort)
 		numSectors := benchmarkBatchSize / rhpv2.SectorSize
@@ -76,18 +65,28 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 
 		// Check if we have a contract with this host and if it has enough money in it.
 		if host.Revision.WindowStart <= height ||
-			host.Revision.ValidRenterPayout().Cmp(hdb.benchmarkCost(host)) < 0 {
+			host.Revision.ValidRenterPayout().Cmp(benchmarkCost(host)) < 0 {
 			var rev rhpv2.ContractRevision
 			var txnSet []types.Transaction
-			err = rhp.WithTransportV2(ctx, settings.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
+			formCtx, formCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer formCancel()
+			go func() {
+				select {
+				case <-hdb.tg.StopChan():
+					formCancel()
+				case <-formCtx.Done():
+				}
+			}()
+			err = rhp.WithTransportV2(formCtx, settings.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
 				renterTxnSet, err := hdb.prepareContractFormation(host)
 				if err != nil {
 					return utils.AddContext(err, "couldn't prepare contract")
 				}
 
-				rev, txnSet, err = rhp.RPCFormContract(ctx, t, key, renterTxnSet)
+				rev, txnSet, err = rhp.RPCFormContract(formCtx, t, key, renterTxnSet)
+				fmt.Println("DEBUG: contract formed:", err)
 				if err != nil {
-					hdb.w.Release(renterTxnSet)
+					hdb.w.Release(renterTxnSet...)
 					return utils.AddContext(err, "couldn't form contract")
 				}
 
@@ -100,25 +99,34 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			if host.Network == "zen" {
 				_, err := hdb.cmZen.AddPoolTransactions(txnSet)
 				if err != nil {
-					hdb.w.Release(txnSet)
+					hdb.w.Release(txnSet...)
 					return utils.AddContext(err, "invalid transaction set")
 				}
 				hdb.syncerZen.BroadcastTransactionSet(txnSet)
 			} else {
 				_, err := hdb.cm.AddPoolTransactions(txnSet)
 				if err != nil {
-					hdb.w.Release(txnSet)
+					hdb.w.Release(txnSet...)
 					return utils.AddContext(err, "invalid transaction set")
 				}
 				hdb.syncer.BroadcastTransactionSet(txnSet)
 			}
 
 			host.Revision = rev.Revision
-			hdb.log.Info("successfully formed contract", zap.String("host", host.NetAddress), zap.Stringer("id", rev.Revision.ParentID))
+			hdb.log.Info("successfully formed contract", zap.String("network", host.Network), zap.String("host", host.NetAddress), zap.Stringer("id", rev.Revision.ParentID))
 		} else {
 			// Fetch the latest revision.
-			err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
-				rev, err := rhp.RPCLatestRevision(ctx, t, host.Revision.ParentID)
+			revCtx, revCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer revCancel()
+			go func() {
+				select {
+				case <-hdb.tg.StopChan():
+					revCancel()
+				case <-revCtx.Done():
+				}
+			}()
+			err = rhp.WithTransportV3(revCtx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
+				rev, err := rhp.RPCLatestRevision(revCtx, t, host.Revision.ParentID)
 				if err != nil {
 					return utils.AddContext(err, "unable to get latest revision")
 				}
@@ -128,8 +136,17 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		}
 
 		// Fetch a valid price table.
-		err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
-			pt, err = rhp.RPCPriceTable(ctx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
+		ptCtx, ptCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer ptCancel()
+		go func() {
+			select {
+			case <-hdb.tg.StopChan():
+				ptCancel()
+			case <-ptCtx.Done():
+			}
+		}()
+		err = rhp.WithTransportV3(ptCtx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
+			pt, err = rhp.RPCPriceTable(ptCtx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
 				payment, ok := rhpv3.PayByContract(&host.Revision, pt.UpdatePriceTableCost, rhpv3.Account(key.PublicKey()), key)
 				if !ok {
 					return nil, errors.New("insufficient balance")
@@ -156,7 +173,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			if !ok {
 				return errors.New("insufficient balance")
 			}
-			if err := rhp.RPCFundAccount(ctx, t, &payment, rhpv3.Account(key.PublicKey()), pt.UID); err != nil {
+			if err := rhp.RPCFundAccount(ptCtx, t, &payment, rhpv3.Account(key.PublicKey()), pt.UID); err != nil {
 				return utils.AddContext(err, "unable to fund account")
 			}
 
@@ -166,16 +183,46 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			return err
 		}
 
+		// Use the channel to prevent other threads from running benchmarks
+		// at the same time.
+		for {
+			hdb.mu.Lock()
+			if !hdb.benchmarking {
+				hdb.benchmarking = true
+				hdb.mu.Unlock()
+				break
+			}
+			hdb.mu.Unlock()
+			select {
+			case <-hdb.tg.StopChan():
+			case <-time.After(time.Second):
+			}
+		}
+		defer func() {
+			hdb.mu.Lock()
+			hdb.benchmarking = false
+			hdb.mu.Unlock()
+		}()
+
 		// Run an upload benchmark.
 		var data [rhpv2.SectorSize]byte
 		roots := make([]types.Hash256, numSectors)
 		var start time.Time
-		err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
+		upCtx, upCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer upCancel()
+		go func() {
+			select {
+			case <-hdb.tg.StopChan():
+				upCancel()
+			case <-upCtx.Done():
+			}
+		}()
+		err = rhp.WithTransportV3(upCtx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
 			start = time.Now()
 			for i := 0; i < numSectors; i++ {
 				frand.Read(data[:256])
 				payment := rhpv3.PayByEphemeralAccount(rhpv3.Account(key.PublicKey()), uploadCost, host.PriceTable.HostBlockHeight+6, key)
-				root, _, err := rhp.RPCAppendSector(ctx, t, key, pt, &host.Revision, &payment, &data)
+				root, _, err := rhp.RPCAppendSector(upCtx, t, key, pt, &host.Revision, &payment, &data)
 				if err != nil {
 					return utils.AddContext(err, "unable to upload sector")
 				}
@@ -189,12 +236,21 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		ul = float64(benchmarkBatchSize) / time.Since(start).Seconds()
 
 		// Run a download benchmark.
-		err = rhp.WithTransportV3(ctx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
+		dnCtx, dnCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer dnCancel()
+		go func() {
+			select {
+			case <-hdb.tg.StopChan():
+				dnCancel()
+			case <-dnCtx.Done():
+			}
+		}()
+		err = rhp.WithTransportV3(dnCtx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
 			start = time.Now()
 			for i := 0; i < numSectors; i++ {
 				payment := rhpv3.PayByEphemeralAccount(rhpv3.Account(key.PublicKey()), downloadCost, host.PriceTable.HostBlockHeight+6, key)
 				buf := bytes.NewBuffer(data[:])
-				_, _, err := rhp.RPCReadSector(ctx, t, buf, pt, &payment, 0, rhpv2.SectorSize, roots[i])
+				_, _, err := rhp.RPCReadSector(dnCtx, t, buf, pt, &payment, 0, rhpv2.SectorSize, roots[i])
 				if err != nil {
 					return utils.AddContext(err, "unable to download sector")
 				}
@@ -211,15 +267,11 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		})
 		return err
 	}()
-	if err != nil && strings.Contains(err.Error(), "canceled") {
-		// Shutting down.
-		return
-	}
-	if err != nil && strings.Contains(err.Error(), "insufficient balance") {
+	if err != nil && errors.Is(err, walletutil.ErrInsufficientBalance) {
 		// Not the host's fault.
 		hdb.mu.Lock()
 		delete(hdb.scanMap, host.PublicKey)
-		hdb.benchmarking = false
+		hdb.benchmarkThreads--
 		hdb.mu.Unlock()
 		return
 	}
@@ -251,7 +303,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	// Delete the host from scanMap.
 	hdb.mu.Lock()
 	delete(hdb.scanMap, host.PublicKey)
-	hdb.benchmarking = false
+	hdb.benchmarkThreads--
 	hdb.mu.Unlock()
 }
 
@@ -263,7 +315,7 @@ func (s *hostDBStore) calculateBenchmarkInterval(host *HostDBEntry) time.Duratio
 	}
 
 	num := s.lastFailedBenchmarks(host)
-	if num > 13 && !host.ScanHistory[len(host.ScanHistory)-1].Success {
+	if num > 13 && s.lastFailedScans(host) > 18 {
 		return math.MaxInt64 // never
 	}
 	if num > 11 {
@@ -281,11 +333,11 @@ func (s *hostDBStore) calculateBenchmarkInterval(host *HostDBEntry) time.Duratio
 	if num > 3 {
 		return benchmarkInterval * 2 // 4 hours
 	}
-	return math.MaxInt64
+	return benchmarkInterval
 }
 
 // benchmarkCost estimates the cost of running a single benchmark.
-func (s *HostDB) benchmarkCost(host *HostDBEntry) types.Currency {
+func benchmarkCost(host *HostDBEntry) types.Currency {
 	if (host.Settings == rhpv2.HostSettings{}) ||
 		(host.PriceTable == rhpv3.HostPriceTable{}) ||
 		(host.Revision.ParentID == types.FileContractID{}) {

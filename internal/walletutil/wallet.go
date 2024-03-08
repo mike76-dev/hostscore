@@ -14,7 +14,6 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/persist"
 	"github.com/mike76-dev/hostscore/wallet"
-	"gitlab.com/NebulousLabs/encoding"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -38,6 +37,13 @@ const (
 	wantedOutputs = 100
 )
 
+var (
+	defragThreshold     = 300
+	maxInputsForDefrag  = 300
+	maxDefragUTXOs      = 10
+	reservationDuration = 15 * time.Minute
+)
+
 // ErrInsufficientBalance is returned when there aren't enough unused outputs to
 // cover the requested amount.
 var ErrInsufficientBalance = errors.New("insufficient balance")
@@ -52,9 +58,9 @@ type Wallet struct {
 	log       *zap.Logger
 	closeFn   func()
 
-	mu   sync.Mutex
-	tg   siasync.ThreadGroup
-	used map[types.Hash256]bool
+	mu     sync.Mutex
+	tg     siasync.ThreadGroup
+	locked map[types.Hash256]time.Time
 }
 
 // Address implements api.Wallet.
@@ -94,6 +100,8 @@ func (w *Wallet) Close() {
 	if err := w.tg.Stop(); err != nil {
 		w.log.Error("unable to stop threads", zap.Error(err))
 	}
+	w.cm.RemoveSubscriber(w.s)
+	w.cmZen.RemoveSubscriber(w.sZen)
 	w.s.close()
 	w.sZen.close()
 	w.closeFn()
@@ -131,7 +139,7 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 		closeFn:   closeFn,
 		s:         store,
 		sZen:      storeZen,
-		used:      make(map[types.Hash256]bool),
+		locked:    make(map[types.Hash256]time.Time),
 	}
 
 	go w.performWalletMaintenance("mainnet")
@@ -141,65 +149,143 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 }
 
 // Fund adds Siacoin inputs with the required amount to the transaction.
-func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Currency) (parents []types.Transaction, toSign []types.Hash256, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Currency, useUnconfirmed bool) (parents []types.Transaction, toSign []types.Hash256, err error) {
 	if amount.IsZero() {
 		return nil, nil, nil
 	}
 
-	utxos, _, err := w.UnspentOutputs(network)
+	elements, _, err := w.UnspentOutputs(network)
 	if err != nil {
 		return nil, nil, utils.AddContext(err, "couldn't get utxos to fund transaction")
 	}
 
+	tpoolSpent := make(map[types.Hash256]bool)
+	tpoolUtxos := make(map[types.Hash256]types.SiacoinElement)
+	var poolTransactions []types.Transaction
+	var cs consensus.State
+	var addr types.Address
+	if network == "zen" {
+		poolTransactions = w.cmZen.PoolTransactions()
+		cs = w.cmZen.TipState()
+		addr = w.sZen.addr
+	} else {
+		poolTransactions = w.cm.PoolTransactions()
+		cs = w.cm.TipState()
+		addr = w.s.addr
+	}
+	for _, txn := range poolTransactions {
+		for _, sci := range txn.SiacoinInputs {
+			tpoolSpent[types.Hash256(sci.ParentID)] = true
+			delete(tpoolUtxos, types.Hash256(sci.ParentID))
+		}
+		for i, sco := range txn.SiacoinOutputs {
+			tpoolUtxos[types.Hash256(txn.SiacoinOutputID(i))] = types.SiacoinElement{
+				StateElement: types.StateElement{
+					ID: types.Hash256(types.SiacoinOutputID(txn.SiacoinOutputID(i))),
+				},
+				SiacoinOutput: sco,
+			}
+		}
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	// Remove immature, locked and spent outputs.
+	utxos := make([]types.SiacoinElement, 0, len(elements))
+	for _, sce := range elements {
+		if time.Now().Before(w.locked[sce.ID]) || tpoolSpent[sce.ID] || cs.Index.Height < sce.MaturityHeight {
+			continue
+		}
+		utxos = append(utxos, sce)
+	}
+
+	// Sort by value, descending.
 	sort.Slice(utxos, func(i, j int) bool {
 		return utxos[i].SiacoinOutput.Value.Cmp(utxos[j].SiacoinOutput.Value) > 0
 	})
 
-	inPool := make(map[types.Hash256]bool)
-	var txns []types.Transaction
-	if network == "zen" {
-		txns = w.cmZen.PoolTransactions()
-	} else {
-		txns = w.cm.PoolTransactions()
-	}
-	for _, ptxn := range txns {
-		for _, in := range ptxn.SiacoinInputs {
-			inPool[types.Hash256(in.ParentID)] = true
+	var unconfirmedUTXOs []types.SiacoinElement
+	if useUnconfirmed {
+		for _, sce := range tpoolUtxos {
+			if sce.SiacoinOutput.Address != addr || time.Now().Before(w.locked[sce.ID]) {
+				continue
+			}
+			unconfirmedUTXOs = append(unconfirmedUTXOs, sce)
 		}
-	}
 
-	var outputSum types.Currency
-	var fundingElements []types.SiacoinElement
-	for _, sce := range utxos {
-		if w.used[types.Hash256(sce.ID)] || inPool[types.Hash256(sce.ID)] {
-			continue
-		}
-		fundingElements = append(fundingElements, sce)
-		outputSum = outputSum.Add(sce.SiacoinOutput.Value)
-		if outputSum.Cmp(amount) >= 0 {
-			break
-		}
-	}
-
-	if outputSum.Cmp(amount) < 0 {
-		return nil, nil, errors.New("insufficient balance")
-	} else if outputSum.Cmp(amount) > 0 {
-		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
-			Value:   outputSum.Sub(amount),
-			Address: w.Address(network),
+		// Sort by value, descending.
+		sort.Slice(unconfirmedUTXOs, func(i, j int) bool {
+			return unconfirmedUTXOs[i].SiacoinOutput.Value.Cmp(unconfirmedUTXOs[j].SiacoinOutput.Value) > 0
 		})
 	}
 
-	toSign = make([]types.Hash256, len(fundingElements))
-	for i, sce := range fundingElements {
+	// Fund the transaction using the largest utxos first.
+	var selected []types.SiacoinElement
+	var inputSum types.Currency
+	for i, sce := range utxos {
+		if inputSum.Cmp(amount) >= 0 {
+			utxos = utxos[i:]
+			break
+		}
+		selected = append(selected, sce)
+		inputSum = inputSum.Add(sce.SiacoinOutput.Value)
+	}
+
+	if inputSum.Cmp(amount) < 0 && useUnconfirmed {
+		// Try adding unconfirmed utxos.
+		for _, sce := range unconfirmedUTXOs {
+			if inputSum.Cmp(amount) >= 0 {
+				break
+			}
+			selected = append(selected, sce)
+			inputSum = inputSum.Add(sce.SiacoinOutput.Value)
+		}
+
+		if inputSum.Cmp(amount) < 0 {
+			// Still not enough funds.
+			return nil, nil, ErrInsufficientBalance
+		}
+	} else if inputSum.Cmp(amount) < 0 {
+		return nil, nil, ErrInsufficientBalance
+	}
+
+	// Check if remaining utxos should be defragged.
+	txnInputs := len(txn.SiacoinInputs) + len(selected)
+	if len(utxos) > defragThreshold && txnInputs < maxInputsForDefrag {
+		// Add the smallest utxos to the transaction.
+		defraggable := utxos
+		if len(defraggable) > maxDefragUTXOs {
+			defraggable = defraggable[len(defraggable)-maxDefragUTXOs:]
+		}
+		for i := len(defraggable) - 1; i >= 0; i-- {
+			if txnInputs >= maxInputsForDefrag {
+				break
+			}
+
+			sce := defraggable[i]
+			selected = append(selected, sce)
+			inputSum = inputSum.Add(sce.SiacoinOutput.Value)
+			txnInputs++
+		}
+	}
+
+	// Add a change output if necessary.
+	if inputSum.Cmp(amount) > 0 {
+		txn.SiacoinOutputs = append(txn.SiacoinOutputs, types.SiacoinOutput{
+			Value:   inputSum.Sub(amount),
+			Address: addr,
+		})
+	}
+
+	toSign = make([]types.Hash256, len(selected))
+	for i, sce := range selected {
 		txn.SiacoinInputs = append(txn.SiacoinInputs, types.SiacoinInput{
 			ParentID:         types.SiacoinOutputID(sce.ID),
 			UnlockConditions: types.StandardUnlockConditions(w.Key(network).PublicKey()),
 		})
-		toSign[i] = types.Hash256(sce.ID)
-		w.used[types.Hash256(sce.ID)] = true
+		toSign[i] = sce.ID
+		w.locked[sce.ID] = time.Now().Add(reservationDuration)
 	}
 
 	if network == "zen" {
@@ -209,57 +295,50 @@ func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Curre
 }
 
 // Release marks the outputs as unused.
-func (w *Wallet) Release(txnSet []types.Transaction) {
+func (w *Wallet) Release(txns ...types.Transaction) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	for _, txn := range txnSet {
-		for i := range txn.SiacoinOutputs {
-			delete(w.used, types.Hash256(txn.SiacoinOutputID(i)))
+	w.release(txns...)
+}
+
+func (w *Wallet) release(txns ...types.Transaction) {
+	for _, txn := range txns {
+		for _, in := range txn.SiacoinInputs {
+			delete(w.locked, types.Hash256(in.ParentID))
 		}
-		for i := range txn.SiafundOutputs {
-			delete(w.used, types.Hash256(txn.SiafundOutputID(i)))
+		for _, in := range txn.SiafundInputs {
+			delete(w.locked, types.Hash256(in.ParentID))
 		}
 	}
 }
 
 // Reserve reserves the outputs for a defined amount of time.
 func (w *Wallet) Reserve(scoids []types.SiacoinOutputID, sfoids []types.SiafundOutputID, duration time.Duration) error {
-	w.mu.Lock()
-	for _, id := range scoids {
-		if w.used[types.Hash256(id)] {
-			w.mu.Unlock()
-			return fmt.Errorf("output %v is already reserved", id)
-		}
-		w.used[types.Hash256(id)] = true
-	}
-	for _, id := range sfoids {
-		if w.used[types.Hash256(id)] {
-			w.mu.Unlock()
-			return fmt.Errorf("output %v is already reserved", id)
-		}
-		w.used[types.Hash256(id)] = true
-	}
-	w.mu.Unlock()
-
 	if duration == 0 {
 		duration = 10 * time.Minute
 	}
-	time.AfterFunc(duration, func() {
-		w.mu.Lock()
-		defer w.mu.Unlock()
-		for _, id := range scoids {
-			delete(w.used, types.Hash256(id))
+	t := time.Now()
+	w.mu.Lock()
+	for _, id := range scoids {
+		if t.Before(w.locked[types.Hash256(id)]) {
+			w.mu.Unlock()
+			return fmt.Errorf("output %v is already reserved", id)
 		}
-		for _, id := range sfoids {
-			delete(w.used, types.Hash256(id))
+		w.locked[types.Hash256(id)] = t.Add(duration)
+	}
+	for _, id := range sfoids {
+		if t.Before(w.locked[types.Hash256(id)]) {
+			w.mu.Unlock()
+			return fmt.Errorf("output %v is already reserved", id)
 		}
-	})
-
+		w.locked[types.Hash256(id)] = t.Add(duration)
+	}
+	w.mu.Unlock()
 	return nil
 }
 
 // Sign adds signatures corresponding to toSign elements to the transaction.
-func (w *Wallet) Sign(network string, txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) error {
+func (w *Wallet) Sign(network string, txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) {
 	var cs consensus.State
 	if network == "zen" {
 		cs = w.cmZen.TipState()
@@ -267,22 +346,20 @@ func (w *Wallet) Sign(network string, txn *types.Transaction, toSign []types.Has
 		cs = w.cm.TipState()
 	}
 	for _, id := range toSign {
-		ts := types.TransactionSignature{
-			ParentID:       id,
-			CoveredFields:  cf,
-			PublicKeyIndex: 0,
-		}
 		var h types.Hash256
 		if cf.WholeTransaction {
-			h = cs.WholeSigHash(*txn, ts.ParentID, ts.PublicKeyIndex, ts.Timelock, cf.Signatures)
+			h = cs.WholeSigHash(*txn, id, 0, 0, cf.Signatures)
 		} else {
 			h = cs.PartialSigHash(*txn, cf)
 		}
 		sig := w.Key(network).SignHash(h)
-		ts.Signature = sig[:]
-		txn.Signatures = append(txn.Signatures, ts)
+		txn.Signatures = append(txn.Signatures, types.TransactionSignature{
+			ParentID:       id,
+			CoveredFields:  cf,
+			PublicKeyIndex: 0,
+			Signature:      sig[:],
+		})
 	}
-	return nil
 }
 
 // Redistribute creates a specified number of new outputs and distributes
@@ -305,6 +382,13 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		fee = w.cm.RecommendedFee()
 		pool = w.cm.PoolTransactions()
 	}
+	height := cs.Index.Height
+
+	// Fetch unspent transaction outputs.
+	elements, _, err := w.UnspentOutputs(network)
+	if err != nil {
+		return err
+	}
 
 	// Build map of inputs currently in the tx pool.
 	inPool := make(map[types.Hash256]bool)
@@ -314,24 +398,29 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		}
 	}
 
-	// Fetch unspent transaction outputs.
-	utxos, _, err := w.UnspentOutputs(network)
-	if err != nil {
-		return err
-	}
-
-	// Check whether a redistribution is necessary, adjust number of desired
-	// outputs accordingly.
 	w.mu.Lock()
-	for _, sce := range utxos {
-		inUse := w.used[sce.ID] || inPool[sce.ID]
-		matured := cs.Index.Height >= sce.MaturityHeight
+	defer w.mu.Unlock()
+
+	// Adjust the number of desired outputs for any output we encounter that is
+	// unused, matured and has the same value.
+	utxos := make([]types.SiacoinElement, 0, len(elements))
+	for _, sce := range elements {
+		inUse := time.Now().After(w.locked[sce.ID]) || inPool[sce.ID]
+		matured := height >= sce.MaturityHeight
 		sameValue := sce.SiacoinOutput.Value.Equals(amount)
+
+		// Adjust number of desired outputs.
 		if !inUse && matured && sameValue {
 			outputs--
 		}
+
+		// Collect usable outputs for defragging.
+		if !inUse && matured && !sameValue {
+			utxos = append(utxos, sce)
+		}
 	}
-	w.mu.Unlock()
+
+	// Return early if we don't have to defrag at all.
 	if outputs <= 0 {
 		return nil
 	}
@@ -356,45 +445,27 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		outputs -= len(txn.SiacoinOutputs)
 
 		// Estimate the fees.
-		outputFees := fee.Mul64(uint64(len(encoding.Marshal(txn.SiacoinOutputs))))
+		outputFees := fee.Mul64(cs.TransactionWeight(txn))
 		feePerInput := fee.Mul64(bytesPerInput)
 
 		// Collect outputs that cover the total amount.
 		var inputs []types.SiacoinElement
 		want := amount.Mul64(uint64(len(txn.SiacoinOutputs)))
-		var amtInUse, amtSameValue, amtNotMatured types.Currency
-		w.mu.Lock()
 		for _, sce := range utxos {
-			inUse := w.used[sce.ID] || inPool[sce.ID]
-			matured := cs.Index.Height >= sce.MaturityHeight
-			sameValue := sce.SiacoinOutput.Value.Equals(amount)
-			if inUse {
-				amtInUse = amtInUse.Add(sce.SiacoinOutput.Value)
-				continue
-			} else if sameValue {
-				amtSameValue = amtSameValue.Add(sce.SiacoinOutput.Value)
-				continue
-			} else if !matured {
-				amtNotMatured = amtNotMatured.Add(sce.SiacoinOutput.Value)
-				continue
-			}
-
 			inputs = append(inputs, sce)
-			inPool[sce.ID] = true
 			fee := feePerInput.Mul64(uint64(len(inputs))).Add(outputFees)
 			if SumOutputs(inputs).Cmp(want.Add(fee)) > 0 {
 				break
 			}
 		}
-		w.mu.Unlock()
 
 		// Not enough outputs found.
 		fee := feePerInput.Mul64(uint64(len(inputs))).Add(outputFees)
 		if sumOut := SumOutputs(inputs); sumOut.Cmp(want.Add(fee)) < 0 {
 			// In case of an error we need to free all inputs.
-			w.Release(txns)
-			return fmt.Errorf("%w: inputs %v < needed %v + txnFee %v (usable: %v, inUse: %v, sameValue: %v, notMatured: %v, network: %s)",
-				ErrInsufficientBalance, sumOut.String(), want.String(), fee.String(), sumOut.String(), amtInUse.String(), amtSameValue.String(), amtNotMatured.String(), network)
+			w.release(txns...)
+			return fmt.Errorf("network: %s: %w, inputs %v < needed %v + txnFee %v",
+				network, ErrInsufficientBalance, sumOut.String(), want.String(), fee.String())
 		}
 
 		// Set the miner fee.
@@ -416,14 +487,11 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 				UnlockConditions: types.StandardUnlockConditions(w.Key(network).PublicKey()),
 			})
 			toSign = append(toSign, sce.ID)
+			w.locked[sce.ID] = time.Now().Add(reservationDuration)
 		}
 
-		err = w.Sign(network, &txn, toSign, types.CoveredFields{WholeTransaction: true})
+		w.Sign(network, &txn, toSign, types.CoveredFields{WholeTransaction: true})
 		txns = append(txns, txn)
-		if err != nil {
-			w.Release(txns)
-			return utils.AddContext(err, "couldn't sign the transaction")
-		}
 	}
 
 	if network == "zen" {
@@ -432,7 +500,7 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		_, err = w.cm.AddPoolTransactions(txns)
 	}
 	if err != nil {
-		w.Release(txns)
+		w.release(txns...)
 		return utils.AddContext(err, "invalid transaction set")
 	}
 	if network == "zen" {

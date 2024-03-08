@@ -106,6 +106,7 @@ type HostDB struct {
 	benchmarkList        []*HostDBEntry
 	scanMap              map[types.PublicKey]bool
 	scanThreads          int
+	benchmarkThreads     int
 	priceLimits          hostDBPriceLimits
 	blockedDomains       *blockedDomains
 }
@@ -155,6 +156,8 @@ func (hdb *HostDB) Close() {
 	if err := hdb.tg.Stop(); err != nil {
 		hdb.log.Error("unable to stop threads", zap.Error(err))
 	}
+	hdb.cm.RemoveSubscriber(hdb.s)
+	hdb.cmZen.RemoveSubscriber(hdb.sZen)
 	hdb.s.close()
 	hdb.sZen.close()
 	hdb.closeFn()

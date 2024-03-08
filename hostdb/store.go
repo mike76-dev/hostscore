@@ -505,7 +505,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 					return utils.AddContext(err, "couldn't decode host price table")
 				}
 			}
-			host.ScanHistory = append(host.ScanHistory, scan)
+			host.ScanHistory = append([]HostScan{scan}, host.ScanHistory...)
 		}
 		scanRows.Close()
 
