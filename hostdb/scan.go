@@ -5,7 +5,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
@@ -16,10 +15,11 @@ import (
 )
 
 const (
-	scanInterval   = 30 * time.Minute
-	scanBatchSize  = 20
-	maxScanThreads = 1000
-	minScans       = 25
+	scanInterval        = 30 * time.Minute
+	scanBatchSize       = 20
+	maxScanThreads      = 1000
+	maxBenchmarkThreads = 20
+	minScans            = 25
 )
 
 // queueScan will add a host to the queue to be scanned.
@@ -193,7 +193,6 @@ func (hdb *HostDB) scanHosts() {
 			hdb.sZen.getHostsForScan()
 		}
 
-		var wg sync.WaitGroup
 		for len(hdb.scanList) > 0 {
 			hdb.mu.Lock()
 			if hdb.scanThreads < maxScanThreads {
@@ -205,12 +204,10 @@ func (hdb *HostDB) scanHosts() {
 				list := hdb.scanList[:batchSize]
 				hdb.scanList = hdb.scanList[batchSize:]
 				hdb.mu.Unlock()
-				wg.Add(1)
 				go func() {
 					for _, entry := range list {
 						hdb.scanHost(entry)
 					}
-					wg.Done()
 				}()
 			} else {
 				hdb.mu.Unlock()
@@ -218,21 +215,14 @@ func (hdb *HostDB) scanHosts() {
 			}
 		}
 
-		wg.Wait()
 		for len(hdb.benchmarkList) > 0 {
 			hdb.mu.Lock()
-			if !hdb.benchmarking {
-				hdb.benchmarking = true
+			if hdb.benchmarkThreads < maxBenchmarkThreads {
+				hdb.benchmarkThreads++
 				entry := hdb.benchmarkList[0]
 				hdb.benchmarkList = hdb.benchmarkList[1:]
 				hdb.mu.Unlock()
-				go func() {
-					if err := hdb.tg.Add(); err != nil {
-						return
-					}
-					defer hdb.tg.Done()
-					hdb.benchmarkHost(entry)
-				}()
+				go hdb.benchmarkHost(entry)
 			} else {
 				hdb.mu.Unlock()
 				break
@@ -242,7 +232,7 @@ func (hdb *HostDB) scanHosts() {
 		select {
 		case <-hdb.tg.StopChan():
 			return
-		case <-time.After(30 * time.Second):
+		case <-time.After(5 * time.Second):
 		}
 	}
 }
@@ -255,7 +245,7 @@ func (s *hostDBStore) calculateScanInterval(host *HostDBEntry) time.Duration {
 	}
 
 	num := s.lastFailedScans(host)
-	if num > 18 && (host.LastSeen.IsZero() || time.Since(host.LastSeen) >= 21*24*time.Hour) {
+	if num > 18 && host.LastSeen.IsZero() {
 		return math.MaxInt64 // never
 	}
 	if num > 15 {
@@ -276,5 +266,5 @@ func (s *hostDBStore) calculateScanInterval(host *HostDBEntry) time.Duration {
 	if num > 3 {
 		return scanInterval * 2 // 1 hour
 	}
-	return math.MaxInt64
+	return scanInterval
 }
