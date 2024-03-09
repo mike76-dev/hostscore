@@ -37,6 +37,10 @@ func calculateFunding(settings rhpv2.HostSettings, txnFee types.Currency) (fundi
 // prepareContractFormation creates a new contract and a formation
 // transaction set.
 func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transaction, error) {
+	if host.Network != "mainnet" && host.Network != "zen" {
+		panic("wrong host network")
+	}
+
 	var blockHeight uint64
 	var state consensus.State
 	var txnFee types.Currency

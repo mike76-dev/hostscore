@@ -54,6 +54,9 @@ func newHostDBStore(db *sql.DB, logger *zap.Logger, network string, domains *blo
 // update updates the host entry in the database.
 // NOTE: a lock must be acquired before calling update.
 func (s *hostDBStore) update(host *HostDBEntry) error {
+	if host.Network != s.network {
+		panic("networks don't match")
+	}
 	if s.tx == nil {
 		return errors.New("there is no transaction")
 	}
@@ -156,6 +159,9 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 
 // updateScanHistory adds a new scan to the host's scan history.
 func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error {
+	if host.Network != s.network {
+		panic("networks don't match")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tx == nil {
@@ -227,6 +233,9 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 
 // updateBenchmarks adds a new benchmark to the host's benchmark history.
 func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmark) error {
+	if host.Network != s.network {
+		panic("networks don't match")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tx == nil {
@@ -269,6 +278,9 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 // lastFailedScans returns the number of scans failed in a row.
 // NOTE: a lock must be acquired before calling this function.
 func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
+	if host.Network != s.network {
+		panic("networks don't match")
+	}
 	if s.tx == nil {
 		s.log.Error("there is no transaction", zap.String("network", s.network))
 		return 0
@@ -308,6 +320,9 @@ func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 // lastFailedBenchmarks returns the number of benchmarks failed in a row.
 // NOTE: a lock must be acquired before calling this function.
 func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
+	if host.Network != s.network {
+		panic("networks don't match")
+	}
 	if s.tx == nil {
 		s.log.Error("there is no transaction", zap.String("network", s.network))
 		return 0
@@ -590,6 +605,13 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 	return err
 }
 
+func (s *hostDBStore) isSynced() bool {
+	if s.network == "zen" {
+		return isSynced(s.hdb.syncerZen)
+	}
+	return isSynced(s.hdb.syncer)
+}
+
 // ProcessChainApplyUpdate implements chain.Subscriber.
 func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool) (err error) {
 	// Check if the update is for the right network.
@@ -650,7 +672,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
 				return err
 			}
-			if (!exists || isSynced(s.hdb.syncer)) && !host.Blocked {
+			if (!exists || s.isSynced()) && !host.Blocked {
 				s.hdb.queueScan(host)
 			}
 		}
@@ -692,7 +714,7 @@ func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit 
 				s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
 				return err
 			}
-			if (!exists || isSynced(s.hdb.syncer)) && !host.Blocked {
+			if (!exists || s.isSynced()) && !host.Blocked {
 				s.hdb.queueScan(host)
 			}
 		}

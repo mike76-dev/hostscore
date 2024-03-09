@@ -26,6 +26,10 @@ const (
 
 // benchmarkHost runs an up/download benchmark on a host.
 func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
+	if host.Network != "mainnet" && host.Network != "zen" {
+		panic("wrong host network")
+	}
+
 	// Update historic interactions of the host if necessary.
 	hdb.updateHostHistoricInteractions(host)
 	limits := hdb.priceLimits
@@ -84,7 +88,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 				}
 
 				rev, txnSet, err = rhp.RPCFormContract(formCtx, t, key, renterTxnSet)
-				fmt.Println("DEBUG: contract formed:", err)
+				fmt.Println("DEBUG: contract formed:", err) //TODO
 				if err != nil {
 					hdb.w.Release(renterTxnSet...)
 					return utils.AddContext(err, "couldn't form contract")
@@ -267,6 +271,10 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		})
 		return err
 	}()
+	if err != nil && strings.Contains(err.Error(), "canceled") {
+		// Shutting down.
+		return
+	}
 	if err != nil && strings.Contains(err.Error(), "insufficient balance") {
 		// Not the host's fault.
 		hdb.mu.Lock()

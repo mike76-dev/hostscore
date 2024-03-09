@@ -68,7 +68,10 @@ func (w *Wallet) Address(network string) types.Address {
 	if network == "zen" {
 		return w.sZen.Address()
 	}
-	return w.s.Address()
+	if network == "mainnet" {
+		return w.s.Address()
+	}
+	panic("wrong network provided")
 }
 
 // Key implements api.Wallet.
@@ -76,7 +79,11 @@ func (w *Wallet) Key(network string) types.PrivateKey {
 	if network == "zen" {
 		return w.sZen.key
 	}
-	return w.s.key
+	if network == "mainnet" {
+		return w.s.key
+	}
+	panic("wrong network provided")
+
 }
 
 // Annotate implements api.Wallet.
@@ -84,7 +91,10 @@ func (w *Wallet) Annotate(network string, txns []types.Transaction) ([]wallet.Po
 	if network == "zen" {
 		return w.sZen.Annotate(txns), nil
 	}
-	return w.s.Annotate(txns), nil
+	if network == "mainnet" {
+		return w.s.Annotate(txns), nil
+	}
+	panic("wrong network provided")
 }
 
 // UnspentOutputs implements api.Wallet.
@@ -92,7 +102,10 @@ func (w *Wallet) UnspentOutputs(network string) ([]types.SiacoinElement, []types
 	if network == "zen" {
 		return w.sZen.UnspentOutputs()
 	}
-	return w.s.UnspentOutputs()
+	if network == "mainnet" {
+		return w.s.UnspentOutputs()
+	}
+	panic("wrong network provided")
 }
 
 // Close shuts down the wallet.
@@ -150,6 +163,9 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 
 // Fund adds Siacoin inputs with the required amount to the transaction.
 func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Currency, useUnconfirmed bool) (parents []types.Transaction, toSign []types.Hash256, err error) {
+	if network != "mainnet" && network != "zen" {
+		panic("wrong network provided")
+	}
 	if amount.IsZero() {
 		return nil, nil, nil
 	}
@@ -339,6 +355,9 @@ func (w *Wallet) Reserve(scoids []types.SiacoinOutputID, sfoids []types.SiafundO
 
 // Sign adds signatures corresponding to toSign elements to the transaction.
 func (w *Wallet) Sign(network string, txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) {
+	if network != "mainnet" && network != "zen" {
+		panic("wrong network provided")
+	}
 	var cs consensus.State
 	if network == "zen" {
 		cs = w.cmZen.TipState()
@@ -365,6 +384,9 @@ func (w *Wallet) Sign(network string, txn *types.Transaction, toSign []types.Has
 // Redistribute creates a specified number of new outputs and distributes
 // the funds between them.
 func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int) error {
+	if network != "mainnet" && network != "zen" {
+		panic("wrong network provided")
+	}
 	if outputs == 0 {
 		return errors.New("number of outputs must be greater than zero")
 	}
@@ -405,7 +427,7 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 	// unused, matured and has the same value.
 	utxos := make([]types.SiacoinElement, 0, len(elements))
 	for _, sce := range elements {
-		inUse := time.Now().After(w.locked[sce.ID]) || inPool[sce.ID]
+		inUse := time.Now().Before(w.locked[sce.ID]) || inPool[sce.ID]
 		matured := height >= sce.MaturityHeight
 		sameValue := sce.SiacoinOutput.Value.Equals(amount)
 
@@ -534,7 +556,10 @@ func (w *Wallet) synced(network string) bool {
 	if network == "zen" {
 		return isSynced(w.syncerZen) && time.Since(w.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
 	}
-	return isSynced(w.syncer) && time.Since(w.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+	if network == "mainnet" {
+		return isSynced(w.syncer) && time.Since(w.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+	}
+	panic("wrong network provided")
 }
 
 // performWalletMaintenance performs the wallet maintenance periodically.

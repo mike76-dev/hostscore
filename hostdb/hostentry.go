@@ -18,6 +18,9 @@ const (
 // interactions from 10 blocks ago and then apply the decay of 9 more blocks in
 // which the recent interactions have been 0.
 func (hdb *HostDB) updateHostHistoricInteractions(host *HostDBEntry) {
+	if host.Network != "mainnet" && host.Network != "zen" {
+		panic("wrong host network")
+	}
 	var height uint64
 	if host.Network == "zen" {
 		height = hdb.sZen.tip.Height

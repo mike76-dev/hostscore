@@ -116,7 +116,10 @@ func (hdb *HostDB) Hosts(network string, all bool, offset, limit int, query stri
 	if network == "zen" {
 		return hdb.sZen.getHosts(all, offset, limit, query)
 	}
-	return hdb.s.getHosts(all, offset, limit, query)
+	if network == "mainnet" {
+		return hdb.s.getHosts(all, offset, limit, query)
+	}
+	panic("wrong network provided")
 }
 
 // Scans returns the host's scan history.
@@ -124,7 +127,10 @@ func (hdb *HostDB) Scans(network string, pk types.PublicKey, from, to time.Time)
 	if network == "zen" {
 		return hdb.sZen.getScans(pk, from, to)
 	}
-	return hdb.s.getScans(pk, from, to)
+	if network == "mainnet" {
+		return hdb.s.getScans(pk, from, to)
+	}
+	panic("wrong network provided")
 }
 
 // ScanHistory returns the host's scan history.
@@ -132,7 +138,10 @@ func (hdb *HostDB) ScanHistory(network string, from, to time.Time) (history []Sc
 	if network == "zen" {
 		return hdb.sZen.getScanHistory(from, to)
 	}
-	return hdb.s.getScanHistory(from, to)
+	if network == "mainnet" {
+		return hdb.s.getScanHistory(from, to)
+	}
+	panic("wrong network provided")
 }
 
 // Benchmarks returns the host's benchmark history.
@@ -140,7 +149,10 @@ func (hdb *HostDB) Benchmarks(network string, pk types.PublicKey, from, to time.
 	if network == "zen" {
 		return hdb.sZen.getBenchmarks(pk, from, to)
 	}
-	return hdb.s.getBenchmarks(pk, from, to)
+	if network == "mainnet" {
+		return hdb.s.getBenchmarks(pk, from, to)
+	}
+	panic("wrong network provided")
 }
 
 // BenchmarkHistory returns the host's benchmark history.
@@ -148,7 +160,10 @@ func (hdb *HostDB) BenchmarkHistory(network string, from, to time.Time) (history
 	if network == "zen" {
 		return hdb.sZen.getBenchmarkHistory(from, to)
 	}
-	return hdb.s.getBenchmarkHistory(from, to)
+	if network == "mainnet" {
+		return hdb.s.getBenchmarkHistory(from, to)
+	}
+	panic("wrong network provided")
 }
 
 // Close shuts down HostDB.
@@ -258,7 +273,10 @@ func (hdb *HostDB) online(network string) bool {
 	if network == "zen" {
 		return len(hdb.syncerZen.Peers()) > 0
 	}
-	return len(hdb.syncer.Peers()) > 0
+	if network == "mainnet" {
+		return len(hdb.syncer.Peers()) > 0
+	}
+	panic("wrong network provided")
 }
 
 // updateSCRate periodically fetches the SC exchange rate.
@@ -321,5 +339,8 @@ func (hdb *HostDB) synced(network string) bool {
 	if network == "zen" {
 		return isSynced(hdb.syncerZen) && time.Since(hdb.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
 	}
-	return isSynced(hdb.syncer) && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+	if network == "mainnet" {
+		return isSynced(hdb.syncer) && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
+	}
+	panic("wrong network provided")
 }

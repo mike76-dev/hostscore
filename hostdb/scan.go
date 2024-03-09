@@ -24,6 +24,9 @@ const (
 
 // queueScan will add a host to the queue to be scanned.
 func (hdb *HostDB) queueScan(host *HostDBEntry) {
+	if host.Network != "mainnet" && host.Network != "zen" {
+		panic("wrong host network")
+	}
 	// If this entry is already in the scan pool, can return immediately.
 	hdb.mu.Lock()
 	_, exists := hdb.scanMap[host.PublicKey]
@@ -51,6 +54,10 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 // scanHost will connect to a host and grab the settings and the price
 // table as well as adjust the info.
 func (hdb *HostDB) scanHost(host *HostDBEntry) {
+	if host.Network != "mainnet" && host.Network != "zen" {
+		panic("wrong host network")
+	}
+
 	// Resolve the host's used subnets and update the timestamp if they
 	// changed. We only update the timestamp if resolving the ipNets was
 	// successful.
