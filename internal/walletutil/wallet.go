@@ -49,6 +49,7 @@ var (
 var ErrInsufficientBalance = errors.New("insufficient balance")
 
 type Wallet struct {
+	db        *sql.DB
 	s         *DBStore
 	sZen      *DBStore
 	cm        *chain.Manager
@@ -144,6 +145,7 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 	}
 
 	w := &Wallet{
+		db:        db,
 		cm:        cm,
 		cmZen:     cmZen,
 		syncer:    syncer,
@@ -155,10 +157,48 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 		locked:    make(map[types.Hash256]time.Time),
 	}
 
+	rows, err := db.Query("SELECT id, until FROM wt_locked")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		id := make([]byte, 32)
+		var until int64
+		if err := rows.Scan(&id, &until); err != nil {
+			return nil, err
+		}
+		var oid types.Hash256
+		copy(oid[:], id)
+		w.locked[oid] = time.Unix(until, 0)
+	}
+
 	go w.performWalletMaintenance("mainnet")
 	go w.performWalletMaintenance("zen")
+	go w.pruneLocked()
 
 	return w, nil
+}
+
+func (w *Wallet) lock(id types.Hash256, until time.Time) {
+	w.locked[id] = until
+	_, err := w.db.Exec(`
+		INSERT INTO wt_locked (id, until)
+		VALUES (?, ?) AS new
+		ON DUPLICATE KEY UPDATE until = new.until
+	`, id[:], until.Unix())
+	if err != nil {
+		w.log.Error("couldn't lock input", zap.Stringer("ID", id), zap.Error(err))
+	}
+}
+
+func (w *Wallet) release(id types.Hash256) {
+	delete(w.locked, id)
+	_, err := w.db.Exec("DELETE FROM wt_locked WHERE id = ?", id[:])
+	if err != nil {
+		w.log.Error("couldn't release input", zap.Stringer("ID", id), zap.Error(err))
+	}
 }
 
 // Fund adds Siacoin inputs with the required amount to the transaction.
@@ -209,8 +249,13 @@ func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Curre
 
 	// Remove immature, locked and spent outputs.
 	utxos := make([]types.SiacoinElement, 0, len(elements))
+	var usedSum, immatureSum types.Currency
 	for _, sce := range elements {
-		if time.Now().Before(w.locked[sce.ID]) || tpoolSpent[sce.ID] || cs.Index.Height < sce.MaturityHeight {
+		if time.Now().Before(w.locked[sce.ID]) || tpoolSpent[sce.ID] {
+			usedSum = usedSum.Add(sce.SiacoinOutput.Value)
+			continue
+		} else if cs.Index.Height < sce.MaturityHeight {
+			immatureSum = immatureSum.Add(sce.SiacoinOutput.Value)
 			continue
 		}
 		utxos = append(utxos, sce)
@@ -222,19 +267,21 @@ func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Curre
 	})
 
 	var unconfirmedUTXOs []types.SiacoinElement
+	var unconfirmedSum types.Currency
 	if useUnconfirmed {
 		for _, sce := range tpoolUtxos {
 			if sce.SiacoinOutput.Address != addr || time.Now().Before(w.locked[sce.ID]) {
 				continue
 			}
 			unconfirmedUTXOs = append(unconfirmedUTXOs, sce)
+			unconfirmedSum = unconfirmedSum.Add(sce.SiacoinOutput.Value)
 		}
-
-		// Sort by value, descending.
-		sort.Slice(unconfirmedUTXOs, func(i, j int) bool {
-			return unconfirmedUTXOs[i].SiacoinOutput.Value.Cmp(unconfirmedUTXOs[j].SiacoinOutput.Value) > 0
-		})
 	}
+
+	// Sort by value, descending.
+	sort.Slice(unconfirmedUTXOs, func(i, j int) bool {
+		return unconfirmedUTXOs[i].SiacoinOutput.Value.Cmp(unconfirmedUTXOs[j].SiacoinOutput.Value) > 0
+	})
 
 	// Fund the transaction using the largest utxos first.
 	var selected []types.SiacoinElement
@@ -251,19 +298,19 @@ func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Curre
 	if inputSum.Cmp(amount) < 0 && useUnconfirmed {
 		// Try adding unconfirmed utxos.
 		for _, sce := range unconfirmedUTXOs {
+			selected = append(selected, sce)
+			inputSum = inputSum.Add(sce.SiacoinOutput.Value)
 			if inputSum.Cmp(amount) >= 0 {
 				break
 			}
-			selected = append(selected, sce)
-			inputSum = inputSum.Add(sce.SiacoinOutput.Value)
 		}
 
 		if inputSum.Cmp(amount) < 0 {
 			// Still not enough funds.
-			return nil, nil, ErrInsufficientBalance
+			return nil, nil, fmt.Errorf("%w: inputs %v < needed %v (used: %v immature: %v unconfirmed: %v)", ErrInsufficientBalance, inputSum.String(), amount.String(), usedSum.String(), immatureSum.String(), unconfirmedSum.String())
 		}
 	} else if inputSum.Cmp(amount) < 0 {
-		return nil, nil, ErrInsufficientBalance
+		return nil, nil, fmt.Errorf("%w: inputs %v < needed %v (used: %v immature: %v", ErrInsufficientBalance, inputSum.String(), amount.String(), usedSum.String(), immatureSum.String())
 	}
 
 	// Check if remaining utxos should be defragged.
@@ -301,7 +348,7 @@ func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Curre
 			UnlockConditions: types.StandardUnlockConditions(w.Key(network).PublicKey()),
 		})
 		toSign[i] = sce.ID
-		w.locked[sce.ID] = time.Now().Add(reservationDuration)
+		w.lock(sce.ID, time.Now().Add(reservationDuration))
 	}
 
 	if network == "zen" {
@@ -310,47 +357,22 @@ func (w *Wallet) Fund(network string, txn *types.Transaction, amount types.Curre
 	return w.cm.UnconfirmedParents(*txn), toSign, nil
 }
 
-// Release marks the outputs as unused.
+// Release marks the inputs as unused.
 func (w *Wallet) Release(txns ...types.Transaction) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.release(txns...)
+	w.releaseInputs(txns...)
 }
 
-func (w *Wallet) release(txns ...types.Transaction) {
+func (w *Wallet) releaseInputs(txns ...types.Transaction) {
 	for _, txn := range txns {
 		for _, in := range txn.SiacoinInputs {
-			delete(w.locked, types.Hash256(in.ParentID))
+			w.release(types.Hash256(in.ParentID))
 		}
 		for _, in := range txn.SiafundInputs {
-			delete(w.locked, types.Hash256(in.ParentID))
+			w.release(types.Hash256(in.ParentID))
 		}
 	}
-}
-
-// Reserve reserves the outputs for a defined amount of time.
-func (w *Wallet) Reserve(scoids []types.SiacoinOutputID, sfoids []types.SiafundOutputID, duration time.Duration) error {
-	if duration == 0 {
-		duration = 10 * time.Minute
-	}
-	t := time.Now()
-	w.mu.Lock()
-	for _, id := range scoids {
-		if t.Before(w.locked[types.Hash256(id)]) {
-			w.mu.Unlock()
-			return fmt.Errorf("output %v is already reserved", id)
-		}
-		w.locked[types.Hash256(id)] = t.Add(duration)
-	}
-	for _, id := range sfoids {
-		if t.Before(w.locked[types.Hash256(id)]) {
-			w.mu.Unlock()
-			return fmt.Errorf("output %v is already reserved", id)
-		}
-		w.locked[types.Hash256(id)] = t.Add(duration)
-	}
-	w.mu.Unlock()
-	return nil
 }
 
 // Sign adds signatures corresponding to toSign elements to the transaction.
@@ -474,6 +496,10 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		var inputs []types.SiacoinElement
 		want := amount.Mul64(uint64(len(txn.SiacoinOutputs)))
 		for _, sce := range utxos {
+			inUse := time.Now().Before(w.locked[sce.ID]) || inPool[sce.ID]
+			if inUse {
+				continue
+			}
 			inputs = append(inputs, sce)
 			fee := feePerInput.Mul64(uint64(len(inputs))).Add(outputFees)
 			if SumOutputs(inputs).Cmp(want.Add(fee)) > 0 {
@@ -485,7 +511,7 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		fee := feePerInput.Mul64(uint64(len(inputs))).Add(outputFees)
 		if sumOut := SumOutputs(inputs); sumOut.Cmp(want.Add(fee)) < 0 {
 			// In case of an error we need to free all inputs.
-			w.release(txns...)
+			w.releaseInputs(txns...)
 			return fmt.Errorf("network: %s: %w, inputs %v < needed %v + txnFee %v",
 				network, ErrInsufficientBalance, sumOut.String(), want.String(), fee.String())
 		}
@@ -509,7 +535,7 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 				UnlockConditions: types.StandardUnlockConditions(w.Key(network).PublicKey()),
 			})
 			toSign = append(toSign, sce.ID)
-			w.locked[sce.ID] = time.Now().Add(reservationDuration)
+			w.lock(sce.ID, time.Now().Add(reservationDuration))
 		}
 
 		w.Sign(network, &txn, toSign, types.CoveredFields{WholeTransaction: true})
@@ -522,7 +548,7 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		_, err = w.cm.AddPoolTransactions(txns)
 	}
 	if err != nil {
-		w.release(txns...)
+		w.releaseInputs(txns...)
 		return utils.AddContext(err, "invalid transaction set")
 	}
 	if network == "zen" {
@@ -622,4 +648,35 @@ func relevantTransactions(txnSet []types.Transaction, addr types.Address) bool {
 		}
 	}
 	return false
+}
+
+// pruneLocked periodically cleans the locked map from the expired elements.
+func (w *Wallet) pruneLocked() {
+	if err := w.tg.Add(); err != nil {
+		w.log.Error("couldn't add a thread", zap.Error(err))
+		return
+	}
+	defer w.tg.Done()
+
+	for {
+		select {
+		case <-w.tg.StopChan():
+			return
+		case <-time.After(time.Hour):
+			_, err := w.db.Exec(`
+				DELETE FROM wt_locked
+				WHERE until < ?
+			`, time.Now().Unix())
+			if err != nil {
+				w.log.Error("couldn't delete expired outputs", zap.Error(err))
+			}
+			w.mu.Lock()
+			for id, until := range w.locked {
+				if time.Now().After(until) {
+					delete(w.locked, id)
+				}
+			}
+			w.mu.Unlock()
+		}
+	}
 }
