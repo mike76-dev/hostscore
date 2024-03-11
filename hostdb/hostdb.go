@@ -37,6 +37,7 @@ type HostDBEntry struct {
 	Interactions  HostInteractions           `json:"interactions"`
 	LastSeen      time.Time                  `json:"lastSeen"`
 	IPNets        []string                   `json:"ipNets"`
+	ActiveHosts   int                        `json:"activeHosts"`
 	LastIPChange  time.Time                  `json:"lastIPChange"`
 	Revision      types.FileContractRevision `json:"-"`
 	Settings      rhpv2.HostSettings         `json:"settings"`

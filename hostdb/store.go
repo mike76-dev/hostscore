@@ -29,6 +29,8 @@ type hostDBStore struct {
 	hosts        map[types.PublicKey]*HostDBEntry
 	blockedHosts map[types.PublicKey]struct{}
 
+	activeHostsCache map[types.PublicKey][]string
+
 	mu sync.Mutex
 
 	tip           types.ChainIndex
@@ -37,11 +39,12 @@ type hostDBStore struct {
 
 func newHostDBStore(db *sql.DB, logger *zap.Logger, network string, domains *blockedDomains) (*hostDBStore, types.ChainIndex, error) {
 	s := &hostDBStore{
-		db:           db,
-		log:          logger,
-		network:      network,
-		hosts:        make(map[types.PublicKey]*HostDBEntry),
-		blockedHosts: make(map[types.PublicKey]struct{}),
+		db:               db,
+		log:              logger,
+		network:          network,
+		hosts:            make(map[types.PublicKey]*HostDBEntry),
+		blockedHosts:     make(map[types.PublicKey]struct{}),
+		activeHostsCache: make(map[types.PublicKey][]string),
 	}
 	err := s.load(domains)
 	if err != nil {
@@ -226,6 +229,12 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 	err = s.update(host)
 	if err != nil {
 		return utils.AddContext(err, "couldn't update host")
+	}
+
+	if (len(host.ScanHistory) > 0 && host.ScanHistory[len(host.ScanHistory)-1].Success) && (len(host.ScanHistory) > 1 && host.ScanHistory[len(host.ScanHistory)-2].Success || len(host.ScanHistory) == 1) {
+		s.activeHostsCache[host.PublicKey] = host.IPNets
+	} else {
+		delete(s.activeHostsCache, host.PublicKey)
 	}
 
 	return nil
@@ -596,6 +605,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			}
 		}
 		s.hosts[host.PublicKey] = host
+		if (len(host.ScanHistory) > 0 && host.ScanHistory[len(host.ScanHistory)-1].Success) && (len(host.ScanHistory) > 1 && host.ScanHistory[len(host.ScanHistory)-2].Success || len(host.ScanHistory) == 1) {
+			s.activeHostsCache[host.PublicKey] = host.IPNets
+		}
 	}
 	rows.Close()
 
@@ -737,6 +749,32 @@ func (s *hostDBStore) ProcessChainRevertUpdate(_ *chain.RevertUpdate) error {
 	return nil
 }
 
+func (s *hostDBStore) activeHostsInSubnet(ipNets []string) int {
+	var count int
+	subnets := make(map[string]struct{})
+	for _, ip := range ipNets {
+		subnets[ip] = struct{}{}
+	}
+outer:
+	for _, entry := range s.activeHostsCache {
+		for _, ip := range entry {
+			if _, exists := subnets[ip]; exists {
+				count++
+				continue outer
+			}
+		}
+	}
+	return count
+}
+
+// activeHostsInSubnet calculates the total number of active hosts sharing
+// the same subnet(s).
+func (s *hostDBStore) checkSubnets(ipNets []string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.activeHostsInSubnet(ipNets)
+}
+
 func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -744,6 +782,7 @@ func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts
 	for _, host := range s.hosts {
 		if all || ((len(host.ScanHistory) > 0 && host.ScanHistory[len(host.ScanHistory)-1].Success) && (len(host.ScanHistory) > 1 && host.ScanHistory[len(host.ScanHistory)-2].Success || len(host.ScanHistory) == 1)) {
 			if query == "" || strings.Contains(host.NetAddress, query) {
+				host.ActiveHosts = s.activeHostsInSubnet(host.IPNets)
 				hosts = append(hosts, *host)
 			}
 		}
@@ -765,6 +804,10 @@ func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts
 	}
 	more = len(hosts) > offset+limit
 	hosts = hosts[offset : offset+limit]
+
+	for _, host := range hosts {
+		host.ActiveHosts = s.activeHostsInSubnet(host.IPNets)
+	}
 
 	return
 }

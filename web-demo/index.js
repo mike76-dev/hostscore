@@ -256,6 +256,7 @@ function browseHost(obj) {
 	document.getElementById('current-download-price').innerHTML = host.settings.downloadbandwidthprice == '0' ? '0 H/TB' : convertPrice(host.settings.downloadbandwidthprice + '0'.repeat(12)) + '/TB';
 	document.getElementById('current-total').innerHTML = convertSize(host.settings.totalstorage);
 	document.getElementById('current-remaining').innerHTML = convertSize(host.settings.remainingstorage);
+	document.getElementById('current-hosts').innerHTML = host.activeHosts;
 	document.getElementById('host').classList.remove('hidden');
 }
 

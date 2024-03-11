@@ -58,6 +58,15 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		if (pt == rhpv3.HostPriceTable{}) {
 			return errors.New("couldn't fetch price table")
 		}
+		var count int
+		if host.Network == "zen" {
+			count = hdb.sZen.checkSubnets(host.IPNets)
+		} else {
+			count = hdb.s.checkSubnets(host.IPNets)
+		}
+		if count > 5 {
+			return errors.New("too many hosts in the same subnet")
+		}
 		err := checkGouging(&settings, &pt, limits)
 		if err != nil {
 			return err
