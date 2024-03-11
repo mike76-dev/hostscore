@@ -47,23 +47,24 @@ func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transact
 	if host.Network == "zen" {
 		blockHeight = hdb.sZen.tip.Height
 		state = hdb.cmZen.TipState()
-		txnFee = hdb.cmZen.RecommendedFee().Mul64(2048).Mul64(3)
+		txnFee = hdb.cmZen.RecommendedFee().Mul64(3)
 	} else {
 		blockHeight = hdb.s.tip.Height
 		state = hdb.cm.TipState()
-		txnFee = hdb.cm.RecommendedFee().Mul64(2048).Mul64(3)
+		txnFee = hdb.cm.RecommendedFee().Mul64(3)
 	}
 	settings := host.Settings
 	ourKey := hdb.w.Key(host.Network)
 	ourAddr := hdb.w.Address(host.Network)
 
-	funding, collateral := calculateFunding(settings, txnFee)
+	funding, collateral := calculateFunding(settings, txnFee.Mul64(2048))
 	fc := rhpv2.PrepareContractFormation(ourKey.PublicKey(), host.PublicKey, funding, collateral, blockHeight+contractDuration, settings, ourAddr)
 	cost := rhpv2.ContractFormationCost(state, fc, settings.ContractPrice)
 
 	txn := types.Transaction{
 		FileContracts: []types.FileContract{fc},
 	}
+	txnFee = txnFee.Mul64(state.TransactionWeight(txn))
 	txn.MinerFees = []types.Currency{txnFee}
 	cost = cost.Add(txnFee)
 

@@ -36,6 +36,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 
 	key := hdb.w.Key(host.Network)
 	var height uint64
+
 	if host.Network == "zen" {
 		height = hdb.sZen.tip.Height
 	} else {
