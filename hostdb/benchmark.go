@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"net"
 	"strings"
@@ -98,7 +97,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 				}
 
 				rev, txnSet, err = rhp.RPCFormContract(formCtx, t, key, renterTxnSet)
-				fmt.Println("DEBUG: contract formed:", err) //TODO
 				if err != nil {
 					hdb.w.Release(renterTxnSet...)
 					return utils.AddContext(err, "couldn't form contract")
