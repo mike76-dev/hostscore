@@ -118,14 +118,14 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	client, ok := api.clients[location]
+	cl, ok := api.clients[location]
 	if !ok {
 		writeError(w, "node not found", http.StatusBadRequest)
 		return
 	}
 	hosts, more, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
 	if !ok {
-		resp, err := client.Hosts(network, all, int(offset), int(limit), query)
+		resp, err := cl.Hosts(network, all, int(offset), int(limit), query)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
 			writeError(w, "internal error", http.StatusInternalServerError)
@@ -135,6 +135,47 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		more = resp.More
 		api.cache.putHosts(network, all, int(offset), int(limit), query, resp.Hosts, resp.More)
 	}
+
+	// Prefetch the scans and the benchmarks.
+	go func() {
+		for _, h := range hosts {
+			for l, c := range api.clients {
+				go func(h hostdb.HostDBEntry, l string, c *client.Client) {
+					_, ok := api.cache.getScans(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+					if !ok {
+						s, err := c.Scans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+						if err != nil {
+							return
+						}
+						api.cache.putScans(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), s)
+					}
+					_, ok = api.cache.getBenchmarks(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+					if !ok {
+						b, err := c.Benchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+						if err != nil {
+							return
+						}
+						api.cache.putBenchmarks(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), b)
+					}
+				}(h, l, c)
+			}
+		}
+	}()
+
+	// Prefetch the next bunch of hosts.
+	if more {
+		go func() {
+			_, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query)
+			if !ok {
+				resp, err := cl.Hosts(network, all, int(offset+limit), int(limit), query)
+				if err != nil {
+					return
+				}
+				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, resp.Hosts, resp.More)
+			}
+		}()
+	}
+
 	for i := range hosts {
 		info, lastFetched, err := getLocation(api.db, hosts[i], api.token)
 		if err != nil {
