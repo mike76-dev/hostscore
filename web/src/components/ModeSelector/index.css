@@ -1,19 +1,19 @@
 .mode-selector-switch {
-    text-decoration: none;
-    border-radius: 0.25rem;
-    cursor: pointer;
-    margin-left: auto;
+	text-decoration: none;
+	border-radius: 0.25rem;
+	cursor: pointer;
+	margin-left: auto;
 }
 
 .mode-selector-switch:focus {
-    outline: 2px solid var(--outlineLight);
+	outline: 2px solid var(--outlineLight);
 }
 
 .mode-selector-container {
-    padding: 0.25rem;
+	padding: 0.25rem;
 }
 
 .mode-selector-icon {
-    width: 1.5rem;
-    height: 1.5rem;
+	width: 1.5rem;
+	height: 1.5rem;
 }

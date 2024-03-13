@@ -1,32 +1,32 @@
 .button-container {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding: 0.25rem;
-    background-color: transparent;
-    border: none;
-    cursor: pointer;
-    border-radius: 0.25rem;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 0.25rem;
+	background-color: transparent;
+	border: none;
+	cursor: pointer;
+	border-radius: 0.25rem;
 }
 
 .button-container:focus {
-    outline: 2px solid var(--outlineLight);
+	outline: 2px solid var(--outlineLight);
 }
 
 .button-icon {
-    width: 1.5rem;
-    height: 1.5rem;
+	width: 1.5rem;
+	height: 1.5rem;
 }
 
 .button-caption {
-    font-size: 1.2rem;
-    margin: 0 0.5rem;
+	font-size: 1.2rem;
+	margin: 0 0.5rem;
 }
 
 .button-container-dark .button-caption {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 .button-container-dark:focus {
-    outline: 2px solid var(--outlineDark);
+	outline: 2px solid var(--outlineDark);
 }

@@ -1,37 +1,37 @@
 .about-container h1 {
-    font-size: 2rem;
+	font-size: 2rem;
 }
 
 .about-container p,
 .about-container ul {
-    font-size: 1rem;
+	font-size: 1rem;
 }
 
 .about-container a:focus {
-    border-radius: 0.25rem;
-    outline: 2px solid var(--outlineLight);
+	border-radius: 0.25rem;
+	outline: 2px solid var(--outlineLight);
 }
 
 .about-container-dark a {
-    color: #3f3faf;
+	color: #3f3faf;
 }
 
 .about-container-dark a:focus {
-    outline: 2px solid var(--outlineDark);
+	outline: 2px solid var(--outlineDark);
 }
 
 .about-container-dark a:visited {
-    color: #5f5faf;
+	color: #5f5faf;
 }
 
 .about-container-dark h1,
 .about-container-dark p,
 .about-container-dark ul {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 @media screen and (max-width: 1000px) {
-    .about-container h1 {
-        font-size: 1.5rem;
-    }
+	.about-container h1 {
+		font-size: 1.5rem;
+	}
 }

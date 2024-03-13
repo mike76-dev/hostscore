@@ -1,67 +1,67 @@
 .footer-container {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    height: 6rem;
-    padding: 0.25rem;
-    border-top: 2px solid var(--borderLight);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	height: 6rem;
+	padding: 0.25rem;
+	border-top: 2px solid var(--borderLight);
 }
 
 .footer-container a {
-    border-radius: 0.25rem;
+	border-radius: 0.25rem;
 }
 
 .footer-container a:focus {
-    outline: 2px solid var(--outlineLight);
+	outline: 2px solid var(--outlineLight);
 }
 
 .footer-dark-mode {
 	background-color: var(--backgroundDark);
-    border-top: 2px solid var(--borderDark);
+	border-top: 2px solid var(--borderDark);
 }
 
 .footer-link {
-    margin: 0 1rem;
-    text-decoration: none;
+	margin: 0 1rem;
+	text-decoration: none;
 }
 
 .footer-link-dark {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 .footer-link:visited {
-    color: inherit;
+	color: inherit;
 }
 
 .footer-link-dark:visited {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 .footer-container svg {
-    width: 5rem;
-    height: 5rem;
+	width: 5rem;
+	height: 5rem;
 }
 
 .footer-container g[id="sia"] > * {
-    fill: var(--siaLight)!important;
+	fill: var(--siaLight)!important;
 }
 
 .footer-dark-mode g[id="sia"] > * {
-    fill: var(--siaDark)!important;
+	fill: var(--siaDark)!important;
 }
 
 .footer-dark-mode a:focus {
-    outline: 2px solid var(--outlineDark);
+	outline: 2px solid var(--outlineDark);
 }
 
 @media screen and (max-width: 1000px) {
-    .footer-container  {
-        height: 5rem;
-    }
+	.footer-container  {
+		height: 5rem;
+	}
 
-    .footer-container svg {
-        width: 4rem;
-        height: 4rem;
-    }
+	.footer-container svg {
+		width: 4rem;
+		height: 4rem;
+	}
 }

@@ -1,26 +1,26 @@
 .header-container {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding: 0.25rem;
-    border-bottom: 2px solid var(--borderLight);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 0.25rem;
+	border-bottom: 2px solid var(--borderLight);
 }
 
 .header-dark-mode {
 	background-color: var(--backgroundDark);
-    border-bottom: 2px solid var(--borderDark);
+	border-bottom: 2px solid var(--borderDark);
 }
 
 .header-dark-mode a:focus {
-    outline: 2px solid var(--outlineDark);
+	outline: 2px solid var(--outlineDark);
 }
 
 .header-dark-mode select {
-    color: var(--textDark);
-    background-color: var(--selectDark);
+	color: var(--textDark);
+	background-color: var(--selectDark);
 }
 
 .header-dark-mode select:focus {
-    border: 1px solid transparent;
-    outline: 2px solid var(--outlineDark);
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
 }
