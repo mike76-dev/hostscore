@@ -9,13 +9,16 @@ import Footer from './components/Footer'
 import Content from './components/Content'
 import About from './components/About'
 import Hosts from './components/Hosts'
-import { NetworkContext } from './contexts'
+import HostDetails from './components/HostDetails'
+import { Host } from './api'
+import { NetworkContext, HostContext } from './contexts'
 
 const App = () => {
 	let data = window.localStorage.getItem('darkMode')
 	let mode = data ? JSON.parse(data) : false
 	const [darkMode, toggleDarkMode] = useState(mode)
 	const [network, switchNetwork] = useState('')
+	const [hosts, setHosts] = useState<Host[]>([])
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
 	}, [darkMode])
@@ -40,7 +43,11 @@ const App = () => {
 								toggleDarkMode={toggleDarkMode}
 							/>
 							<Content darkMode={darkMode}>
-								<Hosts network="mainnet" darkMode={darkMode}/>
+								<Hosts
+									network="mainnet"
+									darkMode={darkMode}
+									setHosts={setHosts}
+								/>
 							</Content>
 							<Footer darkMode={darkMode}/>
 						</>
@@ -55,7 +62,47 @@ const App = () => {
 								toggleDarkMode={toggleDarkMode}
 							/>
 							<Content darkMode={darkMode}>
-								<Hosts network="zen" darkMode={darkMode}/>
+								<Hosts
+									network="zen"
+									darkMode={darkMode}
+									setHosts={setHosts}
+								/>
+							</Content>
+							<Footer darkMode={darkMode}/>
+						</>
+					),
+				},
+				{
+					path: 'host/:publicKey',
+					element: (
+						<>
+							<Header
+								darkMode={darkMode}
+								toggleDarkMode={toggleDarkMode}
+							/>
+							<Content darkMode={darkMode}>
+								<HostDetails
+									darkMode={darkMode}
+									hosts={hosts}
+								/>
+							</Content>
+							<Footer darkMode={darkMode}/>
+						</>
+					),
+				},
+				{
+					path: 'zen/host/:publicKey',
+					element: (
+						<>
+							<Header
+								darkMode={darkMode}
+								toggleDarkMode={toggleDarkMode}
+							/>
+							<Content darkMode={darkMode}>
+								<HostDetails
+									darkMode={darkMode}
+									hosts={hosts}
+								/>
 							</Content>
 							<Footer darkMode={darkMode}/>
 						</>
@@ -82,7 +129,9 @@ const App = () => {
 
 	return (
 		<NetworkContext.Provider value={{ network, switchNetwork }}>
-			<RouterProvider router={router}/>
+			<HostContext.Provider value={{ hosts, setHosts }}>
+				<RouterProvider router={router}/>
+			</HostContext.Provider>
 		</NetworkContext.Provider>
 	);
 }

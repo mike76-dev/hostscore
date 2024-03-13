@@ -9,7 +9,8 @@ import { Host, getHosts } from '../../api'
 
 type HostsProps = {
 	network: string,
-	darkMode: boolean
+	darkMode: boolean,
+	setHosts: (hosts: Host[]) => any,
 }
 
 const Hosts = (props: HostsProps) => {
@@ -18,23 +19,26 @@ const Hosts = (props: HostsProps) => {
 	const [query, setQuery] = useState('')
 	const [offset, changeOfset] = useState(0)
 	const [limit, changeLimit] = useState(10)
-	const [hosts, setHosts] = useState<Host[]>([])
+	const [hosts, setHostsLocal] = useState<Host[]>([])
 	const [total, setTotal] = useState(0)
 	const [loading, setLoading] = useState(false)
+	const { network, setHosts } = props
 	useEffect(() => {
 		setLoading(true)
-		getHosts(props.network, !onlineOnly, offset, limit, query)
+		getHosts(network, !onlineOnly, offset, limit, query)
 		.then(data => {
 			if (data && data.status === 'ok' && data.hosts) {
-				setHosts(data.hosts)
+				setHostsLocal(data.hosts)
 				setTotal(data.total)
+				setHosts(data.hosts)
 			} else {
-				setHosts([])
+				setHostsLocal([])
 				setTotal(0)
+				setHosts([])
 			}
 			setLoading(false)
 		})
-	}, [props.network, onlineOnly, offset, limit, query])
+	}, [network, onlineOnly, offset, limit, query, setHosts])
 	return (
 		<div className="hosts-container">
 			{loading &&

@@ -32,4 +32,18 @@ export const getHosts = async (
 	.catch(error => console.log(error))
 }
 
+export const getHost = async (
+	network: string,
+	publicKey: string
+): Promise<{ status: string, message: string, host?: Host }> => {
+	const location = locations[0]
+	const url = '/host?location=' +
+		location + '&network=' + network +
+		'&host=' + publicKey
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
 export * from './types'
+export * from './helpers'

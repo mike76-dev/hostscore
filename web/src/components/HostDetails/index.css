@@ -1,0 +1,23 @@
+.host-details-container {
+	display: flex;
+	flex-direction: row;
+	width: 100%;
+	height: 100%;
+}
+
+.host-not-found {
+	align-self: center;
+	width: 100%;
+	text-align: center;
+	font-size: 2rem;
+}
+
+.host-details-dark .host-not-found {
+	color: var(--textDark);
+}
+
+@media screen and (max-width: 1000px) {
+	.host-details-container {
+		flex-direction: column;
+	}
+}

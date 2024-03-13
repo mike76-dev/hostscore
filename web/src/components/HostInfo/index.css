@@ -1,0 +1,25 @@
+.host-info-container {
+	display: flex;
+	flex-direction: column;
+	max-width: 100vw;
+	overflow: auto;
+}
+
+.host-info-container table {
+	border: 1px solid var(--borderLight);
+	padding: 0.25rem;
+	font-size: 0.9rem;
+}
+
+.host-info-container tr > td:first-child {
+	min-width: 11rem;
+}
+
+.host-info-dark table {
+	color: var(--textDark);
+	border-color: var(--borderDark);
+}
+
+.host-info-small {
+	font-size: 0.7rem;
+}

@@ -1,6 +1,6 @@
 import './index.css'
 import { Link } from 'react-router-dom'
-import { Host } from '../../api'
+import { Host, stripePrefix } from '../../api'
 import Tooltip from '../Tooltip'
 
 type HostsTableProps = {
@@ -26,7 +26,6 @@ const StatusTooltip = () => (
 )
 
 const HostsTable = (props: HostsTableProps) => {
-	const stripePrefix = (pk: string) => (pk.slice(pk.indexOf(':') + 1))
 	const newLocation = (host: Host) => {
 		let href = window.location.href
 		if (href[href.length - 1] === '/') {
@@ -57,7 +56,7 @@ const HostsTable = (props: HostsTableProps) => {
 				</thead>
 				<tbody>
 					{props.hosts.map(host => (
-						<tr>
+						<tr key={host.publicKey}>
 							<td>{host.id}</td>
 							<td>
 								<Link className="hosts-table-link" to={newLocation(host)}>
