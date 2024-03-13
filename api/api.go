@@ -45,4 +45,5 @@ type WalletOutputsResponse struct {
 type HostdbHostsResponse struct {
 	Hosts []hostdb.HostDBEntry `json:"hosts"`
 	More  bool                 `json:"more"`
+	Total int                  `json:"total"`
 }

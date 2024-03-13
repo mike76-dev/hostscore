@@ -775,7 +775,7 @@ func (s *hostDBStore) checkSubnets(ipNets []string) int {
 	return s.activeHostsInSubnet(ipNets)
 }
 
-func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool) {
+func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool, total int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -803,6 +803,7 @@ func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts
 		limit = len(hosts) - offset
 	}
 	more = len(hosts) > offset+limit
+	total = len(hosts)
 	hosts = hosts[offset : offset+limit]
 
 	for _, host := range hosts {

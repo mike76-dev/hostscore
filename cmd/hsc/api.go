@@ -27,6 +27,7 @@ type hostsResponse struct {
 	APIResponse
 	Hosts []hostdb.HostDBEntry `json:"hosts"`
 	More  bool                 `json:"more"`
+	Total int                  `json:"total"`
 }
 
 type scansResponse struct {
@@ -64,6 +65,16 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 }
 
 func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// For testing only.
+	if origin := r.Header.Get("Origin"); origin != "" {
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+	}
+	if r.Method == "OPTIONS" {
+		return
+	}
+
 	api.mu.RLock()
 	api.router.ServeHTTP(w, r)
 	api.mu.RUnlock()
@@ -123,7 +134,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		writeError(w, "node not found", http.StatusBadRequest)
 		return
 	}
-	hosts, more, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
+	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
 	if !ok {
 		resp, err := cl.Hosts(network, all, int(offset), int(limit), query)
 		if err != nil {
@@ -133,7 +144,8 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		}
 		hosts = resp.Hosts
 		more = resp.More
-		api.cache.putHosts(network, all, int(offset), int(limit), query, resp.Hosts, resp.More)
+		total = resp.Total
+		api.cache.putHosts(network, all, int(offset), int(limit), query, resp.Hosts, resp.More, resp.Total)
 	}
 
 	// Prefetch the scans and the benchmarks.
@@ -165,13 +177,13 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	// Prefetch the next bunch of hosts.
 	if more {
 		go func() {
-			_, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query)
+			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query)
 			if !ok {
 				resp, err := cl.Hosts(network, all, int(offset+limit), int(limit), query)
 				if err != nil {
 					return
 				}
-				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, resp.Hosts, resp.More)
+				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, resp.Hosts, resp.More, resp.Total)
 			}
 		}()
 	}
@@ -205,6 +217,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		APIResponse: APIResponse{Status: "ok"},
 		Hosts:       hosts,
 		More:        more,
+		Total:       total,
 	})
 }
 

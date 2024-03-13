@@ -22,6 +22,7 @@ const (
 type cachedHosts struct {
 	hosts    []hostdb.HostDBEntry
 	more     bool
+	total    int
 	network  string
 	all      bool
 	offset   int
@@ -127,13 +128,14 @@ func (rc *responseCache) prune() {
 	}
 }
 
-func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query string) (hosts []hostdb.HostDBEntry, more bool, ok bool) {
+func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query string) (hosts []hostdb.HostDBEntry, more bool, total int, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, ch := range rc.hosts {
 		if ch.network == network && ch.all == all && ch.offset == offset && ch.limit == limit && ch.query == query && time.Since(ch.modified) < hostsExpireThreshold {
 			hosts = ch.hosts
 			more = ch.more
+			total = ch.total
 			ok = true
 			return
 		}
@@ -141,12 +143,13 @@ func (rc *responseCache) getHosts(network string, all bool, offset, limit int, q
 	return
 }
 
-func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query string, hosts []hostdb.HostDBEntry, more bool) {
+func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query string, hosts []hostdb.HostDBEntry, more bool, total int) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.hosts = append(rc.hosts, cachedHosts{
 		hosts:    hosts,
 		more:     more,
+		total:    total,
 		network:  network,
 		all:      all,
 		offset:   offset,

@@ -312,10 +312,11 @@ func (s *server) hostDBHostsHandler(jc jape.Context) {
 		all = true
 	}
 
-	hosts, more := s.hdb.Hosts(network, all, offset, limit, query)
+	hosts, more, total := s.hdb.Hosts(network, all, offset, limit, query)
 	jc.Encode(HostdbHostsResponse{
 		Hosts: hosts,
 		More:  more,
+		Total: total,
 	})
 }
 
