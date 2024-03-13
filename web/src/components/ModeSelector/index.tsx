@@ -14,6 +14,7 @@ const ModeSelector = (props: ModeSelectorProps) => {
 		toggleDarkMode(props.darkMode)
 	}, [props.darkMode])
 	return (
+		// eslint-disable-next-line
 		<a
 			className="mode-selector-switch"
 			tabIndex={1}
@@ -21,7 +22,7 @@ const ModeSelector = (props: ModeSelectorProps) => {
 				props.toggleDarkMode(!mode)
 			}}
 			onKeyUp={(event: React.KeyboardEvent<HTMLAnchorElement>) => {
-				if (event.key == 'Enter' || event.key == ' ') {
+				if (event.key === 'Enter' || event.key === ' ') {
 					props.toggleDarkMode(!mode)
 				}
 			}}
