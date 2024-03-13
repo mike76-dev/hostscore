@@ -1,0 +1,30 @@
+.host-search-container {
+	margin: 0.5rem 0;
+}
+
+.host-search-input {
+	margin-left: 0.5rem;
+	height: 1.5rem;
+	border-radius: 0.25rem;
+	border: 1px solid var(--outlineLight);
+}
+
+.host-search-input:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.host-search-dark .host-search-text {
+	color: var(--textDark);
+}
+
+.host-search-dark input {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+	border: 1px solid var(--outlineDark);
+}
+
+.host-search-dark input:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}

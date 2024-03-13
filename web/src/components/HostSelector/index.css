@@ -1,0 +1,28 @@
+.host-selector-container {
+	margin: 0.5rem 0;
+}
+
+.host-selector-select {
+	margin-left: 0.5rem;
+	height: 1.5rem;
+	border-radius: 0.25rem;
+}
+
+.host-selector-select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.host-selector-dark .host-selector-text {
+	color: var(--textDark);
+}
+
+.host-selector-dark select {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+}
+
+.host-selector-dark select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}

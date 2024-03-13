@@ -8,6 +8,7 @@ import Header from './components/Header'
 import Footer from './components/Footer'
 import Content from './components/Content'
 import About from './components/About'
+import Hosts from './components/Hosts'
 import { NetworkContext } from './contexts'
 
 const App = () => {
@@ -39,6 +40,7 @@ const App = () => {
 								toggleDarkMode={toggleDarkMode}
 							/>
 							<Content darkMode={darkMode}>
+								<Hosts network="mainnet" darkMode={darkMode}/>
 							</Content>
 							<Footer darkMode={darkMode}/>
 						</>
@@ -52,7 +54,9 @@ const App = () => {
 								darkMode={darkMode}
 								toggleDarkMode={toggleDarkMode}
 							/>
-							<Content darkMode={darkMode}/>
+							<Content darkMode={darkMode}>
+								<Hosts network="zen" darkMode={darkMode}/>
+							</Content>
 							<Footer darkMode={darkMode}/>
 						</>
 					),

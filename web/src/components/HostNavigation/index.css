@@ -1,0 +1,111 @@
+.host-navigation-container {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: nowrap;
+	margin: 0.5rem 0;
+}
+
+.host-navigation-select {
+	margin: 0 0.25rem;
+	height: 1.5rem;
+	border-radius: 0.25rem;
+}
+
+.host-navigation-select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.host-navigation-dark .host-navigation-text {
+	color: var(--textDark);
+}
+
+.host-navigation-dark .host-navigation-select {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+}
+
+.host-navigation-dark .host-navigation-select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}
+
+.host-navigation-button {
+	width: 2rem;
+	height: 2rem;
+	cursor: pointer;
+	border-radius: 0.25rem;
+	margin: 0 0.25rem;
+}
+
+.host-navigation-button:focus {
+	border: 2px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.host-navigation-button:disabled {
+	cursor: inherit;
+}
+
+.host-navigation-dark .host-navigation-button {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+	border: 2px solid inset;
+}
+
+.host-navigation-button:focus {
+	border: 2px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}
+
+.host-navigation-dark .host-navigation-button:disabled {
+	color: var(--selectDark);
+	background-color: inherit;
+	border: 2px solid;
+}
+
+.host-navigation-input {
+	width: 2rem;
+	height: 1.5rem;
+	border-radius: 0.25rem;
+	border: 1px solid var(--outlineLight);
+	margin: 0 0.25rem;
+	padding: 0 0.25rem;
+}
+
+.host-navigation-input:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.host-navigation-input::-webkit-inner-spin-button {
+	display: none;
+ }
+
+.host-navigation-dark .host-navigation-input {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+	border: 1px solid var(--outlineDark);
+}
+
+.host-navigation-dark .host-navigation-input:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}
+
+.host-navigation-total {
+	font-size: 0.9rem;
+	margin: 0 0.25rem;
+}
+
+.host-navigation-dark .host-navigation-total {
+	color: var(--textDark);
+}
+
+@media screen and (max-width: 1000px) {
+	.host-navigation-text {
+		display: none;
+	}
+}
