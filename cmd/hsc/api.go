@@ -23,6 +23,11 @@ type APIResponse struct {
 	Message string `json:"message"`
 }
 
+type hostResponse struct {
+	APIResponse
+	Host hostdb.HostDBEntry `json:"host"`
+}
+
 type hostsResponse struct {
 	APIResponse
 	Hosts []hostdb.HostDBEntry `json:"hosts"`
@@ -83,6 +88,9 @@ func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (api *portalAPI) buildHTTPRoutes() {
 	router := httprouter.New()
 
+	router.GET("/host", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.hostHandler(w, req, ps)
+	})
 	router.GET("/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHandler(w, req, ps)
 	})
@@ -98,11 +106,89 @@ func (api *portalAPI) buildHTTPRoutes() {
 	api.mu.Unlock()
 }
 
+func (api *portalAPI) hostHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	location := strings.ToLower(req.FormValue("location"))
+	network := strings.ToLower(req.FormValue("network"))
+	if location == "" || network == "" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node location or network not provided",
+		})
+		return
+	}
+	h := req.FormValue("host")
+	if h == "" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "host not provided",
+		})
+		return
+	}
+	var pk types.PublicKey
+	err := pk.UnmarshalText([]byte(h))
+	if err != nil {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "invalid public key",
+		})
+		return
+	}
+	client, ok := api.clients[location]
+	if !ok {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node not found",
+		})
+		return
+	}
+	host, ok := api.cache.getHost(network, pk)
+	if !ok {
+		host, err = client.Host(network, pk)
+		if err != nil {
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "host not found",
+			})
+			return
+		}
+	}
+
+	info, lastFetched, err := getLocation(api.db, host, api.token)
+	if err != nil {
+		api.log.Error("couldn't get host location", zap.String("host", host.NetAddress), zap.Error(err))
+	} else if host.LastIPChange.After(lastFetched) {
+		newInfo, err := external.FetchIPInfo(host.NetAddress, api.token)
+		if err != nil {
+			api.log.Error("couldn't fetch host location", zap.String("host", host.NetAddress), zap.Error(err))
+		} else {
+			if (newInfo != external.IPInfo{}) {
+				info = newInfo
+				err = saveLocation(api.db, host.PublicKey, info)
+				if err != nil {
+					api.log.Error("couldn't update host location", zap.String("host", host.NetAddress), zap.Error(err))
+				}
+			} else {
+				api.log.Debug("empty host location received", zap.String("host", host.NetAddress))
+			}
+		}
+	}
+
+	host.IPInfo = info
+
+	writeJSON(w, hostResponse{
+		APIResponse: APIResponse{Status: "ok"},
+		Host:        host,
+	})
+}
+
 func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
 	if location == "" || network == "" {
-		writeError(w, "node location or network not provided", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node location or network not provided",
+		})
 		return
 	}
 	query := strings.ToLower(req.FormValue("query"))
@@ -117,7 +203,10 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	if off != "" {
 		offset, err = strconv.ParseInt(off, 10, 64)
 		if err != nil {
-			writeError(w, "invalid offset", http.StatusBadRequest)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid offset",
+			})
 			return
 		}
 	}
@@ -125,13 +214,19 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	if lim != "" {
 		limit, err = strconv.ParseInt(lim, 10, 64)
 		if err != nil {
-			writeError(w, "invalid limit", http.StatusBadRequest)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid limit",
+			})
 			return
 		}
 	}
 	cl, ok := api.clients[location]
 	if !ok {
-		writeError(w, "node not found", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node not found",
+		})
 		return
 	}
 	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
@@ -139,7 +234,10 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		resp, err := cl.Hosts(network, all, int(offset), int(limit), query)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
-			writeError(w, "internal error", http.StatusInternalServerError)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "internal error",
+			})
 			return
 		}
 		hosts = resp.Hosts
@@ -225,18 +323,27 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
 	if location == "" || network == "" {
-		writeError(w, "node location or network not provided", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node location or network not provided",
+		})
 		return
 	}
 	host := req.FormValue("host")
 	if host == "" {
-		writeError(w, "host not provided", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "host not provided",
+		})
 		return
 	}
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
-		writeError(w, "invalid public key", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "invalid public key",
+		})
 		return
 	}
 	var from, to time.Time
@@ -245,7 +352,10 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	if f != "" {
 		from, err = time.Parse(time.RFC3339, f)
 		if err != nil {
-			writeError(w, "invalid timestamp", http.StatusBadRequest)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid timestamp",
+			})
 			return
 		}
 	}
@@ -253,13 +363,19 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	if t != "" {
 		to, err = time.Parse(time.RFC3339, t)
 		if err != nil {
-			writeError(w, "invalid timestamp", http.StatusBadRequest)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid timestamp",
+			})
 			return
 		}
 	}
 	client, ok := api.clients[location]
 	if !ok {
-		writeError(w, "node not found", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node not found",
+		})
 		return
 	}
 	scans, ok := api.cache.getScans(location, network, pk, from, to)
@@ -267,7 +383,10 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 		s, err := client.Scans(network, pk, from, to)
 		if err != nil {
 			api.log.Error("couldn't get scan history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
-			writeError(w, "internal error", http.StatusInternalServerError)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "internal error",
+			})
 			return
 		}
 		scans = s
@@ -284,18 +403,27 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
 	if location == "" || network == "" {
-		writeError(w, "node location or network not provided", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node location or network not provided",
+		})
 		return
 	}
 	host := req.FormValue("host")
 	if host == "" {
-		writeError(w, "host not provided", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "host not provided",
+		})
 		return
 	}
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
-		writeError(w, "invalid public key", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "invalid public key",
+		})
 		return
 	}
 	var from, to time.Time
@@ -304,7 +432,10 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	if f != "" {
 		from, err = time.Parse(time.RFC3339, f)
 		if err != nil {
-			writeError(w, "invalid timestamp", http.StatusBadRequest)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid timestamp",
+			})
 			return
 		}
 	}
@@ -312,13 +443,19 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	if t != "" {
 		to, err = time.Parse(time.RFC3339, t)
 		if err != nil {
-			writeError(w, "invalid timestamp", http.StatusBadRequest)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid timestamp",
+			})
 			return
 		}
 	}
 	client, ok := api.clients[location]
 	if !ok {
-		writeError(w, "node not found", http.StatusBadRequest)
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "node not found",
+		})
 		return
 	}
 	benchmarks, ok := api.cache.getBenchmarks(location, network, pk, from, to)
@@ -326,7 +463,10 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 		b, err := client.Benchmarks(network, pk, from, to)
 		if err != nil {
 			api.log.Error("couldn't get benchmark history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
-			writeError(w, "internal error", http.StatusInternalServerError)
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "internal error",
+			})
 			return
 		}
 		benchmarks = b
@@ -344,17 +484,5 @@ func writeJSON(w http.ResponseWriter, obj interface{}) {
 	err := json.NewEncoder(w).Encode(obj)
 	if _, isJsonErr := err.(*json.SyntaxError); isJsonErr {
 		log.Println("ERROR: failed to encode API response:", err)
-	}
-}
-
-func writeError(w http.ResponseWriter, msg string, code int) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(code)
-	err := json.NewEncoder(w).Encode(APIResponse{
-		Status:  "error",
-		Message: msg,
-	})
-	if _, isJsonErr := err.(*json.SyntaxError); isJsonErr {
-		log.Println("ERROR: failed to encode API error response:", err)
 	}
 }

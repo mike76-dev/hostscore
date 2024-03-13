@@ -97,11 +97,19 @@ func (c *Client) Hosts(network string, all bool, offset, limit int, query string
 	return
 }
 
+// Host returns the information about a particular host.
+func (c *Client) Host(network string, pk types.PublicKey) (host hostdb.HostDBEntry, err error) {
+	err = c.c.GET(fmt.Sprintf("/hostdb/host?network=%s&host=%s", network, pk), &host)
+	return
+}
+
+// Scans returns a list of host scans.
 func (c *Client) Scans(network string, pk types.PublicKey, from, to time.Time) (scans []hostdb.HostScan, err error) {
 	err = c.c.GET(fmt.Sprintf("/hostdb/scans?network=%s&host=%s&from=%v&to=%v", network, pk, encodeTime(from), encodeTime(to)), &scans)
 	return
 }
 
+// Benchmarks returns a list of host benchmarks.
 func (c *Client) Benchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []hostdb.HostBenchmark, err error) {
 	err = c.c.GET(fmt.Sprintf("/hostdb/benchmarks?network=%s&host=%s&from=%v&to=%v", network, pk, encodeTime(from), encodeTime(to)), &benchmarks)
 	return

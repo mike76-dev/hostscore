@@ -123,6 +123,17 @@ func (hdb *HostDB) Hosts(network string, all bool, offset, limit int, query stri
 	panic("wrong network provided")
 }
 
+// Host returns a specific HostDB entry.
+func (hdb *HostDB) Host(network string, pk types.PublicKey) (host HostDBEntry, ok bool) {
+	if network == "zen" {
+		return hdb.sZen.getHost(pk)
+	}
+	if network == "mainnet" {
+		return hdb.s.getHost(pk)
+	}
+	panic("wrong network provided")
+}
+
 // Scans returns the host's scan history.
 func (hdb *HostDB) Scans(network string, pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
 	if network == "zen" {

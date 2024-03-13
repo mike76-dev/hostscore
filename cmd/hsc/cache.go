@@ -128,6 +128,22 @@ func (rc *responseCache) prune() {
 	}
 }
 
+func (rc *responseCache) getHost(network string, pk types.PublicKey) (host hostdb.HostDBEntry, ok bool) {
+	rc.mu.Lock()
+	defer rc.mu.Unlock()
+	for _, ch := range rc.hosts {
+		if ch.network != network {
+			continue
+		}
+		for _, h := range ch.hosts {
+			if h.PublicKey == pk {
+				return h, true
+			}
+		}
+	}
+	return
+}
+
 func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query string) (hosts []hostdb.HostDBEntry, more bool, total int, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()

@@ -320,6 +320,34 @@ func (s *server) hostDBHostsHandler(jc jape.Context) {
 	})
 }
 
+func (s *server) hostDBHostHandler(jc jape.Context) {
+	var network string
+	if jc.DecodeForm("network", &network) != nil {
+		return
+	}
+
+	network = strings.ToLower(network)
+	if network != "" && network != "mainnet" && network != "zen" {
+		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+		return
+	}
+	if network == "" {
+		network = "mainnet"
+	}
+
+	var pk types.PublicKey
+	if jc.DecodeForm("host", &pk) != nil {
+		return
+	}
+
+	host, ok := s.hdb.Host(network, pk)
+	if !ok {
+		jc.Error(errors.New("host not found"), http.StatusBadRequest)
+		return
+	}
+	jc.Encode(host)
+}
+
 func (s *server) hostDBScansHandler(jc jape.Context) {
 	var network string
 	if jc.DecodeForm("network", &network) != nil {
@@ -440,6 +468,7 @@ func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *
 		"GET    /wallet/outputs": srv.walletOutputsHandler,
 
 		"GET    /hostdb/hosts":              srv.hostDBHostsHandler,
+		"GET    /hostdb/host":               srv.hostDBHostHandler,
 		"GET    /hostdb/scans":              srv.hostDBScansHandler,
 		"GET    /hostdb/scans/history":      srv.hostDBScanHistoryHandler,
 		"GET    /hostdb/benchmarks":         srv.hostDBBenchmarksHandler,

@@ -813,6 +813,13 @@ func (s *hostDBStore) getHosts(all bool, offset, limit int, query string) (hosts
 	return
 }
 
+func (s *hostDBStore) getHost(pk types.PublicKey) (HostDBEntry, bool) {
+	s.mu.Lock()
+	host, ok := s.hosts[pk]
+	s.mu.Unlock()
+	return *host, ok
+}
+
 func (s *hostDBStore) getHostsForScan() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
