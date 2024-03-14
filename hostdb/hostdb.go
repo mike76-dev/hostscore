@@ -68,6 +68,7 @@ type HostScan struct {
 type ScanHistory struct {
 	HostScan
 	PublicKey types.PublicKey `json:"publicKey"`
+	Network   string          `json:"network"`
 }
 
 // A HostBenchmark contains the information measured during a host benchmark.
@@ -84,6 +85,7 @@ type HostBenchmark struct {
 type BenchmarkHistory struct {
 	HostBenchmark
 	PublicKey types.PublicKey `json:"publicKey"`
+	Network   string          `json:"network"`
 }
 
 // The HostDB is a database of hosts.
@@ -112,70 +114,17 @@ type HostDB struct {
 	blockedDomains       *blockedDomains
 }
 
-// Hosts returns a list of HostDB's hosts.
-func (hdb *HostDB) Hosts(network string, all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool, total int) {
-	if network == "zen" {
-		return hdb.sZen.getHosts(all, offset, limit, query)
+// RecentUpdates returns a list of the most recent updates since the last retrieval.
+func (hdb *HostDB) RecentUpdates() ([]HostDBEntry, []ScanHistory, []BenchmarkHistory, error) {
+	hosts, scans, benchmarks, err := hdb.s.getRecentUpdates()
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	if network == "mainnet" {
-		return hdb.s.getHosts(all, offset, limit, query)
+	hostsZen, scansZen, benchmarksZen, err := hdb.sZen.getRecentUpdates()
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	panic("wrong network provided")
-}
-
-// Host returns a specific HostDB entry.
-func (hdb *HostDB) Host(network string, pk types.PublicKey) (host HostDBEntry, ok bool) {
-	if network == "zen" {
-		return hdb.sZen.getHost(pk)
-	}
-	if network == "mainnet" {
-		return hdb.s.getHost(pk)
-	}
-	panic("wrong network provided")
-}
-
-// Scans returns the host's scan history.
-func (hdb *HostDB) Scans(network string, pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
-	if network == "zen" {
-		return hdb.sZen.getScans(pk, from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getScans(pk, from, to)
-	}
-	panic("wrong network provided")
-}
-
-// ScanHistory returns the host's scan history.
-func (hdb *HostDB) ScanHistory(network string, from, to time.Time) (history []ScanHistory, err error) {
-	if network == "zen" {
-		return hdb.sZen.getScanHistory(from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getScanHistory(from, to)
-	}
-	panic("wrong network provided")
-}
-
-// Benchmarks returns the host's benchmark history.
-func (hdb *HostDB) Benchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []HostBenchmark, err error) {
-	if network == "zen" {
-		return hdb.sZen.getBenchmarks(pk, from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getBenchmarks(pk, from, to)
-	}
-	panic("wrong network provided")
-}
-
-// BenchmarkHistory returns the host's benchmark history.
-func (hdb *HostDB) BenchmarkHistory(network string, from, to time.Time) (history []BenchmarkHistory, err error) {
-	if network == "zen" {
-		return hdb.sZen.getBenchmarkHistory(from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getBenchmarkHistory(from, to)
-	}
-	panic("wrong network provided")
+	return append(hosts, hostsZen...), append(scans, scansZen...), append(benchmarks, benchmarksZen...), nil
 }
 
 // Close shuts down HostDB.

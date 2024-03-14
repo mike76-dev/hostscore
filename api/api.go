@@ -41,9 +41,9 @@ type WalletOutputsResponse struct {
 	SiafundOutputs []types.SiafundElement `json:"siafundOutputs"`
 }
 
-// HostdbHostsResponse is the response type for /hostdb/hosts.
-type HostdbHostsResponse struct {
-	Hosts []hostdb.HostDBEntry `json:"hosts"`
-	More  bool                 `json:"more"`
-	Total int                  `json:"total"`
+// HostdbUpdatesResponse is the response type for /hostdb/updates.
+type HostdbUpdatesResponse struct {
+	Hosts      []hostdb.HostDBEntry      `json:"hosts"`
+	Scans      []hostdb.ScanHistory      `json:"scans"`
+	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
 }
