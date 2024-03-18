@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -286,15 +287,25 @@ func (s *server) walletOutputsHandler(jc jape.Context) {
 }
 
 func (s *server) hostDBUpdatesHandler(jc jape.Context) {
-	hosts, scans, benchmarks, err := s.hdb.RecentUpdates()
+	updates, err := s.hdb.RecentUpdates()
 	if jc.Check("couldn't receive HostDB updates", err) != nil {
 		return
 	}
-	jc.Encode(HostdbUpdatesResponse{
-		Hosts:      hosts,
-		Scans:      scans,
-		Benchmarks: benchmarks,
-	})
+	jc.Encode(updates)
+}
+
+func (s *server) hostDBUpdatesConfirmHandler(jc jape.Context) {
+	var id string
+	if jc.DecodeForm("id", &id) != nil {
+		return
+	}
+
+	updateID, err := hex.DecodeString(id)
+	if jc.Check("wrong update ID provided", err) != nil {
+		return
+	}
+
+	jc.Check("couldn't finalize updates", s.hdb.FinalizeUpdates(hostdb.UpdateID(updateID)))
 }
 
 // NewServer returns an HTTP handler that serves the hsd API.
@@ -322,6 +333,7 @@ func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *
 		"GET    /wallet/txpool":  srv.walletTxpoolHandler,
 		"GET    /wallet/outputs": srv.walletOutputsHandler,
 
-		"GET    /hostdb/updates": srv.hostDBUpdatesHandler,
+		"GET    /hostdb/updates":         srv.hostDBUpdatesHandler,
+		"GET    /hostdb/updates/confirm": srv.hostDBUpdatesConfirmHandler,
 	})
 }

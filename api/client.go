@@ -1,6 +1,9 @@
 package api
 
 import (
+	"encoding/hex"
+
+	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -81,9 +84,14 @@ func (c *Client) Outputs(network string) (sc []types.SiacoinElement, sf []types.
 }
 
 // Updates returns a list of most recent HostDB updates.
-func (c *Client) Updates() (resp HostdbUpdatesResponse, err error) {
+func (c *Client) Updates() (resp hostdb.HostUpdates, err error) {
 	err = c.c.GET("/hostdb/updates", &resp)
 	return
+}
+
+// FinalizeUpdates confirms the receipt of the HostDB updates.
+func (c *Client) FinalizeUpdates(id hostdb.UpdateID) error {
+	return c.c.GET("/hostdb/updates/confirm?id="+hex.EncodeToString(id[:]), nil)
 }
 
 // NewClient returns a client that communicates with a hsd server listening

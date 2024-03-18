@@ -1,7 +1,6 @@
 package api
 
 import (
-	"github.com/mike76-dev/hostscore/hostdb"
 	"go.sia.tech/core/types"
 )
 
@@ -39,11 +38,4 @@ type WalletOutputsResponse struct {
 	Network        string                 `json:"network"`
 	SiacoinOutputs []types.SiacoinElement `json:"siacoinOutputs"`
 	SiafundOutputs []types.SiafundElement `json:"siafundOutputs"`
-}
-
-// HostdbUpdatesResponse is the response type for /hostdb/updates.
-type HostdbUpdatesResponse struct {
-	Hosts      []hostdb.HostDBEntry      `json:"hosts"`
-	Scans      []hostdb.ScanHistory      `json:"scans"`
-	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
 }

@@ -14,6 +14,8 @@ import (
 	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/external"
 	"github.com/mike76-dev/hostscore/hostdb"
+	rhpv2 "go.sia.tech/core/rhp/v2"
+	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
 )
@@ -25,47 +27,116 @@ type APIResponse struct {
 
 type hostResponse struct {
 	APIResponse
-	Host hostdb.HostDBEntry `json:"host"`
+	Host portalHost `json:"host"`
 }
 
 type hostsResponse struct {
 	APIResponse
-	Hosts []hostdb.HostDBEntry `json:"hosts"`
-	More  bool                 `json:"more"`
-	Total int                  `json:"total"`
+	Hosts []portalHost `json:"hosts"`
+	More  bool         `json:"more"`
+	Total int          `json:"total"`
 }
 
 type scansResponse struct {
 	APIResponse
-	PublicKey types.PublicKey   `json:"publicKey"`
-	Scans     []hostdb.HostScan `json:"scans"`
+	PublicKey types.PublicKey      `json:"publicKey"`
+	Scans     []hostdb.ScanHistory `json:"scans"`
 }
 
 type benchmarksResponse struct {
 	APIResponse
-	PublicKey  types.PublicKey        `json:"publicKey"`
-	Benchmarks []hostdb.HostBenchmark `json:"benchmarks"`
+	PublicKey  types.PublicKey           `json:"publicKey"`
+	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
+}
+
+type nodeInteractions struct {
+	Uptime        time.Duration        `json:"uptime"`
+	Downtime      time.Duration        `json:"downtime"`
+	ScanHistory   []hostdb.HostScan    `json:"scanHistory"`
+	LastBenchmark hostdb.HostBenchmark `json:"lastBenchmark"`
+	LastSeen      time.Time            `json:"lastSeen"`
+	ActiveHosts   int                  `json:"activeHosts"`
+	hostdb.HostInteractions
+}
+
+type portalHost struct {
+	ID           int                         `json:"id"`
+	PublicKey    types.PublicKey             `json:"publicKey"`
+	FirstSeen    time.Time                   `json:"firstSeen"`
+	KnownSince   uint64                      `json:"knownSince"`
+	NetAddress   string                      `json:"netaddress"`
+	Blocked      bool                        `json:"blocked"`
+	Interactions map[string]nodeInteractions `json:"interactions"`
+	IPNets       []string                    `json:"ipNets"`
+	LastIPChange time.Time                   `json:"lastIPChange"`
+	Settings     rhpv2.HostSettings          `json:"settings"`
+	PriceTable   rhpv3.HostPriceTable        `json:"priceTable"`
+	external.IPInfo
 }
 
 type portalAPI struct {
-	router  httprouter.Router
-	store   *jsonStore
-	db      *sql.DB
-	token   string
-	log     *zap.Logger
-	clients map[string]*client.Client
-	mu      sync.RWMutex
-	cache   *responseCache
+	router   httprouter.Router
+	store    *jsonStore
+	db       *sql.DB
+	token    string
+	log      *zap.Logger
+	clients  map[string]*client.Client
+	mu       sync.RWMutex
+	cache    *responseCache
+	hosts    map[types.PublicKey]*portalHost
+	hostsZen map[types.PublicKey]*portalHost
+	stopChan chan struct{}
 }
 
-func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *responseCache) *portalAPI {
-	return &portalAPI{
-		store:   s,
-		db:      db,
-		token:   token,
-		log:     logger,
-		clients: make(map[string]*client.Client),
-		cache:   cache,
+func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *responseCache) (*portalAPI, error) {
+	api := &portalAPI{
+		store:    s,
+		db:       db,
+		token:    token,
+		log:      logger,
+		clients:  make(map[string]*client.Client),
+		cache:    cache,
+		hosts:    map[types.PublicKey]*portalHost{},
+		hostsZen: map[types.PublicKey]*portalHost{},
+		stopChan: make(chan struct{}),
+	}
+
+	err := api.load()
+	if err != nil {
+		return nil, err
+	}
+
+	go api.requestUpdates()
+
+	return api, nil
+}
+
+func (api *portalAPI) close() {
+	close(api.stopChan)
+}
+
+func (api *portalAPI) requestUpdates() {
+	timeout := time.Minute
+	for {
+		select {
+		case <-api.stopChan:
+			return
+		case <-time.After(timeout):
+		}
+
+		timeout = time.Minute
+		for node, c := range api.clients {
+			updates, err := c.Updates()
+			if err != nil {
+				api.log.Error("failed to request updates", zap.String("node", node), zap.Error(err))
+			}
+			if err := api.insertUpdates(node, updates); err != nil {
+				api.log.Error("failed to insert updates", zap.String("node", node), zap.Error(err))
+			}
+			if len(updates.Hosts)+len(updates.Scans)+len(updates.Benchmarks) > 1000 {
+				timeout = 5 * time.Second
+			}
+		}
 	}
 }
 
@@ -107,12 +178,11 @@ func (api *portalAPI) buildHTTPRoutes() {
 }
 
 func (api *portalAPI) hostHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
-	if location == "" || network == "" {
+	if network == "" {
 		writeJSON(w, APIResponse{
 			Status:  "error",
-			Message: "node location or network not provided",
+			Message: "network not provided",
 		})
 		return
 	}
@@ -133,17 +203,9 @@ func (api *portalAPI) hostHandler(w http.ResponseWriter, req *http.Request, _ ht
 		})
 		return
 	}
-	client, ok := api.clients[location]
-	if !ok {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "node not found",
-		})
-		return
-	}
 	host, ok := api.cache.getHost(network, pk)
 	if !ok {
-		host, err = client.Host(network, pk)
+		host, err = api.getHost(network, pk)
 		if err != nil {
 			writeJSON(w, APIResponse{
 				Status:  "error",
@@ -152,29 +214,6 @@ func (api *portalAPI) hostHandler(w http.ResponseWriter, req *http.Request, _ ht
 			return
 		}
 	}
-
-	info, lastFetched, err := getLocation(api.db, host, api.token)
-	if err != nil {
-		api.log.Error("couldn't get host location", zap.String("host", host.NetAddress), zap.Error(err))
-	} else if host.LastIPChange.After(lastFetched) {
-		newInfo, err := external.FetchIPInfo(host.NetAddress, api.token)
-		if err != nil {
-			api.log.Error("couldn't fetch host location", zap.String("host", host.NetAddress), zap.Error(err))
-		} else {
-			if (newInfo != external.IPInfo{}) {
-				info = newInfo
-				err = saveLocation(api.db, host.PublicKey, info)
-				if err != nil {
-					api.log.Error("couldn't update host location", zap.String("host", host.NetAddress), zap.Error(err))
-				}
-			} else {
-				api.log.Debug("empty host location received", zap.String("host", host.NetAddress))
-			}
-		}
-	}
-
-	host.IPInfo = info
-
 	writeJSON(w, hostResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		Host:        host,
@@ -182,12 +221,11 @@ func (api *portalAPI) hostHandler(w http.ResponseWriter, req *http.Request, _ ht
 }
 
 func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
-	if location == "" || network == "" {
+	if network == "" {
 		writeJSON(w, APIResponse{
 			Status:  "error",
-			Message: "node location or network not provided",
+			Message: "network not provided",
 		})
 		return
 	}
@@ -221,17 +259,9 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	cl, ok := api.clients[location]
-	if !ok {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "node not found",
-		})
-		return
-	}
 	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
 	if !ok {
-		resp, err := cl.Hosts(network, all, int(offset), int(limit), query)
+		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -240,35 +270,30 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			})
 			return
 		}
-		hosts = resp.Hosts
-		more = resp.More
-		total = resp.Total
-		api.cache.putHosts(network, all, int(offset), int(limit), query, resp.Hosts, resp.More, resp.Total)
+		api.cache.putHosts(network, all, int(offset), int(limit), query, hosts, more, total)
 	}
 
 	// Prefetch the scans and the benchmarks.
 	go func() {
 		for _, h := range hosts {
-			for l, c := range api.clients {
-				go func(h hostdb.HostDBEntry, l string, c *client.Client) {
-					_, ok := api.cache.getScans(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
-					if !ok {
-						s, err := c.Scans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
-						if err != nil {
-							return
-						}
-						api.cache.putScans(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), s)
+			go func(h portalHost) {
+				_, ok := api.cache.getScans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+				if !ok {
+					s, err := api.getScans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+					if err != nil {
+						return
 					}
-					_, ok = api.cache.getBenchmarks(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
-					if !ok {
-						b, err := c.Benchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
-						if err != nil {
-							return
-						}
-						api.cache.putBenchmarks(l, network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), b)
+					api.cache.putScans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), s)
+				}
+				_, ok = api.cache.getBenchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+				if !ok {
+					b, err := api.getBenchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+					if err != nil {
+						return
 					}
-				}(h, l, c)
-			}
+					api.cache.putBenchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), b)
+				}
+			}(h)
 		}
 	}()
 
@@ -277,40 +302,15 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		go func() {
 			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query)
 			if !ok {
-				resp, err := cl.Hosts(network, all, int(offset+limit), int(limit), query)
+				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query)
 				if err != nil {
 					return
 				}
-				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, resp.Hosts, resp.More, resp.Total)
+				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, h, m, t)
 			}
 		}()
 	}
 
-	for i := range hosts {
-		info, lastFetched, err := getLocation(api.db, hosts[i], api.token)
-		if err != nil {
-			api.log.Error("couldn't get host location", zap.String("host", hosts[i].NetAddress), zap.Error(err))
-			continue
-		}
-		if hosts[i].LastIPChange.After(lastFetched) {
-			newInfo, err := external.FetchIPInfo(hosts[i].NetAddress, api.token)
-			if err != nil {
-				api.log.Error("couldn't fetch host location", zap.String("host", hosts[i].NetAddress), zap.Error(err))
-				continue
-			}
-			if (newInfo != external.IPInfo{}) {
-				info = newInfo
-				err = saveLocation(api.db, hosts[i].PublicKey, info)
-				if err != nil {
-					api.log.Error("couldn't update host location", zap.String("host", hosts[i].NetAddress), zap.Error(err))
-					continue
-				}
-			} else {
-				api.log.Debug("empty host location received", zap.String("host", hosts[i].NetAddress))
-			}
-		}
-		hosts[i].IPInfo = info
-	}
 	writeJSON(w, hostsResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		Hosts:       hosts,
@@ -320,12 +320,11 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 }
 
 func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
-	if location == "" || network == "" {
+	if network == "" {
 		writeJSON(w, APIResponse{
 			Status:  "error",
-			Message: "node location or network not provided",
+			Message: "network not provided",
 		})
 		return
 	}
@@ -370,17 +369,9 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	client, ok := api.clients[location]
+	scans, ok := api.cache.getScans(network, pk, from, to)
 	if !ok {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "node not found",
-		})
-		return
-	}
-	scans, ok := api.cache.getScans(location, network, pk, from, to)
-	if !ok {
-		s, err := client.Scans(network, pk, from, to)
+		s, err := api.getScans(network, pk, from, to)
 		if err != nil {
 			api.log.Error("couldn't get scan history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -390,7 +381,7 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 		scans = s
-		api.cache.putScans(location, network, pk, from, to, s)
+		api.cache.putScans(network, pk, from, to, s)
 	}
 	writeJSON(w, scansResponse{
 		APIResponse: APIResponse{Status: "ok"},
@@ -400,12 +391,11 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 }
 
 func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	location := strings.ToLower(req.FormValue("location"))
 	network := strings.ToLower(req.FormValue("network"))
-	if location == "" || network == "" {
+	if network == "" {
 		writeJSON(w, APIResponse{
 			Status:  "error",
-			Message: "node location or network not provided",
+			Message: "network not provided",
 		})
 		return
 	}
@@ -450,17 +440,9 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 	}
-	client, ok := api.clients[location]
+	benchmarks, ok := api.cache.getBenchmarks(network, pk, from, to)
 	if !ok {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "node not found",
-		})
-		return
-	}
-	benchmarks, ok := api.cache.getBenchmarks(location, network, pk, from, to)
-	if !ok {
-		b, err := client.Benchmarks(network, pk, from, to)
+		b, err := api.getBenchmarks(network, pk, from, to)
 		if err != nil {
 			api.log.Error("couldn't get benchmark history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -470,7 +452,7 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 		benchmarks = b
-		api.cache.putBenchmarks(location, network, pk, from, to, b)
+		api.cache.putBenchmarks(network, pk, from, to, b)
 	}
 	writeJSON(w, benchmarksResponse{
 		APIResponse: APIResponse{Status: "ok"},

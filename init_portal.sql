@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS locations;
 DROP TABLE IF EXISTS scans;
 DROP TABLE IF EXISTS benchmarks;
+DROP TABLE IF EXISTS interactions;
 DROP TABLE IF EXISTS hosts;
 
 CREATE TABLE hosts (
@@ -11,45 +12,58 @@ CREATE TABLE hosts (
 	known_since    BIGINT UNSIGNED NOT NULL,
 	blocked        BOOL NOT NULL,
 	net_address    VARCHAR(255) NOT NULL,
-	uptime         BIGINT NOT NULL,
-	downtime       BIGINT NOT NULL,
-	last_seen      BIGINT NOT NULL,
 	ip_nets        TEXT NOT NULL,
 	last_ip_change BIGINT NOT NULL,
+	settings       BLOB,
+	price_table    BLOB,
+	PRIMARY KEY (id, network)
+);
+
+CREATE TABLE interactions (
+	network      VARCHAR(8) NOT NULL,
+	node         VARCHAR(8) NOT NULL,
+	public_key   BINARY(32) NOT NULL,
+	uptime       BIGINT NOT NULL,
+	downtime     BIGINT NOT NULL,
+	last_seen    BIGINT NOT NULL,
+    active_hosts INT NOT NULL,
 	historic_successful_interactions DOUBLE NOT NULL,
 	historic_failed_interactions     DOUBLE NOT NULL,
 	recent_successful_interactions   DOUBLE NOT NULL,
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
-	settings       BLOB,
-	price_table    BLOB,
-	PRIMARY KEY (id)
+	PRIMARY KEY (network, node, public_key),
+    FOREIGN KEY (public_key) REFERENCES hosts(public_key)
 );
 
 CREATE TABLE scans (
 	id           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 	network      VARCHAR(8) NOT NULL,
-	public_key   BINARY(32) NOT NULL UNIQUE,
+	node         VARCHAR(8) NOT NULL,
+	public_key   BINARY(32) NOT NULL,
 	ran_at       BIGINT NOT NULL,
 	success      BOOL NOT NULL,
 	latency      DOUBLE NOT NULL,
 	error        TEXT NOT NULL,
 	settings     BLOB,
 	price_table  BLOB,
-	PRIMARY KEY (id)
+	PRIMARY KEY (id),
+    FOREIGN KEY (public_key) REFERENCES hosts(public_key)
 );
 
 CREATE TABLE benchmarks (
 	id             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 	network        VARCHAR(8) NOT NULL,
-	public_key     BINARY(32) NOT NULL UNIQUE,
+	node           VARCHAR(8) NOT NULL,
+	public_key     BINARY(32) NOT NULL,
 	ran_at         BIGINT NOT NULL,
 	success        BOOL NOT NULL,
 	upload_speed   DOUBLE NOT NULL,
 	download_speed DOUBLE NOT NULL,
 	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
-	PRIMARY KEY (id)
+	PRIMARY KEY (id),
+    FOREIGN KEY (public_key) REFERENCES hosts(public_key)
 );
 
 CREATE TABLE locations (

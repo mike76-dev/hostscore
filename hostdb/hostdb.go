@@ -18,6 +18,7 @@ import (
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
 	"go.uber.org/zap"
+	"lukechampine.com/frand"
 )
 
 // A HostDBEntry represents one host entry in the HostDB. It
@@ -56,6 +57,7 @@ type HostInteractions struct {
 
 // A HostScan contains all information measured during a host scan.
 type HostScan struct {
+	ID         int64                `json:"-"`
 	Timestamp  time.Time            `json:"timestamp"`
 	Success    bool                 `json:"success"`
 	Latency    time.Duration        `json:"latency"`
@@ -69,10 +71,12 @@ type ScanHistory struct {
 	HostScan
 	PublicKey types.PublicKey `json:"publicKey"`
 	Network   string          `json:"network"`
+	Node      string          `json:"node"`
 }
 
 // A HostBenchmark contains the information measured during a host benchmark.
 type HostBenchmark struct {
+	ID            int64         `json:"-"`
 	Timestamp     time.Time     `json:"timestamp"`
 	Success       bool          `json:"success"`
 	Error         string        `json:"error"`
@@ -86,6 +90,18 @@ type BenchmarkHistory struct {
 	HostBenchmark
 	PublicKey types.PublicKey `json:"publicKey"`
 	Network   string          `json:"network"`
+	Node      string          `json:"node"`
+}
+
+// UpdateID is the ID of a HostUpdate.
+type UpdateID = [8]byte
+
+// HostUpdates represents a batch of updates sent to the client.
+type HostUpdates struct {
+	ID         UpdateID           `json:"id"`
+	Hosts      []HostDBEntry      `json:"hosts"`
+	Scans      []ScanHistory      `json:"scans"`
+	Benchmarks []BenchmarkHistory `json:"benchmarks"`
 }
 
 // The HostDB is a database of hosts.
@@ -115,16 +131,30 @@ type HostDB struct {
 }
 
 // RecentUpdates returns a list of the most recent updates since the last retrieval.
-func (hdb *HostDB) RecentUpdates() ([]HostDBEntry, []ScanHistory, []BenchmarkHistory, error) {
-	hosts, scans, benchmarks, err := hdb.s.getRecentUpdates()
+func (hdb *HostDB) RecentUpdates() (HostUpdates, error) {
+	var id UpdateID
+	frand.Read(id[:])
+
+	updates, err := hdb.s.getRecentUpdates(id)
 	if err != nil {
-		return nil, nil, nil, err
+		return HostUpdates{}, err
 	}
-	hostsZen, scansZen, benchmarksZen, err := hdb.sZen.getRecentUpdates()
+
+	updatesZen, err := hdb.sZen.getRecentUpdates(id)
 	if err != nil {
-		return nil, nil, nil, err
+		return HostUpdates{}, err
 	}
-	return append(hosts, hostsZen...), append(scans, scansZen...), append(benchmarks, benchmarksZen...), nil
+
+	updates.Hosts = append(updates.Hosts, updatesZen.Hosts...)
+	updates.Scans = append(updates.Scans, updatesZen.Scans...)
+	updates.Benchmarks = append(updates.Benchmarks, updatesZen.Benchmarks...)
+
+	return updates, nil
+}
+
+// FinalizeUpdates updates the timestamps after the client confirms the data receipt.
+func (hdb *HostDB) FinalizeUpdates(id UpdateID) error {
+	return utils.ComposeErrors(hdb.s.finalizeUpdates(id), hdb.sZen.finalizeUpdates(id))
 }
 
 // Close shuts down HostDB.
