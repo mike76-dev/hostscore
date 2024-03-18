@@ -380,9 +380,6 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 	}
 
 	if all {
-		if limit < 0 {
-			limit = math.MaxInt64
-		}
 		query = "%" + query + "%"
 		err = api.db.QueryRow(`
 			SELECT COUNT(*)
@@ -396,7 +393,10 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		if total == 0 {
 			return
 		}
-		more = (offset+1)*limit < total
+		more = limit > 0 && offset+limit < total
+		if limit < 0 {
+			limit = math.MaxInt64
+		}
 
 		rows, err := api.db.Query(`
 			SELECT
@@ -620,8 +620,8 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		if offset+limit > len(hosts) {
 			limit = len(hosts) - offset
 		}
-		more = len(hosts) > offset+limit
 		total = len(hosts)
+		more = offset+limit < total
 		hosts = hosts[offset : offset+limit]
 	}
 
