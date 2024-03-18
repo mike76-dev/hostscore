@@ -215,6 +215,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				ScanHistory:   h.ScanHistory,
 				LastBenchmark: h.LastBenchmark,
 				LastSeen:      h.LastSeen,
+				ActiveHosts:   h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -244,6 +245,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				ScanHistory:   h.ScanHistory,
 				LastBenchmark: h.LastBenchmark,
 				LastSeen:      h.LastSeen,
+				ActiveHosts:   h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
