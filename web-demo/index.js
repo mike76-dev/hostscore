@@ -1,5 +1,5 @@
 const apiBaseURL = '/hostscore/api';
-var locations = ['eu'];//, 'us'];
+var locations = ['eu', 'us'];
 var hosts = [];
 var moreHosts = false;
 var offset = 0;
@@ -162,12 +162,14 @@ function browseHost(obj) {
 								let dl = 0;
 								let ttfb = 0;
 								let count = 0;
+								let items = [];
 								data.benchmarks.forEach(benchmark => {
 									if (benchmark.node == loc && benchmark.success == true) {
 										ul += benchmark.uploadSpeed;
 										dl += benchmark.downloadSpeed;
 										ttfb += benchmark.ttfb / 1e9;
 										count++;
+										items.push(benchmark);
 									}
 								});
 								if (count > 0) {
@@ -179,7 +181,7 @@ function browseHost(obj) {
 										upload: convertSize(ul) + '/s',
 										download: convertSize(dl) + '/s',
 										ttfb: ttfb.toFixed(2) + ' s',
-										data: data.benchmarks
+										data: items
 									});
 								} else {
 									benchmarks.push({
@@ -187,7 +189,7 @@ function browseHost(obj) {
 										upload: 'N/A',
 										download: 'N/A',
 										ttfb: 'N/A',
-										data: data.benchmarks
+										data: items
 									});
 								}
 								if (benchmarks.length == locations.length) {
@@ -200,7 +202,7 @@ function browseHost(obj) {
 										upload += '<td style="text-align:center">' + benchmark.upload + '</td>';
 										download += '<td style="text-align:center">' + benchmark.download + '</td>';
 										ttfb += '<td style="text-align:center">' + benchmark.ttfb + '</td>';
-										header += '<th>' + l + '</th>';
+										header += '<th>' + l.toUpperCase() + '</th>';
 									});
 									header += '</tr>';
 									upload += '</tr>';
@@ -246,12 +248,14 @@ function browseHost(obj) {
 	let downtime = 0;
 	let activeHosts = 0;
 	if (host.interactions) locations.forEach(location => {
-		let date = new Date(host.interactions[location].lastSeen);
-		if (date > lastSeen) lastSeen = date;
-		uptime += host.interactions[location].uptime;
-		downtime += host.interactions[location].downtime;
-		let ah = host.interactions[location].activeHosts;
-		if (ah > activeHosts) activeHosts = ah;
+		if (host.interactions[location]) {
+			let date = new Date(host.interactions[location].lastSeen);
+			if (date > lastSeen) lastSeen = date;
+			uptime += host.interactions[location].uptime;
+			downtime += host.interactions[location].downtime;
+			let ah = host.interactions[location].activeHosts;
+			if (ah > activeHosts) activeHosts = ah;
+		}
 	});
 	document.getElementById('current-id').innerHTML = host.id;
 	document.getElementById('current-key').innerHTML = host.publicKey;
