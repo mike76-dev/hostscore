@@ -11,6 +11,21 @@ type GatewayPeer struct {
 	Version string `json:"version"`
 }
 
+// Balance combines mature and immature values.
+type Balance struct {
+	Siacoins         types.Currency `json:"siacoins"`
+	ImmatureSiacoins types.Currency `json:"immatureSiacoins"`
+}
+
+// NodeStatusResponse is the response type for /node/status.
+type NodeStatusResponse struct {
+	Version    string  `json:"version"`
+	Height     uint64  `json:"heightMainnet"`
+	HeightZen  uint64  `json:"heightZen"`
+	Balance    Balance `json:"balanceMainnet"`
+	BalanceZen Balance `json:"balanceZen"`
+}
+
 // ConsensusTipResponse is the response type for /consensus/tip.
 type ConsensusTipResponse struct {
 	Network string        `json:"network"`

@@ -15,6 +15,12 @@ type Client struct {
 	c jape.Client
 }
 
+// NodeStatus returns the status of the node.
+func (c *Client) NodeStatus() (resp NodeStatusResponse, err error) {
+	err = c.c.GET("/node/status", &resp)
+	return
+}
+
 // TxpoolTransactions returns all transactions in the transaction pool.
 func (c *Client) TxpoolTransactions(network string) (txns []types.Transaction, v2txns []types.V2Transaction, err error) {
 	var resp TxpoolTransactionsResponse

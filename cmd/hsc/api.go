@@ -14,11 +14,14 @@ import (
 	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/external"
 	"github.com/mike76-dev/hostscore/hostdb"
+	"github.com/mike76-dev/hostscore/internal/build"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
 )
+
+var lowBalanceThreshold = types.Siacoins(200)
 
 type APIResponse struct {
 	Status  string `json:"status"`
@@ -47,6 +50,22 @@ type benchmarksResponse struct {
 	APIResponse
 	PublicKey  types.PublicKey           `json:"publicKey"`
 	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
+}
+
+type nodeStatus struct {
+	Location   string `json:"location"`
+	Status     bool   `json:"status"`
+	Version    string `json:"version"`
+	Height     uint64 `json:"heightMainnet"`
+	HeightZen  uint64 `json:"heightZen"`
+	Balance    string `json:"balanceMainnet"`
+	BalanceZen string `json:"balanceZen"`
+}
+
+type statusResponse struct {
+	APIResponse
+	Version string       `json:"version"`
+	Nodes   []nodeStatus `json:"nodes"`
 }
 
 type nodeInteractions struct {
@@ -170,6 +189,9 @@ func (api *portalAPI) buildHTTPRoutes() {
 	})
 	router.GET("/benchmarks", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.benchmarksHandler(w, req, ps)
+	})
+	router.GET("/status", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.statusHandler(w, req, ps)
 	})
 
 	api.mu.Lock()
@@ -458,6 +480,45 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 		APIResponse: APIResponse{Status: "ok"},
 		PublicKey:   pk,
 		Benchmarks:  benchmarks,
+	})
+}
+
+func balanceStatus(balance types.Currency) string {
+	if balance.IsZero() {
+		return "empty"
+	}
+	if balance.Cmp(lowBalanceThreshold) < 0 {
+		return "low"
+	}
+	return "ok"
+}
+
+func (api *portalAPI) statusHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	var nodes []nodeStatus
+	for n, c := range api.clients {
+		status, err := c.NodeStatus()
+		if err != nil {
+			api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
+			nodes = append(nodes, nodeStatus{
+				Location: n,
+				Status:   false,
+			})
+		} else {
+			nodes = append(nodes, nodeStatus{
+				Location:   n,
+				Status:     true,
+				Version:    status.Version,
+				Height:     status.Height,
+				HeightZen:  status.HeightZen,
+				Balance:    balanceStatus(status.Balance.Siacoins),
+				BalanceZen: balanceStatus(status.BalanceZen.Siacoins),
+			})
+		}
+	}
+	writeJSON(w, statusResponse{
+		APIResponse: APIResponse{Status: "ok"},
+		Version:     build.ClientVersion,
+		Nodes:       nodes,
 	})
 }
 

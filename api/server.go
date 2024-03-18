@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mike76-dev/hostscore/hostdb"
+	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
@@ -33,6 +34,53 @@ func isSynced(s *syncer.Syncer) bool {
 		}
 	}
 	return count >= 5
+}
+
+func (s *server) nodeStatusHandler(jc jape.Context) {
+	height := s.cm.TipState().Index.Height
+	heightZen := s.cmZen.TipState().Index.Height
+
+	scos, _, err := s.w.UnspentOutputs("mainnet")
+	if jc.Check("couldn't load Mainnet outputs", err) != nil {
+		return
+	}
+
+	var sc, immature types.Currency
+	for _, sco := range scos {
+		if height >= sco.MaturityHeight {
+			sc = sc.Add(sco.SiacoinOutput.Value)
+		} else {
+			immature = immature.Add(sco.SiacoinOutput.Value)
+		}
+	}
+
+	scosZen, _, err := s.w.UnspentOutputs("zen")
+	if jc.Check("couldn't load Zen outputs", err) != nil {
+		return
+	}
+
+	var scZen, immatureZen types.Currency
+	for _, sco := range scosZen {
+		if heightZen >= sco.MaturityHeight {
+			scZen = scZen.Add(sco.SiacoinOutput.Value)
+		} else {
+			immatureZen = immatureZen.Add(sco.SiacoinOutput.Value)
+		}
+	}
+
+	jc.Encode(NodeStatusResponse{
+		Version:   build.NodeVersion,
+		Height:    height,
+		HeightZen: heightZen,
+		Balance: Balance{
+			Siacoins:         sc,
+			ImmatureSiacoins: immature,
+		},
+		BalanceZen: Balance{
+			Siacoins:         scZen,
+			ImmatureSiacoins: immatureZen,
+		},
+	})
 }
 
 func (s *server) consensusNetworkHandler(jc jape.Context) {
@@ -319,6 +367,8 @@ func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *
 		hdb:   hdb,
 	}
 	return jape.Mux(map[string]jape.Handler{
+		"GET /node/status": srv.nodeStatusHandler,
+
 		"GET /consensus/network":  srv.consensusNetworkHandler,
 		"GET /consensus/tip":      srv.consensusTipHandler,
 		"GET /consensus/tipstate": srv.consensusTipStateHandler,
