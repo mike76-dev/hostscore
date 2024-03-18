@@ -219,7 +219,7 @@ func main() {
 			cmd.Usage()
 			return
 		}
-		fmt.Printf("hsd v%v\n", build.NodeVersion)
+		fmt.Printf("%s v%v\n", build.NodeBinaryName, build.NodeVersion)
 		if build.GitRevision != "" {
 			fmt.Println("Git Revision " + build.GitRevision)
 		}

@@ -50,7 +50,7 @@ func main() {
 		log.Fatalf("Provided parameter is invalid: %v\n", *dir)
 	}
 
-	fmt.Printf("hsc v%v\n", build.NodeVersion)
+	fmt.Printf("%s v%v\n", build.ClientBinaryName, build.ClientVersion)
 	if build.GitRevision == "" {
 		fmt.Println("WARN: compiled without build commit or version. To compile correctly, please use the makefile")
 	} else {

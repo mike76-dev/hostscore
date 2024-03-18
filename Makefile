@@ -8,8 +8,10 @@ else
 endif
 
 ldflags= \
--X "github.com/mike76-dev/hostscore/internal/build.BinaryName=hsd" \
+-X "github.com/mike76-dev/hostscore/internal/build.NodeBinaryName=hsd" \
 -X "github.com/mike76-dev/hostscore/internal/build.NodeVersion=0.1.0" \
+-X "github.com/mike76-dev/hostscore/internal/build.ClientBinaryName=hsc" \
+-X "github.com/mike76-dev/hostscore/internal/build.ClientVersion=0.1.0" \
 -X "github.com/mike76-dev/hostscore/internal/build.GitRevision=${GIT_DIRTY}${GIT_REVISION}" \
 -X "github.com/mike76-dev/hostscore/internal/build.BuildTime=${BUILD_TIME}"
 
@@ -21,10 +23,10 @@ pkgs = \
 	./api \
 	./cmd/hsc \
 	./cmd/hsd \
+	./external \
 	./hostdb \
 	./persist \
 	./rhp \
-	./syncer \
 	./wallet
 
 # release-pkgs determine which packages are built for release and distribution
