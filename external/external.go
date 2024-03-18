@@ -69,10 +69,10 @@ func FetchIPInfo(addr, token string) (IPInfo, error) {
 
 	ips, err := net.LookupHost(host)
 	if err != nil {
-		return IPInfo{}, err
+		return IPInfo{}, nil
 	}
 	if len(ips) == 0 {
-		return IPInfo{}, errors.New("unable to resolve netaddress")
+		return IPInfo{}, nil
 	}
 
 	resp, err := http.Get(ipInfoAPI + ips[0] + "?token=" + token)

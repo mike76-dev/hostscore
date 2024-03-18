@@ -18,6 +18,7 @@ import (
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
 	"go.uber.org/zap"
+	"lukechampine.com/frand"
 )
 
 // A HostDBEntry represents one host entry in the HostDB. It
@@ -56,6 +57,7 @@ type HostInteractions struct {
 
 // A HostScan contains all information measured during a host scan.
 type HostScan struct {
+	ID         int64                `json:"-"`
 	Timestamp  time.Time            `json:"timestamp"`
 	Success    bool                 `json:"success"`
 	Latency    time.Duration        `json:"latency"`
@@ -68,10 +70,13 @@ type HostScan struct {
 type ScanHistory struct {
 	HostScan
 	PublicKey types.PublicKey `json:"publicKey"`
+	Network   string          `json:"network"`
+	Node      string          `json:"node"`
 }
 
 // A HostBenchmark contains the information measured during a host benchmark.
 type HostBenchmark struct {
+	ID            int64         `json:"-"`
 	Timestamp     time.Time     `json:"timestamp"`
 	Success       bool          `json:"success"`
 	Error         string        `json:"error"`
@@ -84,6 +89,19 @@ type HostBenchmark struct {
 type BenchmarkHistory struct {
 	HostBenchmark
 	PublicKey types.PublicKey `json:"publicKey"`
+	Network   string          `json:"network"`
+	Node      string          `json:"node"`
+}
+
+// UpdateID is the ID of a HostUpdate.
+type UpdateID = [8]byte
+
+// HostUpdates represents a batch of updates sent to the client.
+type HostUpdates struct {
+	ID         UpdateID           `json:"id"`
+	Hosts      []HostDBEntry      `json:"hosts"`
+	Scans      []ScanHistory      `json:"scans"`
+	Benchmarks []BenchmarkHistory `json:"benchmarks"`
 }
 
 // The HostDB is a database of hosts.
@@ -112,70 +130,31 @@ type HostDB struct {
 	blockedDomains       *blockedDomains
 }
 
-// Hosts returns a list of HostDB's hosts.
-func (hdb *HostDB) Hosts(network string, all bool, offset, limit int, query string) (hosts []HostDBEntry, more bool, total int) {
-	if network == "zen" {
-		return hdb.sZen.getHosts(all, offset, limit, query)
+// RecentUpdates returns a list of the most recent updates since the last retrieval.
+func (hdb *HostDB) RecentUpdates() (HostUpdates, error) {
+	var id UpdateID
+	frand.Read(id[:])
+
+	updates, err := hdb.s.getRecentUpdates(id)
+	if err != nil {
+		return HostUpdates{}, err
 	}
-	if network == "mainnet" {
-		return hdb.s.getHosts(all, offset, limit, query)
+
+	updatesZen, err := hdb.sZen.getRecentUpdates(id)
+	if err != nil {
+		return HostUpdates{}, err
 	}
-	panic("wrong network provided")
+
+	updates.Hosts = append(updates.Hosts, updatesZen.Hosts...)
+	updates.Scans = append(updates.Scans, updatesZen.Scans...)
+	updates.Benchmarks = append(updates.Benchmarks, updatesZen.Benchmarks...)
+
+	return updates, nil
 }
 
-// Host returns a specific HostDB entry.
-func (hdb *HostDB) Host(network string, pk types.PublicKey) (host HostDBEntry, ok bool) {
-	if network == "zen" {
-		return hdb.sZen.getHost(pk)
-	}
-	if network == "mainnet" {
-		return hdb.s.getHost(pk)
-	}
-	panic("wrong network provided")
-}
-
-// Scans returns the host's scan history.
-func (hdb *HostDB) Scans(network string, pk types.PublicKey, from, to time.Time) (scans []HostScan, err error) {
-	if network == "zen" {
-		return hdb.sZen.getScans(pk, from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getScans(pk, from, to)
-	}
-	panic("wrong network provided")
-}
-
-// ScanHistory returns the host's scan history.
-func (hdb *HostDB) ScanHistory(network string, from, to time.Time) (history []ScanHistory, err error) {
-	if network == "zen" {
-		return hdb.sZen.getScanHistory(from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getScanHistory(from, to)
-	}
-	panic("wrong network provided")
-}
-
-// Benchmarks returns the host's benchmark history.
-func (hdb *HostDB) Benchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []HostBenchmark, err error) {
-	if network == "zen" {
-		return hdb.sZen.getBenchmarks(pk, from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getBenchmarks(pk, from, to)
-	}
-	panic("wrong network provided")
-}
-
-// BenchmarkHistory returns the host's benchmark history.
-func (hdb *HostDB) BenchmarkHistory(network string, from, to time.Time) (history []BenchmarkHistory, err error) {
-	if network == "zen" {
-		return hdb.sZen.getBenchmarkHistory(from, to)
-	}
-	if network == "mainnet" {
-		return hdb.s.getBenchmarkHistory(from, to)
-	}
-	panic("wrong network provided")
+// FinalizeUpdates updates the timestamps after the client confirms the data receipt.
+func (hdb *HostDB) FinalizeUpdates(id UpdateID) error {
+	return utils.ComposeErrors(hdb.s.finalizeUpdates(id), hdb.sZen.finalizeUpdates(id))
 }
 
 // Close shuts down HostDB.

@@ -105,7 +105,12 @@ func main() {
 	cache := newCache()
 	defer cache.close()
 
-	api := newAPI(s, db, apiToken, logger, cache)
+	api, err := newAPI(s, db, apiToken, logger, cache)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer api.close()
+
 	for key, node := range s.nodes {
 		api.clients[key] = client.NewClient(node.Address, node.Password)
 	}

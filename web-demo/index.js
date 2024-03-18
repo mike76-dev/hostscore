@@ -1,5 +1,5 @@
 const apiBaseURL = '/hostscore/api';
-var locations = ['EU'];//, 'US'];
+var locations = ['eu'];//, 'us'];
 var hosts = [];
 var moreHosts = false;
 var offset = 0;
@@ -19,8 +19,7 @@ function loadHosts() {
 	let query = document.getElementById('search-host').value;
 	hosts = [];
 	moreHosts = false;
-	let location = locations[0];
-	let url = '/hosts?location=' + location + '&network=' + network;
+	let url = '/hosts?network=' + network;
 	url += '&all=' + (all == 'all' ? 'true' : 'false');
 	url += '&offset=' + offset + '&limit=10';
 	if (query != '') url += '&query=' + query;
@@ -71,13 +70,18 @@ function renderHosts() {
 
 function isOnline(pk) {
 	let host = hosts.find(h => h.publicKey == pk);
-	if (host) {
-		if (!host.scanHistory) return false;
-		return host.scanHistory.length > 0 && host.scanHistory[0].success == true &&
-			((host.scanHistory.length > 1 && host.scanHistory[1].success == true) ||
-			host.scanHistory.length == 1);
+	let online = false;
+	if (host && host.interactions) {
+		locations.forEach(location => {
+			let int = host.interactions[location];
+			if (int && int.scanHistory && int.scanHistory.length > 0 && int.scanHistory[0].success == true &&
+				((int.scanHistory.length > 1 && int.scanHistory[1].success == true) ||
+				int.scanHistory.length == 1)) {
+				online = true
+			}
+		});
 	}
-	return false;
+	return online;
 }
 
 function prevHosts() {
@@ -113,19 +117,18 @@ function browseHost(obj) {
 	let benchmarks = [];
 	let from = new Date();
 	from.setDate(from.getDate() - 1);
-	locations.forEach(location => {
-		fetch(apiBaseURL + '/scans?location=' + location.toLowerCase() +
-			'&network=' + network +
-			'&host=' + key +
-			'&from=' + from.toISOString(), options)
-		.then(response => response.json())
-		.then(data => {
-			if (data.status != 'ok') console.log(data.message)
-			else {
+	fetch(apiBaseURL + '/scans?network=' + network +
+		'&host=' + key +
+		'&from=' + from.toISOString(), options)
+	.then(response => response.json())
+	.then(data => {
+		if (data.status != 'ok') console.log(data.message)
+		else {
+			locations.forEach(location => {
 				let average = 0;
 				let count = 0;
 				data.scans.forEach(scan => {
-					if (scan.success == true) {
+					if (scan.node == location && scan.success == true) {
 						average += scan.latency / 1e6;
 						count++;
 					}
@@ -141,27 +144,26 @@ function browseHost(obj) {
 					let row = '<tr><td>Latency</td>';
 					locations.forEach(loc => {
 						latency = latencies.find(l => l.location == loc);
-						header += '<th>' + latency.location + '</th>';
+						header += '<th>' + latency.location.toUpperCase() + '</th>';
 						row += '<td style="text-align:center">' + latency.latency + '</td>';
 					});
 					header += '</tr>';
 					row += '</tr>';
 					table.children[1].innerHTML = header + row;
-					locations.forEach(loc => {
-						fetch(apiBaseURL + '/benchmarks?location=' + loc.toLowerCase() +
-							'&network=' + network +
-							'&host=' + key +
-							'&from=' + from.toISOString(), options)
-						.then(response => response.json())
-						.then(data => {
-							if (data.status != 'ok') console.log(data.message)
-							else {
+					fetch(apiBaseURL + '/benchmarks?network=' + network +
+						'&host=' + key +
+						'&from=' + from.toISOString(), options)
+					.then(response => response.json())
+					.then(data => {
+						if (data.status != 'ok') console.log(data.message)
+						else {
+							locations.forEach(loc => {
 								let ul = 0;
 								let dl = 0;
 								let ttfb = 0;
 								let count = 0;
 								data.benchmarks.forEach(benchmark => {
-									if (benchmark.success == true) {
+									if (benchmark.node == loc && benchmark.success == true) {
 										ul += benchmark.uploadSpeed;
 										dl += benchmark.downloadSpeed;
 										ttfb += benchmark.ttfb / 1e9;
@@ -228,24 +230,36 @@ function browseHost(obj) {
 										list.children[0].innerHTML += '<tr>' + row + '</tr>';
 									}
 								}
-							}
-						})
-						.catch(error => console.log(error));
-					});
-					table.classList.remove('hidden');
-					list.classList.remove('hidden');
+							});
+						}
+					})
+					.catch(error => console.log(error));
 				}
-			}
-		})
-		.catch(error => console.log(error));
+				table.classList.remove('hidden');
+				list.classList.remove('hidden');
+			});
+		}
+	})
+	.catch(error => console.log(error));
+	let lastSeen = new Date('0001-01-01T00:00:00Z');
+	let uptime = 0;
+	let downtime = 0;
+	let activeHosts = 0;
+	if (host.interactions) locations.forEach(location => {
+		let date = new Date(host.interactions[location].lastSeen);
+		if (date > lastSeen) lastSeen = date;
+		uptime += host.interactions[location].uptime;
+		downtime += host.interactions[location].downtime;
+		let ah = host.interactions[location].activeHosts;
+		if (ah > activeHosts) activeHosts = ah;
 	});
 	document.getElementById('current-id').innerHTML = host.id;
 	document.getElementById('current-key').innerHTML = host.publicKey;
 	document.getElementById('current-address').innerHTML = host.netaddress;
 	document.getElementById('current-location').innerHTML = getFlagEmoji(host.country);
 	document.getElementById('current-first').innerHTML = new Date(host.firstSeen).toDateString();
-	document.getElementById('current-last').innerHTML = host.lastSeen == '0001-01-01T00:00:00Z' ? 'N/A' : new Date(host.lastSeen).toDateString();
-	document.getElementById('current-uptime').innerHTML = host.downtime + host.uptime == 0 ? '0%' : (host.uptime * 100 / (host.uptime + host.downtime)).toFixed(1) + '%';
+	document.getElementById('current-last').innerHTML = host.lastSeen == '0001-01-01T00:00:00Z' ? 'N/A' : lastSeen.toDateString();
+	document.getElementById('current-uptime').innerHTML = downtime + uptime == 0 ? '0%' : (uptime * 100 / (uptime + downtime)).toFixed(1) + '%';
 	document.getElementById('current-version').innerHTML = host.settings.version == '' ? 'N/A' : host.settings.version;
 	document.getElementById('current-accepting').innerHTML = host.settings.acceptingcontracts ? 'Yes' : 'No';
 	document.getElementById('current-duration').innerHTML = host.settings.maxduration == 0 ? 'N/A' : blocksToTime(host.settings.maxduration);
@@ -256,7 +270,7 @@ function browseHost(obj) {
 	document.getElementById('current-download-price').innerHTML = host.settings.downloadbandwidthprice == '0' ? '0 H/TB' : convertPrice(host.settings.downloadbandwidthprice + '0'.repeat(12)) + '/TB';
 	document.getElementById('current-total').innerHTML = convertSize(host.settings.totalstorage);
 	document.getElementById('current-remaining').innerHTML = convertSize(host.settings.remainingstorage);
-	document.getElementById('current-hosts').innerHTML = host.activeHosts;
+	document.getElementById('current-hosts').innerHTML = activeHosts;
 	document.getElementById('host').classList.remove('hidden');
 }
 

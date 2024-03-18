@@ -62,6 +62,8 @@ CREATE TABLE hdb_hosts_mainnet (
 	revision       BLOB,
 	settings       BLOB,
 	price_table    BLOB,
+	modified       BIGINT NOT NULL,
+	fetched        BIGINT NOT NULL,
 	PRIMARY KEY (id)
 );
 
@@ -74,6 +76,8 @@ CREATE TABLE hdb_scans_mainnet (
 	error        TEXT NOT NULL,
 	settings     BLOB,
 	price_table  BLOB,
+	modified     BIGINT NOT NULL,
+	fetched      BIGINT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
 );
@@ -87,6 +91,8 @@ CREATE TABLE hdb_benchmarks_mainnet (
 	download_speed DOUBLE NOT NULL,
 	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
+	modified       BIGINT NOT NULL,
+	fetched        BIGINT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_mainnet(public_key)
 );
@@ -111,6 +117,8 @@ CREATE TABLE hdb_hosts_zen (
 	revision       BLOB,
 	settings       BLOB,
 	price_table    BLOB,
+	modified       BIGINT NOT NULL,
+	fetched        BIGINT NOT NULL,
 	PRIMARY KEY (id)
 );
 
@@ -123,6 +131,8 @@ CREATE TABLE hdb_scans_zen (
 	error        TEXT NOT NULL,
 	settings     BLOB,
 	price_table  BLOB,
+	modified     BIGINT NOT NULL,
+	fetched      BIGINT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
 );
@@ -136,6 +146,8 @@ CREATE TABLE hdb_benchmarks_zen (
 	download_speed DOUBLE NOT NULL,
 	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
+	modified       BIGINT NOT NULL,
+	fetched        BIGINT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (public_key) REFERENCES hdb_hosts_zen(public_key)
 );
