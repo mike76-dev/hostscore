@@ -510,6 +510,11 @@ func (w *Wallet) Redistribute(network string, amount types.Currency, outputs int
 		// Not enough outputs found.
 		fee := feePerInput.Mul64(uint64(len(inputs))).Add(outputFees)
 		if sumOut := SumOutputs(inputs); sumOut.Cmp(want.Add(fee)) < 0 {
+			// If there is at least one transaction in the set, submit it.
+			if len(txns) > 0 {
+				break
+			}
+
 			// In case of an error we need to free all inputs.
 			w.releaseInputs(txns...)
 			return fmt.Errorf("network: %s: %w, inputs %v < needed %v + txnFee %v",

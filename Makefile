@@ -9,7 +9,7 @@ endif
 
 ldflags= \
 -X "github.com/mike76-dev/hostscore/internal/build.NodeBinaryName=hsd" \
--X "github.com/mike76-dev/hostscore/internal/build.NodeVersion=0.1.0" \
+-X "github.com/mike76-dev/hostscore/internal/build.NodeVersion=0.1.1" \
 -X "github.com/mike76-dev/hostscore/internal/build.ClientBinaryName=hsc" \
 -X "github.com/mike76-dev/hostscore/internal/build.ClientVersion=0.1.0" \
 -X "github.com/mike76-dev/hostscore/internal/build.GitRevision=${GIT_DIRTY}${GIT_REVISION}" \
