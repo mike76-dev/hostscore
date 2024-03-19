@@ -164,12 +164,14 @@ function browseHost(obj) {
 								let count = 0;
 								let items = [];
 								data.benchmarks.forEach(benchmark => {
-									if (benchmark.node == loc && benchmark.success == true) {
-										ul += benchmark.uploadSpeed;
-										dl += benchmark.downloadSpeed;
-										ttfb += benchmark.ttfb / 1e9;
-										count++;
+									if (benchmark.node == loc) {
 										items.push(benchmark);
+										if (benchmark.success == true) {
+											ul += benchmark.uploadSpeed;
+											dl += benchmark.downloadSpeed;
+											ttfb += benchmark.ttfb / 1e9;
+											count++;
+										}
 									}
 								});
 								if (count > 0) {
