@@ -1,0 +1,72 @@
+.status-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.status-container h1 {
+	font-size: 2rem;
+}
+
+.status-container-dark h1,
+.status-container-dark td,
+.status-container-dark th {
+	color: var(--textDark);
+}
+
+.status-container table {
+    margin-bottom: 2rem;
+    border-collapse: collapse;
+}
+
+.status-container table,
+.status-container tr,
+.status-container td,
+.status-container th {
+    border: 1px solid var(--borderLight);
+}
+
+.status-container-dark table,
+.status-container-dark tr,
+.status-container-dark td,
+.status-container-dark th {
+    border: 1px solid var(--borderDark);
+}
+
+.status-container td,
+.status-container th {
+    padding: 0.5rem;
+}
+
+.status-container td {
+    text-align: center;
+}
+
+.status-container th:first-child {
+    text-align: left;
+}
+
+.status {
+	width: 1rem;
+	height: 1rem;
+	border-radius: 50%;
+	margin: 0 auto;
+}
+
+.status-good {
+	background-color: green;
+}
+
+.status-medium {
+	background-color: orange;
+}
+
+.status-bad {
+	background-color: red;
+}
+
+@media screen and (max-width: 1000px) {
+	.status-container h1 {
+        text-align: center;
+		font-size: 1.5rem;
+	}
+}

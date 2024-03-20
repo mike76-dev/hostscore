@@ -14,6 +14,13 @@ export const Footer = (props: FooterProps) => {
 			>
 				About
 			</Link>
+            <Link
+				className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
+				to="/status"
+				tabIndex={1}
+			>
+				Status
+			</Link>
 			<a className="footer-link" tabIndex={1} href="https://sia.tech" target="_blank" rel="noreferrer">
 				<SiaLogo/>
 			</a>

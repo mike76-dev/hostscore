@@ -1,6 +1,7 @@
 import './NetworkSelector.css'
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useExcludedPaths } from '../../api'
 
 type NetworkSelectorProps = {
 	network: string,
@@ -11,12 +12,13 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	const location = useLocation()
 	const navigate = useNavigate()
 	const [network, switchNetwork] = useState(props.network)
+    const excludedPaths = useExcludedPaths()
 	useEffect(() => {
-		if (location.pathname === '/about') return
+		if (excludedPaths.includes(location.pathname)) return
 		if (location.pathname.indexOf('/zen') === 0) {
 			switchNetwork('zen')
 		} else switchNetwork('mainnet')
-	}, [location])
+	}, [location, excludedPaths])
 	useEffect(() => {
 		switchNetwork(props.network)
 	}, [props.network])

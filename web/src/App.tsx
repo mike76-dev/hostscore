@@ -10,9 +10,10 @@ import {
     Content,
     About,
     Hosts,
-    HostDetails
+    HostDetails,
+    Status
 } from './components'
-import { Host } from './api'
+import { Host, useExcludedPaths } from './api'
 import { NetworkContext, HostContext } from './contexts'
 
 const App = () => {
@@ -21,17 +22,18 @@ const App = () => {
 	const [darkMode, toggleDarkMode] = useState(mode)
 	const [network, switchNetwork] = useState('')
 	const [hosts, setHosts] = useState<Host[]>([])
+    const excludedPaths = useExcludedPaths()
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
 	}, [darkMode])
 	useEffect(() => {
-		if (window.location.pathname === '/about') return
+		if (excludedPaths.includes(window.location.pathname)) return
 		if (window.location.pathname.indexOf('/zen') === 0) {
 			switchNetwork('zen')
 		} else {
 			switchNetwork('mainnet')
 		}
-	}, [])
+	}, [excludedPaths])
 	const router = createBrowserRouter([
 		{
 			element: <Outlet/>,
@@ -120,6 +122,21 @@ const App = () => {
 							/>
 							<Content darkMode={darkMode}>
 								<About darkMode={darkMode}/>
+							</Content>
+							<Footer darkMode={darkMode}/>
+						</>
+					),
+				},
+                {
+					path: 'status',
+					element: (
+						<>
+							<Header
+								darkMode={darkMode}
+								toggleDarkMode={toggleDarkMode}
+							/>
+							<Content darkMode={darkMode}>
+								<Status darkMode={darkMode}/>
 							</Content>
 							<Footer darkMode={darkMode}/>
 						</>

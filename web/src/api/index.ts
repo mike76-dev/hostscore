@@ -1,10 +1,12 @@
 import axios from 'axios'
-import { Host } from './types'
+import { Host, NodeStatus } from './types'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
 const locations = ['eu', 'us']
+const excludedPaths = ['/about', '/status']
 
 export const useLocations = () => (locations)
+export const useExcludedPaths = () => (excludedPaths)
 
 const instance = axios.create({
 	baseURL: apiBaseURL,
@@ -35,6 +37,13 @@ export const getHost = async (
 	publicKey: string
 ): Promise<{ status: string, message: string, host?: Host }> => {
 	const url = '/host?network=' + network + '&host=' + publicKey
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getStatus = async (): Promise<{ status: string, message: string, version: string, nodes: NodeStatus[] }> => {
+	const url = '/status'
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

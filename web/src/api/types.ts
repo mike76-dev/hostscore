@@ -113,3 +113,13 @@ export type Host = {
 	postal: string,
 	timezone: string
 }
+
+export type NodeStatus = {
+	location: string,
+	status: boolean,
+	version: string,
+	heightMainnet: number,
+	heightZen: number,
+	balanceMainnet: string,
+	balanceZen: string
+}
