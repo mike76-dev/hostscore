@@ -1,0 +1,31 @@
+.node-selector-container {
+    margin-bottom: 0.5rem;
+}
+
+.node-selector-text {
+    margin-right: 0.5rem;
+}
+
+.node-selector-dark .node-selector-text {
+    color: var(--textDark);
+}
+
+.node-selector-select {
+	height: 1.5rem;
+	border-radius: 0.25rem;
+}
+
+.node-selector-select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.node-selector-dark .node-selector-select {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+}
+
+.node-selector-dark .node-selector-select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}
