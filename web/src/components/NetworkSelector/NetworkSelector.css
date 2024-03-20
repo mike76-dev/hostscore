@@ -21,6 +21,10 @@
     white-space: nowrap;
 }
 
+.network-selector-dark .network-selector-text {
+    color: var(--textDark);
+}
+
 @media screen and (max-width: 1000px) {
 	.network-selector-container {
 		margin: 0 0.5rem;
