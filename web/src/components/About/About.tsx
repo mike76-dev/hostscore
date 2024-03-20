@@ -1,11 +1,11 @@
-import './index.css'
+import './About.css'
 import { useNavigate } from 'react-router-dom'
-import Button from '../Button'
+import { Button } from '../'
 import Back from '../../assets/back.png'
 
 type AboutProps = { darkMode: boolean }
 
-const About = (props: AboutProps) => {
+export const About = (props: AboutProps) => {
 	const navigate = useNavigate()
 	return (
 		<div className={'about-container' + (props.darkMode ? ' about-container-dark' : '')}>
@@ -40,5 +40,3 @@ const About = (props: AboutProps) => {
 		</div>
 	)
 }
-
-export default About

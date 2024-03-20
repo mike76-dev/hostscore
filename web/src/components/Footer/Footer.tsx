@@ -1,10 +1,10 @@
-import './index.css'
+import './Footer.css'
 import { ReactComponent as SiaLogo } from '../../assets/built-with-sia.svg'
 import { Link } from 'react-router-dom'
 
 type FooterProps = { darkMode: boolean }
 
-const Footer = (props: FooterProps) => {
+export const Footer = (props: FooterProps) => {
 	return (
 		<div className={'footer-container' + (props.darkMode ? ' footer-dark-mode' : '')}>
 			<Link
@@ -20,5 +20,3 @@ const Footer = (props: FooterProps) => {
 		</div>
 	)
 }
-
-export default Footer

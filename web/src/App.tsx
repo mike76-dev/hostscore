@@ -4,12 +4,14 @@ import {
 	RouterProvider,
 	Outlet
 } from 'react-router-dom'
-import Header from './components/Header'
-import Footer from './components/Footer'
-import Content from './components/Content'
-import About from './components/About'
-import Hosts from './components/Hosts'
-import HostDetails from './components/HostDetails'
+import {
+    Header,
+    Footer,
+    Content,
+    About,
+    Hosts,
+    HostDetails
+} from './components'
 import { Host } from './api'
 import { NetworkContext, HostContext } from './contexts'
 

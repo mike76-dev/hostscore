@@ -1,4 +1,4 @@
-import './index.css'
+import './Button.css'
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 	icon?: string,
@@ -6,7 +6,7 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 	darkMode: boolean,
 }
 
-const Button = (props: ButtonProps) => {
+export const Button = (props: ButtonProps) => {
 	const { icon, caption, darkMode, ...buttonProps } = props
 	return (
 		<button
@@ -21,5 +21,3 @@ const Button = (props: ButtonProps) => {
 		</button>
 	)
 }
-
-export default Button

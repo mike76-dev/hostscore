@@ -1,4 +1,4 @@
-import './index.css'
+import './HostInfo.css'
 import {
 	Host,
 	getFlagEmoji,
@@ -21,7 +21,7 @@ type Interactions = {
 	activeHosts: number,
 }
 
-const HostInfo = (props: HostInfoProps) => {
+export const HostInfo = (props: HostInfoProps) => {
 	const locations = useLocations()
 	const interactions = (): Interactions => {
 		let ls = new Date('0001-01-01T00:00:00Z')
@@ -81,5 +81,3 @@ const HostInfo = (props: HostInfoProps) => {
 		</div>
 	)
 }
-
-export default HostInfo

@@ -1,4 +1,4 @@
-import './index.css'
+import './NetworkSelector.css'
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -7,7 +7,7 @@ type NetworkSelectorProps = {
 	switchNetwork: (network: string) => any,
 }
 
-const NetworkSelector = (props: NetworkSelectorProps) => {
+export const NetworkSelector = (props: NetworkSelectorProps) => {
 	const location = useLocation()
 	const navigate = useNavigate()
 	const [network, switchNetwork] = useState(props.network)
@@ -37,5 +37,3 @@ const NetworkSelector = (props: NetworkSelectorProps) => {
 		</div>
 	)
 }
-
-export default NetworkSelector

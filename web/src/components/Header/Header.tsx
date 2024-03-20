@@ -1,7 +1,5 @@
-import './index.css'
-import Logo from '../Logo'
-import ModeSelector from '../ModeSelector'
-import NetworkSelector from '../NetworkSelector'
+import './Header.css'
+import { Logo, ModeSelector, NetworkSelector } from '../'
 import { useContext } from 'react'
 import { NetworkContext } from '../../contexts'
 
@@ -10,7 +8,7 @@ type HeaderProps = {
 	toggleDarkMode: (mode: boolean) => any,
 }
 
-const Header = (props: HeaderProps) => {
+export const Header = (props: HeaderProps) => {
 	const { network, switchNetwork } = useContext(NetworkContext)
 	return (
 		<div className={'header-container' + (props.darkMode ? ' header-dark-mode' : '')}>
@@ -26,5 +24,3 @@ const Header = (props: HeaderProps) => {
 		</div>
 	)
 }
-
-export default Header

@@ -1,4 +1,4 @@
-import './index.css'
+import './HostSelector.css'
 
 type HostSelectorProps = {
 	value: string,
@@ -6,7 +6,7 @@ type HostSelectorProps = {
 	darkMode: boolean
 }
 
-const HostSelector = (props: HostSelectorProps) => {
+export const HostSelector = (props: HostSelectorProps) => {
 	return (
 		<div className="host-selector-container">
 			<label className={props.darkMode ? 'host-selector-dark' : ''}>
@@ -26,5 +26,3 @@ const HostSelector = (props: HostSelectorProps) => {
 		</div>
 	)
 }
-
-export default HostSelector

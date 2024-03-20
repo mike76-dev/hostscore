@@ -1,4 +1,4 @@
-import './index.css'
+import './HostNavigation.css'
 import React from 'react'
 
 type HostNavigationProps = {
@@ -10,7 +10,7 @@ type HostNavigationProps = {
 	changeLimit: (limit: number) => any
 }
 
-const HostNavigation = (props: HostNavigationProps) => {
+export const HostNavigation = (props: HostNavigationProps) => {
 	const first = () => {props.changeOffset(0)}
 	const prev = () => {props.changeOffset(props.offset - props.limit)}
 	const next = () => {props.changeOffset(props.offset + props.limit)}
@@ -78,5 +78,3 @@ const HostNavigation = (props: HostNavigationProps) => {
 		</div>
 	)
 }
-
-export default HostNavigation

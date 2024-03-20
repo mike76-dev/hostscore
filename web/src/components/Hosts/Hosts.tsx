@@ -1,10 +1,12 @@
-import './index.css'
+import './Hosts.css'
 import { useState, useEffect } from 'react'
-import HostSelector from '../HostSelector'
-import HostSearch from '../HostSearch'
-import HostNavigation from '../HostNavigation'
-import HostsTable from '../HostsTable'
-import Loader from '../Loader'
+import {
+    HostSelector,
+    HostSearch,
+    HostNavigation,
+    HostsTable,
+    Loader
+} from '../'
 import { Host, getHosts } from '../../api'
 
 type HostsProps = {
@@ -13,7 +15,7 @@ type HostsProps = {
 	setHosts: (hosts: Host[]) => any,
 }
 
-const Hosts = (props: HostsProps) => {
+export const Hosts = (props: HostsProps) => {
 	const [onlineOnly, setOnlineOnly] = useState(true)
 	const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
 	const [query, setQuery] = useState('')
@@ -73,5 +75,3 @@ const Hosts = (props: HostsProps) => {
 		</div>
 	)
 }
-
-export default Hosts

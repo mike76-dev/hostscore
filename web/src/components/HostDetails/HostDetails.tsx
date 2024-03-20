@@ -1,16 +1,15 @@
-import './index.css'
+import './HostDetails.css'
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router'
 import { Host, getHost, stripePrefix } from '../../api'
-import HostInfo from '../HostInfo'
-import Loader from '../Loader'
+import { HostInfo, Loader } from '../'
 
 type HostDetailsProps = {
 	darkMode: boolean,
 	hosts: Host[]
 }
 
-const HostDetails = (props: HostDetailsProps) => {
+export const HostDetails = (props: HostDetailsProps) => {
 	const { publicKey } = useParams()
 	const [host, setHost] = useState<Host>()
 	const { hosts } = props
@@ -46,5 +45,3 @@ const HostDetails = (props: HostDetailsProps) => {
 		</div>
 	)
 }
-
-export default HostDetails

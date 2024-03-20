@@ -1,4 +1,4 @@
-import './index.css'
+import './ModeSelector.css'
 import { useState, useEffect } from 'react'
 import darkMode from '../../assets/dark_mode.png'
 import lightMode from '../../assets/light_mode.png'
@@ -8,7 +8,7 @@ type ModeSelectorProps = {
 	toggleDarkMode: (mode: boolean) => any,
 }
 
-const ModeSelector = (props: ModeSelectorProps) => {
+export const ModeSelector = (props: ModeSelectorProps) => {
 	const [mode, toggleDarkMode] = useState(props.darkMode)
 	useEffect(() => {
 		toggleDarkMode(props.darkMode)
@@ -37,5 +37,3 @@ const ModeSelector = (props: ModeSelectorProps) => {
 		</a>
 	)
 }
-
-export default ModeSelector

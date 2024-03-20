@@ -1,7 +1,7 @@
-import './index.css'
+import './HostsTable.css'
 import { Link } from 'react-router-dom'
 import { Host, stripePrefix, useLocations } from '../../api'
-import Tooltip from '../Tooltip'
+import { Tooltip } from '../'
 
 type HostsTableProps = {
 	darkMode: boolean,
@@ -25,7 +25,7 @@ const StatusTooltip = () => (
 	</div>
 )
 
-const HostsTable = (props: HostsTableProps) => {
+export const HostsTable = (props: HostsTableProps) => {
 	const newLocation = (host: Host) => {
 		let href = window.location.href
 		if (href[href.length - 1] === '/') {
@@ -85,5 +85,3 @@ const HostsTable = (props: HostsTableProps) => {
 		</div>
 	)
 }
-
-export default HostsTable

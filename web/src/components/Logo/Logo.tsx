@@ -1,7 +1,7 @@
-import './index.css'
+import './Logo.css'
 import logo from '../../assets/logo.png'
 
-const Logo = () => {
+export const Logo = () => {
 	return (
 		<a className="logo-link" href="/" tabIndex={1}>
 			<div className="logo-container">
@@ -11,5 +11,3 @@ const Logo = () => {
 		</a>
 	)
 }
-
-export default Logo

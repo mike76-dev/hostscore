@@ -1,4 +1,4 @@
-import './index.css'
+import './HostSearch.css'
 
 type HostSearchProps = {
 	darkMode: boolean,
@@ -6,7 +6,7 @@ type HostSearchProps = {
 	onChange: (value: string) => any
 }
 
-const HostSearch = (props: HostSearchProps) => {
+export const HostSearch = (props: HostSearchProps) => {
 	return (
 		<div className="host-search-container">
 			<label className={props.darkMode ? 'host-search-dark' : ''}>
@@ -24,5 +24,3 @@ const HostSearch = (props: HostSearchProps) => {
 		</div>
 	)
 }
-
-export default HostSearch
