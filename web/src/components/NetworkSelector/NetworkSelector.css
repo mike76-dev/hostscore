@@ -1,5 +1,6 @@
 .network-selector-container {
 	margin: 0 1rem;
+    position: relative;
 }
 
 .network-selector-select {
@@ -10,6 +11,14 @@
 .network-selector-select:focus {
 	border: 1px solid transparent;
 	outline: 2px solid var(--outlineLight);
+}
+
+.network-selector-text {
+    position: absolute;
+    right: 0;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    white-space: nowrap;
 }
 
 @media screen and (max-width: 1000px) {

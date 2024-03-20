@@ -1,7 +1,7 @@
 import './NetworkSelector.css'
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useExcludedPaths } from '../../api'
+import { useExcludedPaths, getOnlineHosts } from '../../api'
 
 type NetworkSelectorProps = {
 	network: string,
@@ -13,6 +13,7 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	const navigate = useNavigate()
 	const [network, switchNetwork] = useState(props.network)
     const excludedPaths = useExcludedPaths()
+    const [onlineHosts, setOnlineHosts] = useState(0)
 	useEffect(() => {
 		if (excludedPaths.includes(location.pathname)) return
 		if (location.pathname.indexOf('/zen') === 0) {
@@ -22,6 +23,13 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	useEffect(() => {
 		switchNetwork(props.network)
 	}, [props.network])
+    useEffect(() => {
+        if (network === '') return
+        getOnlineHosts(network)
+        .then(data => {
+            if (data && data.status === 'ok') setOnlineHosts(data.onlineHosts)
+        })
+    }, [network])
 	return (
 		<div className="network-selector-container">
 			<select
@@ -36,6 +44,9 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 				<option value="mainnet">Mainnet</option>
 				<option value="zen">Zen</option>
 			</select>
+            <div className="network-selector-text">
+                Online hosts: {onlineHosts}
+            </div>
 		</div>
 	)
 }

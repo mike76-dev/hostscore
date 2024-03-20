@@ -24,3 +24,9 @@
 	border: 1px solid transparent;
 	outline: 2px solid var(--outlineDark);
 }
+
+@media screen and (max-width: 1000px) {
+    .header-container {
+        padding-bottom: 0.75rem;
+    }
+}

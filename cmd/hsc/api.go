@@ -40,6 +40,11 @@ type hostsResponse struct {
 	Total int          `json:"total"`
 }
 
+type onlineHostsResponse struct {
+	APIResponse
+	OnlineHosts int `json:"onlineHosts"`
+}
+
 type scansResponse struct {
 	APIResponse
 	PublicKey types.PublicKey      `json:"publicKey"`
@@ -183,6 +188,9 @@ func (api *portalAPI) buildHTTPRoutes() {
 	})
 	router.GET("/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHandler(w, req, ps)
+	})
+	router.GET("/hosts/online", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.onlineHostsHandler(w, req, ps)
 	})
 	router.GET("/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.scansHandler(w, req, ps)
@@ -519,6 +527,37 @@ func (api *portalAPI) statusHandler(w http.ResponseWriter, _ *http.Request, _ ht
 		APIResponse: APIResponse{Status: "ok"},
 		Version:     build.ClientVersion,
 		Nodes:       nodes,
+	})
+}
+
+func (api *portalAPI) onlineHostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	network := strings.ToLower(req.FormValue("network"))
+	if network == "" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "network not provided",
+		})
+		return
+	}
+	var count int
+	api.mu.RLock()
+	if network == "mainnet" {
+		for _, host := range api.hosts {
+			if api.isOnline(*host) {
+				count++
+			}
+		}
+	} else if network == "zen" {
+		for _, host := range api.hostsZen {
+			if api.isOnline(*host) {
+				count++
+			}
+		}
+	}
+	api.mu.RUnlock()
+	writeJSON(w, onlineHostsResponse{
+		APIResponse: APIResponse{Status: "ok"},
+		OnlineHosts: count,
 	})
 }
 

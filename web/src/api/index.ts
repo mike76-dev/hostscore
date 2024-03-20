@@ -42,8 +42,17 @@ export const getHost = async (
 	.catch(error => console.log(error))
 }
 
-export const getStatus = async (): Promise<{ status: string, message: string, version: string, nodes: NodeStatus[] }> => {
+export const getStatus = async ():
+	Promise<{ status: string, message: string, version: string, nodes: NodeStatus[] }> => {
 	const url = '/status'
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getOnlineHosts = async (network: string):
+	Promise<{ status: string, message: string, onlineHosts: number }> => {
+	const url = '/hosts/online?network=' + network
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))
