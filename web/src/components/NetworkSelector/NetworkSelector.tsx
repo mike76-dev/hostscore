@@ -19,7 +19,7 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	useEffect((): any => {
 		const interval = setInterval(() => {
 			setTime(new Date())
-		}, 60000)
+		}, 600000)
 		return () => clearInterval(interval)
 	}, [])
 	useEffect(() => {
