@@ -38,6 +38,7 @@ const HostDetails = (props: HostDetailsProps) => {
 				<HostInfo
 					darkMode={props.darkMode}
 					host={host}
+                    node='global'
 				/>
 			:
 				<div className="host-not-found">Host Not Found</div>

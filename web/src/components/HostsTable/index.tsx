@@ -1,6 +1,6 @@
 import './index.css'
 import { Link } from 'react-router-dom'
-import { Host, stripePrefix } from '../../api'
+import { Host, stripePrefix, useLocations } from '../../api'
 import Tooltip from '../Tooltip'
 
 type HostsTableProps = {
@@ -33,9 +33,21 @@ const HostsTable = (props: HostsTableProps) => {
 		}
 		return href + '/host/' + stripePrefix(host.publicKey)
 	}
+	const locations = useLocations()
 	const hostStatus = (host: Host) => {
-		if (host.scanHistory.length === 0 || host.scanHistory[0].success === false ||
-			(host.scanHistory.length > 1 && host.scanHistory[1].success === false)) return 'bad'
+		let online = false
+		if (host.interactions) {
+			locations.forEach(location => {
+				let int = host.interactions[location]
+				if (!int) return
+				if (int.scanHistory.length > 0 && int.scanHistory[0].success === true &&
+					((int.scanHistory.length > 1 && int.scanHistory[1].success === true) ||
+					int.scanHistory.length === 1)) {
+					online = true
+				}
+			})
+		}
+		if (!online) return 'bad'
 		if (host.settings.acceptingcontracts === false) return 'medium'
 		return 'good'
 	}

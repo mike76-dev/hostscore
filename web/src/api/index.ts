@@ -2,7 +2,7 @@ import axios from 'axios'
 import { Host } from './types'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
-const locations = ['EU']
+const locations = ['eu', 'us']
 
 export const useLocations = () => (locations)
 
@@ -21,9 +21,7 @@ export const getHosts = async (
 	limit: number,
 	query: string
 ): Promise<{ status: string, message: string, hosts?: Host[], more: boolean, total: number }> => {
-	const location = locations[0]
-	const url = '/hosts?location=' +
-		location + '&network=' + network +
+	const url = '/hosts?network=' + network +
 		'&all=' + (all ? 'true' : 'false') +
 		'&offset=' + offset + '&limit=' + limit +
 		'&query=' + query
@@ -36,10 +34,7 @@ export const getHost = async (
 	network: string,
 	publicKey: string
 ): Promise<{ status: string, message: string, host?: Host }> => {
-	const location = locations[0]
-	const url = '/host?location=' +
-		location + '&network=' + network +
-		'&host=' + publicKey
+	const url = '/host?network=' + network + '&host=' + publicKey
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))
