@@ -1,0 +1,69 @@
+.host-results-container {
+    display: flex;
+	flex-direction: column;
+	max-width: 100vw;
+	overflow: auto;
+    margin-left: 1rem;
+    margin-top: 2rem;
+    position: relative;
+}
+
+.host-results-table {
+	border: 1px solid var(--borderLight);
+	padding: 0.25rem;
+	font-size: 0.9rem;
+}
+
+.host-benchmarks-table {
+    margin-top: 1rem;
+	border: 1px solid var(--borderLight);
+	font-size: 0.9rem;
+    border-collapse: collapse;
+}
+
+.host-results-table tr > td {
+	padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    text-align: center;
+}
+
+.host-results-table tr > td:first-child {
+	min-width: 6rem;
+    padding-left: 0;
+    padding-right: 0;
+    text-align: left;
+}
+
+.host-benchmarks-table tr > td,
+.host-benchmarks-table tr > th {
+    border-right: 1px solid var(--borderLight);
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.host-benchmarks-table tr:first-child > th {
+    padding-top: 0.5rem;
+}
+
+.host-benchmarks-table tr:last-child > td {
+    padding-bottom: 0.5rem;
+}
+
+.host-results-dark table {
+	color: var(--textDark);
+	border-color: var(--borderDark);
+}
+
+.host-results-dark .host-benchmarks-table td,
+.host-results-dark .host-benchmarks-table th {
+	border-right: 1px solid var(--borderDark);
+}
+
+@media screen and (max-width: 1000px) {
+    .host-results-container {
+        margin-left: 0;
+        margin-top: 1rem;
+    }
+}

@@ -66,7 +66,10 @@ export type HostScan = {
 	latency: number,
 	error: string,
 	settings: HostSettings,
-	priceTable: HostPriceTable
+	priceTable: HostPriceTable,
+	publicKey: string,
+	network: string,
+	node: string
 }
 
 export type HostBenchmark = {
@@ -75,14 +78,16 @@ export type HostBenchmark = {
 	error: string,
 	uploadSpeed: number,
 	downloadSpeed: number,
-	ttfb: number
+	ttfb: number,
+	publicKey: string,
+	network: string,
+	node: string
 }
 
 export type HostInteractions = {
 	uptime: number,
 	downtime: number,
 	scanHistory: HostScan[],
-	lastBenchmark: HostBenchmark,
 	lastSeen: string,
 	activeHosts: number,
 	historicSuccessfulInteractions: number,

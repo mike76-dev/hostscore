@@ -117,9 +117,8 @@ function browseHost(obj) {
 	let benchmarks = [];
 	let from = new Date();
 	from.setDate(from.getDate() - 1);
-	fetch(apiBaseURL + '/scans?network=' + network +
-		'&host=' + key +
-		'&from=' + from.toISOString(), options)
+	fetch(apiBaseURL + '/scans?network=' + network + '&host=' + key +
+		'&number=48&success=true', options)
 	.then(response => response.json())
 	.then(data => {
 		if (data.status != 'ok') console.log(data.message)
@@ -127,7 +126,7 @@ function browseHost(obj) {
 			locations.forEach(location => {
 				let average = 0;
 				let count = 0;
-				data.scans.forEach(scan => {
+				if (data.scans) data.scans.forEach(scan => {
 					if (scan.node == location && scan.success == true) {
 						average += scan.latency / 1e6;
 						count++;
@@ -151,8 +150,7 @@ function browseHost(obj) {
 					row += '</tr>';
 					table.children[1].innerHTML = header + row;
 					fetch(apiBaseURL + '/benchmarks?network=' + network +
-						'&host=' + key +
-						'&from=' + from.toISOString(), options)
+						'&host=' + key + '&number=12', options)
 					.then(response => response.json())
 					.then(data => {
 						if (data.status != 'ok') console.log(data.message)
@@ -163,7 +161,7 @@ function browseHost(obj) {
 								let ttfb = 0;
 								let count = 0;
 								let items = [];
-								data.benchmarks.forEach(benchmark => {
+								if (data.benchmarks) data.benchmarks.forEach(benchmark => {
 									if (benchmark.node == loc) {
 										items.push(benchmark);
 										if (benchmark.success == true) {
