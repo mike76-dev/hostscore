@@ -32,12 +32,14 @@ type cachedHosts struct {
 }
 
 type cachedScans struct {
-	scans     []hostdb.ScanHistory
-	network   string
-	publicKey types.PublicKey
-	from      time.Time
-	to        time.Time
-	modified  time.Time
+	scans      []hostdb.ScanHistory
+	network    string
+	publicKey  types.PublicKey
+	from       time.Time
+	to         time.Time
+	number     int
+	successful bool
+	modified   time.Time
 }
 
 type cachedBenchmarks struct {
@@ -46,6 +48,8 @@ type cachedBenchmarks struct {
 	publicKey  types.PublicKey
 	from       time.Time
 	to         time.Time
+	number     int
+	successful bool
 	modified   time.Time
 }
 
@@ -176,11 +180,11 @@ func (rc *responseCache) putHosts(network string, all bool, offset, limit int, q
 	}
 }
 
-func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to time.Time) (scans []hostdb.ScanHistory, ok bool) {
+func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []hostdb.ScanHistory, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, cs := range rc.scans {
-		if cs.network == network && cs.publicKey == pk && math.Abs(from.Sub(cs.from).Seconds()) < float64(scansExpireThreshold) && math.Abs(to.Sub(cs.to).Seconds()) < float64(scansExpireThreshold) && time.Since(cs.modified) < scansExpireThreshold {
+		if cs.network == network && cs.publicKey == pk && cs.number == num && cs.successful == successful && math.Abs(from.Sub(cs.from).Seconds()) < float64(scansExpireThreshold) && math.Abs(to.Sub(cs.to).Seconds()) < float64(scansExpireThreshold) && time.Since(cs.modified) < scansExpireThreshold {
 			scans = cs.scans
 			ok = true
 			return
@@ -189,27 +193,29 @@ func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to t
 	return
 }
 
-func (rc *responseCache) putScans(network string, pk types.PublicKey, from, to time.Time, scans []hostdb.ScanHistory) {
+func (rc *responseCache) putScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool, scans []hostdb.ScanHistory) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.scans = append(rc.scans, cachedScans{
-		scans:     scans,
-		network:   network,
-		publicKey: pk,
-		from:      from,
-		to:        to,
-		modified:  time.Now(),
+		scans:      scans,
+		network:    network,
+		publicKey:  pk,
+		from:       from,
+		to:         to,
+		number:     num,
+		successful: successful,
+		modified:   time.Now(),
 	})
 	if len(rc.scans) > scansRequestsLimit {
 		rc.scans = rc.scans[1:]
 	}
 }
 
-func (rc *responseCache) getBenchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []hostdb.BenchmarkHistory, ok bool) {
+func (rc *responseCache) getBenchmarks(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (benchmarks []hostdb.BenchmarkHistory, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, cb := range rc.benchmarks {
-		if cb.network == network && cb.publicKey == pk && math.Abs(from.Sub(cb.from).Seconds()) < float64(benchmarksExpireThreshold) && math.Abs(to.Sub(cb.to).Seconds()) < float64(benchmarksExpireThreshold) && time.Since(cb.modified) < benchmarksExpireThreshold {
+		if cb.network == network && cb.publicKey == pk && cb.number == num && cb.successful == successful && math.Abs(from.Sub(cb.from).Seconds()) < float64(benchmarksExpireThreshold) && math.Abs(to.Sub(cb.to).Seconds()) < float64(benchmarksExpireThreshold) && time.Since(cb.modified) < benchmarksExpireThreshold {
 			benchmarks = cb.benchmarks
 			ok = true
 			return
@@ -218,7 +224,7 @@ func (rc *responseCache) getBenchmarks(network string, pk types.PublicKey, from,
 	return
 }
 
-func (rc *responseCache) putBenchmarks(network string, pk types.PublicKey, from, to time.Time, benchmarks []hostdb.BenchmarkHistory) {
+func (rc *responseCache) putBenchmarks(network string, pk types.PublicKey, from, to time.Time, num int, successful bool, benchmarks []hostdb.BenchmarkHistory) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.benchmarks = append(rc.benchmarks, cachedBenchmarks{
@@ -227,6 +233,8 @@ func (rc *responseCache) putBenchmarks(network string, pk types.PublicKey, from,
 		publicKey:  pk,
 		from:       from,
 		to:         to,
+		number:     num,
+		successful: successful,
 		modified:   time.Now(),
 	})
 	if len(rc.benchmarks) > benchmarksRequestsLimit {

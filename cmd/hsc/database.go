@@ -210,12 +210,11 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.Settings = h.Settings
 			host.PriceTable = h.PriceTable
 			interactions := nodeInteractions{
-				Uptime:        h.Uptime,
-				Downtime:      h.Downtime,
-				ScanHistory:   h.ScanHistory,
-				LastBenchmark: h.LastBenchmark,
-				LastSeen:      h.LastSeen,
-				ActiveHosts:   h.ActiveHosts,
+				Uptime:      h.Uptime,
+				Downtime:    h.Downtime,
+				ScanHistory: h.ScanHistory,
+				LastSeen:    h.LastSeen,
+				ActiveHosts: h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -240,12 +239,11 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				PriceTable:   h.PriceTable,
 			}
 			host.Interactions[node] = nodeInteractions{
-				Uptime:        h.Uptime,
-				Downtime:      h.Downtime,
-				ScanHistory:   h.ScanHistory,
-				LastBenchmark: h.LastBenchmark,
-				LastSeen:      h.LastSeen,
-				ActiveHosts:   h.ActiveHosts,
+				Uptime:      h.Uptime,
+				Downtime:    h.Downtime,
+				ScanHistory: h.ScanHistory,
+				LastSeen:    h.LastSeen,
+				ActiveHosts: h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -524,13 +522,13 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 					return nil, false, 0, utils.AddContext(err, "couldn't query scan history")
 				}
 
-				for rows.Next() {
+				for scanRows.Next() {
 					var ra int64
 					var success bool
 					var latency float64
 					var msg string
 					var settings, pt []byte
-					if err := rows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
+					if err := scanRows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
 						scanRows.Close()
 						rows.Close()
 						return nil, false, 0, utils.AddContext(err, "couldn't decode scan history")
@@ -562,34 +560,6 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 					interactions.ScanHistory = append([]hostdb.HostScan{scan}, interactions.ScanHistory...)
 				}
 				scanRows.Close()
-
-				var ra int64
-				var success bool
-				var ul, dl, ttfb float64
-				var msg string
-				err = api.db.QueryRow(`
-					SELECT ran_at, success, upload_speed, download_speed, ttfb, error
-					FROM benchmarks
-					WHERE network = ?
-					AND public_key = ?
-					AND node = ?
-					ORDER BY ran_at DESC
-					LIMIT 1
-				`, network, hosts[i].PublicKey[:], node).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					return nil, false, 0, utils.AddContext(err, "couldn't query benchmark history")
-				}
-				if err == nil {
-					interactions.LastBenchmark = hostdb.HostBenchmark{
-						Timestamp:     time.Unix(ra, 0),
-						Success:       success,
-						UploadSpeed:   ul,
-						DownloadSpeed: dl,
-						TTFB:          time.Duration(ttfb) * time.Millisecond,
-						Error:         msg,
-					}
-				}
-
 				hosts[i].Interactions[node] = interactions
 			}
 			rows.Close()
@@ -747,9 +717,12 @@ func (api *portalAPI) saveLocation(pk types.PublicKey, info external.IPInfo) err
 }
 
 // getScans returns the scan history according to the criteria provided.
-func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time.Time) (scans []hostdb.ScanHistory, err error) {
+func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []hostdb.ScanHistory, err error) {
 	if to.IsZero() {
 		to = time.Now()
+	}
+	if num < 0 {
+		num = 0
 	}
 
 	rows, err := api.db.Query(`
@@ -759,12 +732,16 @@ func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time
 		AND public_key = ?
 		AND ran_at > ?
 		AND ran_at < ?
+		AND (? OR success = TRUE)
 		ORDER BY ran_at DESC
+		LIMIT ?
 	`,
 		network,
 		pk[:],
 		from.Unix(),
 		to.Unix(),
+		!successful,
+		num,
 	)
 	if err != nil {
 		return nil, utils.AddContext(err, "couldn't query scan history")
@@ -812,9 +789,12 @@ func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time
 }
 
 // getBenchmarks returns the benchmark history according to the criteria provided.
-func (api *portalAPI) getBenchmarks(network string, pk types.PublicKey, from, to time.Time) (benchmarks []hostdb.BenchmarkHistory, err error) {
+func (api *portalAPI) getBenchmarks(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (benchmarks []hostdb.BenchmarkHistory, err error) {
 	if to.IsZero() {
 		to = time.Now()
+	}
+	if num < 0 {
+		num = 0
 	}
 
 	rows, err := api.db.Query(`
@@ -824,12 +804,16 @@ func (api *portalAPI) getBenchmarks(network string, pk types.PublicKey, from, to
 		AND public_key = ?
 		AND ran_at > ?
 		AND ran_at < ?
+		AND (? OR success = TRUE)
 		ORDER BY ran_at DESC
+		LIMIT ?
 	`,
 		network,
 		pk[:],
 		from.Unix(),
 		to.Unix(),
+		!successful,
+		num,
 	)
 	if err != nil {
 		return nil, utils.AddContext(err, "couldn't query benchmark history")
@@ -865,6 +849,91 @@ func (api *portalAPI) getBenchmarks(network string, pk types.PublicKey, from, to
 
 // load loads the online hosts map from the database.
 func (api *portalAPI) load() error {
+	hostStmt, err := api.db.Prepare(`
+		SELECT
+			id,
+			network,
+			public_key,
+			first_seen,
+			known_since,
+			blocked,
+			net_address,
+			ip_nets,
+			last_ip_change,
+			settings,
+			price_table
+		FROM hosts
+	`)
+	if err != nil {
+		return utils.AddContext(err, "couldn't prepare hosts statement")
+	}
+	defer hostStmt.Close()
+
+	rows, err := hostStmt.Query()
+	if err != nil {
+		return utils.AddContext(err, "couldn't query hosts")
+	}
+
+	for rows.Next() {
+		var id int
+		var network, netaddress, ipNets string
+		pk := make([]byte, 32)
+		var fs, lc int64
+		var ks uint64
+		var blocked bool
+		var settings, pt []byte
+		if err := rows.Scan(&id, &network, &pk, &fs, &ks, &blocked, &netaddress, &ipNets, &lc, &settings, &pt); err != nil {
+			rows.Close()
+			return utils.AddContext(err, "couldn't decode host data")
+		}
+		host := &portalHost{
+			ID:           id,
+			PublicKey:    types.PublicKey(pk),
+			FirstSeen:    time.Unix(fs, 0),
+			KnownSince:   ks,
+			Blocked:      blocked,
+			NetAddress:   netaddress,
+			IPNets:       strings.Split(ipNets, ";"),
+			LastIPChange: time.Unix(lc, 0),
+			Interactions: make(map[string]nodeInteractions),
+		}
+		if len(settings) > 0 {
+			d := types.NewBufDecoder(settings)
+			utils.DecodeSettings(&host.Settings, d)
+			if err := d.Err(); err != nil {
+				rows.Close()
+				return utils.AddContext(err, "couldn't decode host settings")
+			}
+		}
+		if len(pt) > 0 {
+			d := types.NewBufDecoder(pt)
+			utils.DecodePriceTable(&host.PriceTable, d)
+			if err := d.Err(); err != nil {
+				rows.Close()
+				return utils.AddContext(err, "couldn't decode host price table")
+			}
+		}
+
+		if network == "mainnet" {
+			api.hosts[host.PublicKey] = host
+		} else if network == "zen" {
+			api.hostsZen[host.PublicKey] = host
+		}
+	}
+	rows.Close()
+
+	if err := api.loadInteractions(api.hosts, "mainnet"); err != nil {
+		return utils.AddContext(err, "couldn't load mainnet interactions")
+	}
+
+	if err := api.loadInteractions(api.hostsZen, "zen"); err != nil {
+		return utils.AddContext(err, "couldn't load zen interactions")
+	}
+
+	return nil
+}
+
+func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, network string) error {
 	intStmt, err := api.db.Prepare(`
 		SELECT
 			node,
@@ -886,6 +955,44 @@ func (api *portalAPI) load() error {
 	}
 	defer intStmt.Close()
 
+	for _, host := range hosts {
+		rows, err := intStmt.Query(network, host.PublicKey[:])
+		if err != nil {
+			return utils.AddContext(err, "couldn't query interactions")
+		}
+
+		for rows.Next() {
+			var node string
+			var lu uint64
+			var ut, dt, ls int64
+			var hsi, hfi, rsi, rfi float64
+			var ah int
+			if err := rows.Scan(&node, &ut, &dt, &ls, &ah, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
+				rows.Close()
+				return utils.AddContext(err, "couldn't decode interactions")
+			}
+			interactions := nodeInteractions{
+				Uptime:      time.Duration(ut) * time.Second,
+				Downtime:    time.Duration(dt) * time.Second,
+				LastSeen:    time.Unix(ls, 0),
+				ActiveHosts: ah,
+				HostInteractions: hostdb.HostInteractions{
+					HistoricSuccesses: hsi,
+					HistoricFailures:  hfi,
+					RecentSuccesses:   rsi,
+					RecentFailures:    rfi,
+					LastUpdate:        lu,
+				},
+			}
+			host.Interactions[node] = interactions
+		}
+		rows.Close()
+	}
+
+	return api.loadScans(hosts, network)
+}
+
+func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network string) error {
 	scanStmt, err := api.db.Prepare(`
 		SELECT
 			ran_at,
@@ -906,127 +1013,21 @@ func (api *portalAPI) load() error {
 	}
 	defer scanStmt.Close()
 
-	benchmarkStmt, err := api.db.Prepare(`
-		SELECT
-			ran_at,
-			success,
-			upload_speed,
-			download_speed,
-			ttfb,
-			error
-		FROM benchmarks
-		WHERE network = ?
-		AND node = ?
-		AND public_key = ?
-		ORDER BY ran_at DESC
-		LIMIT 1
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't prepare benchmark statement")
-	}
-	defer benchmarkStmt.Close()
-
-	rows, err := api.db.Query(`
-		SELECT
-			id,
-			network,
-			public_key,
-			first_seen,
-			known_since,
-			blocked,
-			net_address,
-			ip_nets,
-			last_ip_change,
-			settings,
-			price_table
-		FROM hosts
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't query hosts")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id int
-		var network, netaddress, ipNets string
-		pk := make([]byte, 32)
-		var fs, lc int64
-		var ks uint64
-		var blocked bool
-		var settings, pt []byte
-		if err := rows.Scan(&id, &network, &pk, &fs, &ks, &blocked, &netaddress, &ipNets, &lc, &settings, &pt); err != nil {
-			return utils.AddContext(err, "couldn't decode host data")
-		}
-		host := &portalHost{
-			ID:           id,
-			PublicKey:    types.PublicKey(pk),
-			FirstSeen:    time.Unix(fs, 0),
-			KnownSince:   ks,
-			Blocked:      blocked,
-			NetAddress:   netaddress,
-			IPNets:       strings.Split(ipNets, ";"),
-			LastIPChange: time.Unix(lc, 0),
-			Interactions: make(map[string]nodeInteractions),
-		}
-		if len(settings) > 0 {
-			d := types.NewBufDecoder(settings)
-			utils.DecodeSettings(&host.Settings, d)
-			if err := d.Err(); err != nil {
-				return utils.AddContext(err, "couldn't decode host settings")
-			}
-		}
-		if len(pt) > 0 {
-			d := types.NewBufDecoder(pt)
-			utils.DecodePriceTable(&host.PriceTable, d)
-			if err := d.Err(); err != nil {
-				return utils.AddContext(err, "couldn't decode host price table")
-			}
-		}
-
-		intRows, err := intStmt.Query(network, pk)
-		if err != nil {
-			return utils.AddContext(err, "couldn't query interactions")
-		}
-
-		for intRows.Next() {
-			var node string
-			var lu uint64
-			var ut, dt, ls int64
-			var hsi, hfi, rsi, rfi float64
-			var ah int
-			if err := intRows.Scan(&node, &ut, &dt, &ls, &ah, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
-				intRows.Close()
-				return utils.AddContext(err, "couldn't decode interactions")
-			}
-			interactions := nodeInteractions{
-				Uptime:      time.Duration(ut) * time.Second,
-				Downtime:    time.Duration(dt) * time.Second,
-				LastSeen:    time.Unix(ls, 0),
-				ActiveHosts: ah,
-				HostInteractions: hostdb.HostInteractions{
-					HistoricSuccesses: hsi,
-					HistoricFailures:  hfi,
-					RecentSuccesses:   rsi,
-					RecentFailures:    rfi,
-					LastUpdate:        lu,
-				},
-			}
-
-			scanRows, err := scanStmt.Query(network, node, pk)
+	for _, host := range hosts {
+		for node, int := range host.Interactions {
+			rows, err := scanStmt.Query(network, node, host.PublicKey[:])
 			if err != nil {
-				intRows.Close()
 				return utils.AddContext(err, "couldn't query scan history")
 			}
 
-			for scanRows.Next() {
+			for rows.Next() {
 				var ra int64
 				var success bool
 				var latency float64
 				var msg string
 				var settings, pt []byte
-				if err := scanRows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
-					scanRows.Close()
-					intRows.Close()
+				if err := rows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
+					rows.Close()
 					return utils.AddContext(err, "couldn't decode scan history")
 				}
 				scan := hostdb.HostScan{
@@ -1039,8 +1040,7 @@ func (api *portalAPI) load() error {
 					d := types.NewBufDecoder(settings)
 					utils.DecodeSettings(&scan.Settings, d)
 					if err := d.Err(); err != nil {
-						scanRows.Close()
-						intRows.Close()
+						rows.Close()
 						return utils.AddContext(err, "couldn't decode host settings")
 					}
 				}
@@ -1048,43 +1048,14 @@ func (api *portalAPI) load() error {
 					d := types.NewBufDecoder(pt)
 					utils.DecodePriceTable(&scan.PriceTable, d)
 					if err := d.Err(); err != nil {
-						scanRows.Close()
-						intRows.Close()
+						rows.Close()
 						return utils.AddContext(err, "couldn't decode host price table")
 					}
 				}
-				interactions.ScanHistory = append([]hostdb.HostScan{scan}, interactions.ScanHistory...)
+				int.ScanHistory = append([]hostdb.HostScan{scan}, int.ScanHistory...)
 			}
-			scanRows.Close()
-
-			var ra int64
-			var success bool
-			var ul, dl, ttfb float64
-			var msg string
-			err = benchmarkStmt.QueryRow(network, node, pk).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
-			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				intRows.Close()
-				return utils.AddContext(err, "couldn't query benchmark history")
-			}
-			if err == nil {
-				interactions.LastBenchmark = hostdb.HostBenchmark{
-					Timestamp:     time.Unix(ra, 0),
-					Success:       success,
-					UploadSpeed:   ul,
-					DownloadSpeed: dl,
-					TTFB:          time.Duration(ttfb) * time.Millisecond,
-					Error:         msg,
-				}
-			}
-
-			host.Interactions[node] = interactions
-		}
-		intRows.Close()
-
-		if network == "mainnet" {
-			api.hosts[host.PublicKey] = host
-		} else if network == "zen" {
-			api.hostsZen[host.PublicKey] = host
+			rows.Close()
+			host.Interactions[node] = int
 		}
 	}
 

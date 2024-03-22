@@ -74,12 +74,11 @@ type statusResponse struct {
 }
 
 type nodeInteractions struct {
-	Uptime        time.Duration        `json:"uptime"`
-	Downtime      time.Duration        `json:"downtime"`
-	ScanHistory   []hostdb.HostScan    `json:"scanHistory"`
-	LastBenchmark hostdb.HostBenchmark `json:"lastBenchmark"`
-	LastSeen      time.Time            `json:"lastSeen"`
-	ActiveHosts   int                  `json:"activeHosts"`
+	Uptime      time.Duration     `json:"uptime"`
+	Downtime    time.Duration     `json:"downtime"`
+	ScanHistory []hostdb.HostScan `json:"scanHistory"`
+	LastSeen    time.Time         `json:"lastSeen"`
+	ActiveHosts int               `json:"activeHosts"`
 	hostdb.HostInteractions
 }
 
@@ -307,21 +306,21 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	go func() {
 		for _, h := range hosts {
 			go func(h portalHost) {
-				_, ok := api.cache.getScans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+				_, ok := api.cache.getScans(network, h.PublicKey, time.Unix(0, 0), time.Now(), 48*len(api.clients), true)
 				if !ok {
-					s, err := api.getScans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+					s, err := api.getScans(network, h.PublicKey, time.Unix(0, 0), time.Now(), 48*len(api.clients), true)
 					if err != nil {
 						return
 					}
-					api.cache.putScans(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), s)
+					api.cache.putScans(network, h.PublicKey, time.Unix(0, 0), time.Now(), 48*len(api.clients), true, s)
 				}
-				_, ok = api.cache.getBenchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+				_, ok = api.cache.getBenchmarks(network, h.PublicKey, time.Unix(0, 0), time.Now(), 12*len(api.clients), false)
 				if !ok {
-					b, err := api.getBenchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now())
+					b, err := api.getBenchmarks(network, h.PublicKey, time.Unix(0, 0), time.Now(), 12*len(api.clients), false)
 					if err != nil {
 						return
 					}
-					api.cache.putBenchmarks(network, h.PublicKey, time.Now().AddDate(0, 0, -1), time.Now(), b)
+					api.cache.putBenchmarks(network, h.PublicKey, time.Unix(0, 0), time.Now(), 12*len(api.clients), false, b)
 				}
 			}(h)
 		}
@@ -399,9 +398,26 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	scans, ok := api.cache.getScans(network, pk, from, to)
+	var number int64
+	num := req.FormValue("number")
+	if num != "" {
+		number, err = strconv.ParseInt(num, 10, 64)
+		if err != nil {
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid number",
+			})
+			return
+		}
+	}
+	var successful bool
+	success := strings.ToLower(req.FormValue("success"))
+	if success == "true" {
+		successful = true
+	}
+	scans, ok := api.cache.getScans(network, pk, from, to, int(number), successful)
 	if !ok {
-		s, err := api.getScans(network, pk, from, to)
+		s, err := api.getScans(network, pk, from, to, int(number), successful)
 		if err != nil {
 			api.log.Error("couldn't get scan history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -411,7 +427,7 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 		scans = s
-		api.cache.putScans(network, pk, from, to, s)
+		api.cache.putScans(network, pk, from, to, int(number), successful, s)
 	}
 	writeJSON(w, scansResponse{
 		APIResponse: APIResponse{Status: "ok"},
@@ -470,9 +486,26 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 	}
-	benchmarks, ok := api.cache.getBenchmarks(network, pk, from, to)
+	var number int64
+	num := req.FormValue("number")
+	if num != "" {
+		number, err = strconv.ParseInt(num, 10, 64)
+		if err != nil {
+			writeJSON(w, APIResponse{
+				Status:  "error",
+				Message: "invalid number",
+			})
+			return
+		}
+	}
+	var successful bool
+	success := strings.ToLower(req.FormValue("success"))
+	if success == "true" {
+		successful = true
+	}
+	benchmarks, ok := api.cache.getBenchmarks(network, pk, from, to, int(number), successful)
 	if !ok {
-		b, err := api.getBenchmarks(network, pk, from, to)
+		b, err := api.getBenchmarks(network, pk, from, to, int(number), successful)
 		if err != nil {
 			api.log.Error("couldn't get benchmark history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -482,7 +515,7 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 		benchmarks = b
-		api.cache.putBenchmarks(network, pk, from, to, b)
+		api.cache.putBenchmarks(network, pk, from, to, int(number), successful, b)
 	}
 	writeJSON(w, benchmarksResponse{
 		APIResponse: APIResponse{Status: "ok"},
