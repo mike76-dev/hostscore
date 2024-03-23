@@ -86,9 +86,15 @@ select, input {
     background-color: red;
 }
 
+.host-benchmarks {
+    table-layout: fixed;
+}
+
 .host-benchmarks td, .host-benchmarks th {
     padding: 0.25rem 0.5rem;
     border: 1px solid black;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .benchmark-pass::after {
