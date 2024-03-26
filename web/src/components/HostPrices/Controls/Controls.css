@@ -1,0 +1,32 @@
+.host-prices-controls-container {
+    display: flex;
+    flex-direction: row;
+    position: absolute;
+    top: 3rem;
+    right: 3.5rem;
+}
+
+.host-prices-control {
+    border: none;
+    background-color: transparent;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.host-prices-control:focus {
+    outline: 2px solid var(--outlineLight);
+}
+
+.host-prices-dark .host-prices-control {
+    color: var(--textDark);
+    opacity: 0.5;
+}
+
+.host-prices-dark .host-prices-control:focus {
+    outline: 2px solid var(--outlineDark);
+}

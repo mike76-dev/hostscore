@@ -137,7 +137,7 @@ export const HostResults = (props: HostResultsProps) => {
 					</tr>
 				</tbody>
 			</table>
-			{props.benchmarks &&
+			{props.benchmarks && benchmarkData.length > 0 &&
 				<table className="host-benchmarks-table">
 					<thead>
 						<tr>
@@ -150,7 +150,7 @@ export const HostResults = (props: HostResultsProps) => {
 						{benchmarkData.map((row, j) => (
 							<tr key={'benchmark-row-' + j}>
 								{row.map((cell, i) => (
-									<td key={'benchmark-' + j + '-' + i}>
+									<td key={'benchmark-' + j + '-' + i} style={{width: '' + 100/benchmarkData.length + '%'}}>
 										{cell &&
 											<Benchmark
 												timestamp={cell.timestamp}

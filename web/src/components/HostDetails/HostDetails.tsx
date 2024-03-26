@@ -6,15 +6,18 @@ import {
     Host,
     HostScan,
     HostBenchmark,
+    PriceChange,
     getHost,
     getScans,
     getBenchmarks,
+    getPriceChanges,
     stripePrefix,
     useLocations
 } from '../../api'
 import {
     Button,
     HostInfo,
+    HostPrices,
     HostResults,
     Loader,
     NodeSelector
@@ -33,11 +36,13 @@ export const HostDetails = (props: HostDetailsProps) => {
 	const [host, setHost] = useState<Host>()
     const [scans, setScans] = useState<HostScan[]>([])
     const [benchmarks, setBenchmarks] = useState<HostBenchmark[]>([])
+    const [priceChanges, setPriceChanges] = useState<PriceChange[]>([])
 	const { hosts } = props
 	const network = (window.location.pathname.toLowerCase().indexOf('zen') >= 0 ? 'zen' : 'mainnet')
 	const [loadingHost, setLoadingHost] = useState(false)
     const [loadingScans, setLoadingScans] = useState(false)
     const [loadingBenchmarks, setLoadingBenchmarks] = useState(false)
+    const [loadingPriceChanges, setLoadingPriceChanges] = useState(false)
     const nodes = ['global'].concat(locations)
     const [node, setNode] = useState(nodes[0])
 	useEffect(() => {
@@ -71,10 +76,18 @@ export const HostDetails = (props: HostDetailsProps) => {
             }
             setLoadingBenchmarks(false)
         })
+        setLoadingPriceChanges(true)
+        getPriceChanges(network, publicKey || '')
+        .then(data => {
+            if (data && data.status === 'ok' && data.priceChanges) {
+                setPriceChanges(data.priceChanges)
+            }
+            setLoadingPriceChanges(false)
+        })
     }, [network, publicKey, locations.length])
 	return (
 		<div className={'host-details-container' + (props.darkMode ? ' host-details-dark' : '')}>
-			{loadingHost || loadingScans || loadingBenchmarks ?
+			{loadingHost || loadingScans || loadingBenchmarks || loadingPriceChanges ?
 				<Loader darkMode={props.darkMode}/>
 			: (host ?
                 <>
@@ -90,6 +103,10 @@ export const HostDetails = (props: HostDetailsProps) => {
 		        			host={host}
                             node={node}
 				        />
+                        <HostPrices
+                            darkMode={props.darkMode}
+                            data={priceChanges}
+                        />
                     </div>
                     <HostResults
                         darkMode={props.darkMode}

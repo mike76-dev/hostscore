@@ -62,3 +62,12 @@ export const convertPricePerBlock = (value: string) => {
 	if (result < 1e6) return (result / 1e3).toFixed(1) + ' KS/TB/month'
 	return (result / 1e6).toFixed(1) + ' MS/TB/month'
 }
+
+export const convertPriceRaw = (value: string) => {
+	if (value.length > 12) {
+		value = value.slice(0, value.length - 12) + '.' + value.slice(value.length - 12)
+	} else {
+		value = '0.' + '0'.repeat(12 - value.length) + value
+	}
+	return Number.parseFloat(value)
+}
