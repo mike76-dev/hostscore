@@ -144,6 +144,26 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 	defer benchmarkStmt.Close()
 
+	priceChangeStmt, err := tx.Prepare(`
+		INSERT INTO price_changes (
+			network,
+			public_key,
+			changed_at,
+			remaining_storage,
+			total_storage,
+			collateral,
+			storage_price,
+			upload_price,
+			download_price
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		tx.Rollback()
+		return utils.AddContext(err, "couldn't prepare price change statement")
+	}
+	defer priceChangeStmt.Close()
+
 	for _, host := range updates.Hosts {
 		var settings, pt bytes.Buffer
 		e := types.NewEncoder(&settings)
@@ -201,6 +221,35 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host, exists = api.hosts[h.PublicKey]
 		} else {
 			host, exists = api.hostsZen[h.PublicKey]
+		}
+		if !exists || pricesChanged(h.Settings, host.Settings) {
+			var cb, spb, upb, dpb bytes.Buffer
+			e := types.NewEncoder(&cb)
+			types.V1Currency(h.Settings.Collateral).EncodeTo(e)
+			e.Flush()
+			e = types.NewEncoder(&spb)
+			types.V1Currency(h.Settings.StoragePrice).EncodeTo(e)
+			e.Flush()
+			e = types.NewEncoder(&upb)
+			types.V1Currency(h.Settings.UploadBandwidthPrice).EncodeTo(e)
+			e.Flush()
+			e = types.NewEncoder(&dpb)
+			types.V1Currency(h.Settings.DownloadBandwidthPrice).EncodeTo(e)
+			e.Flush()
+			_, err := priceChangeStmt.Exec(
+				h.Network,
+				h.PublicKey[:],
+				time.Now().Unix(),
+				h.Settings.RemainingStorage,
+				h.Settings.TotalStorage,
+				cb.Bytes(),
+				spb.Bytes(),
+				upb.Bytes(),
+				dpb.Bytes(),
+			)
+			if err != nil {
+				api.log.Error("couldn't update price change", zap.String("network", h.Network), zap.Stringer("host", h.PublicKey), zap.Error(err))
+			}
 		}
 		if exists {
 			host.NetAddress = h.NetAddress
@@ -329,6 +378,23 @@ func (api *portalAPI) isOnline(host portalHost) bool {
 		if len(history) == 1 && history[0].Success {
 			return true
 		}
+	}
+	return false
+}
+
+// pricesChanged returns true if any relevant part of the host's settings has changed.
+func pricesChanged(os, ns rhpv2.HostSettings) bool {
+	if ns.RemainingStorage != os.RemainingStorage || ns.TotalStorage != os.TotalStorage {
+		return true
+	}
+	if ns.StoragePrice.Cmp(os.StoragePrice) != 0 || ns.Collateral.Cmp(os.Collateral) != 0 {
+		return true
+	}
+	if ns.UploadBandwidthPrice.Cmp(os.UploadBandwidthPrice) != 0 {
+		return true
+	}
+	if ns.DownloadBandwidthPrice.Cmp(os.DownloadBandwidthPrice) != 0 {
+		return true
 	}
 	return false
 }
@@ -1060,4 +1126,63 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 	}
 
 	return nil
+}
+
+// getPriceChanges retrieves the historic price changes of the given host.
+func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs []priceChange, err error) {
+	rows, err := api.db.Query(`
+		SELECT
+			changed_at,
+			remaining_storage,
+			total_storage,
+			collateral,
+			storage_price,
+			upload_price,
+			download_price
+		FROM price_changes
+		WHERE network = ?
+		AND public_key = ?
+		AND changed_at >= ?
+		ORDER BY changed_at ASC
+	`, network, pk[:], time.Now().AddDate(-1, 0, 0))
+	if err != nil {
+		return nil, utils.AddContext(err, "couldn't query price changes")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var ca int64
+		var rs, ts uint64
+		var cb, spb, upb, dpb []byte
+		if err := rows.Scan(&ca, &rs, &ts, &cb, &spb, &upb, &dpb); err != nil {
+			return nil, utils.AddContext(err, "couldn't decode price change")
+		}
+
+		pc := priceChange{
+			Timestamp:        time.Unix(ca, 0),
+			RemainingStorage: rs,
+			TotalStorage:     ts,
+		}
+
+		d := types.NewBufDecoder(cb)
+		if (*types.V1Currency)(&pc.Collateral).DecodeFrom(d); d.Err() != nil {
+			return nil, utils.AddContext(err, "couldn't decode collateral")
+		}
+		d = types.NewBufDecoder(spb)
+		if (*types.V1Currency)(&pc.StoragePrice).DecodeFrom(d); d.Err() != nil {
+			return nil, utils.AddContext(err, "couldn't decode storage price")
+		}
+		d = types.NewBufDecoder(upb)
+		if (*types.V1Currency)(&pc.UploadPrice).DecodeFrom(d); d.Err() != nil {
+			return nil, utils.AddContext(err, "couldn't decode upload price")
+		}
+		d = types.NewBufDecoder(dpb)
+		if (*types.V1Currency)(&pc.DownloadPrice).DecodeFrom(d); d.Err() != nil {
+			return nil, utils.AddContext(err, "couldn't decode download price")
+		}
+
+		pcs = append(pcs, pc)
+	}
+
+	return
 }

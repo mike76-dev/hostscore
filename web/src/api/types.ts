@@ -128,3 +128,13 @@ export type NodeStatus = {
 	balanceMainnet: string,
 	balanceZen: string
 }
+
+export type PriceChange = {
+	timestamp: string,
+	remainingStorage: number,
+	totalStorage: number,
+	collateral: string,
+	storagePrice: string,
+	uploadPrice: string,
+	downloadPrice: string
+}

@@ -1,5 +1,5 @@
 const apiBaseURL = '/hostscore/api';
-var locations = ['eu', 'us'];
+var locations = ['eu', 'us', 'ap'];
 var hosts = [];
 var moreHosts = false;
 var offset = 0;
@@ -115,8 +115,6 @@ function browseHost(obj) {
 	list.classList.add('hidden');
 	let latencies = [];
 	let benchmarks = [];
-	let from = new Date();
-	from.setDate(from.getDate() - 1);
 	fetch(apiBaseURL + '/scans?network=' + network + '&host=' + key +
 		'&number=48&success=true', options)
 	.then(response => response.json())

@@ -21,7 +21,10 @@ import (
 	"go.uber.org/zap"
 )
 
-var lowBalanceThreshold = types.Siacoins(200)
+var (
+	lowBalanceThreshold  = types.Siacoins(200)
+	zeroBalanceThreshold = types.Siacoins(10)
+)
 
 type APIResponse struct {
 	Status  string `json:"status"`
@@ -71,6 +74,22 @@ type statusResponse struct {
 	APIResponse
 	Version string       `json:"version"`
 	Nodes   []nodeStatus `json:"nodes"`
+}
+
+type priceChange struct {
+	Timestamp        time.Time      `json:"timestamp"`
+	RemainingStorage uint64         `json:"remainingStorage"`
+	TotalStorage     uint64         `json:"totalStorage"`
+	Collateral       types.Currency `json:"collateral"`
+	StoragePrice     types.Currency `json:"storagePrice"`
+	UploadPrice      types.Currency `json:"uploadPrice"`
+	DownloadPrice    types.Currency `json:"downloadPrice"`
+}
+
+type priceChangeResponse struct {
+	APIResponse
+	PublicKey    types.PublicKey `json:"publicKey"`
+	PriceChanges []priceChange   `json:"priceChanges"`
 }
 
 type nodeInteractions struct {
@@ -196,6 +215,9 @@ func (api *portalAPI) buildHTTPRoutes() {
 	})
 	router.GET("/benchmarks", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.benchmarksHandler(w, req, ps)
+	})
+	router.GET("/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.changesHandler(w, req, ps)
 	})
 	router.GET("/status", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.statusHandler(w, req, ps)
@@ -525,7 +547,7 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 }
 
 func balanceStatus(balance types.Currency) string {
-	if balance.IsZero() {
+	if balance.Cmp(zeroBalanceThreshold) < 0 {
 		return "empty"
 	}
 	if balance.Cmp(lowBalanceThreshold) < 0 {
@@ -591,6 +613,48 @@ func (api *portalAPI) onlineHostsHandler(w http.ResponseWriter, req *http.Reques
 	writeJSON(w, onlineHostsResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		OnlineHosts: count,
+	})
+}
+
+func (api *portalAPI) changesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	network := strings.ToLower(req.FormValue("network"))
+	if network == "" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "network not provided",
+		})
+		return
+	}
+	host := req.FormValue("host")
+	if host == "" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "host not provided",
+		})
+		return
+	}
+	var pk types.PublicKey
+	err := pk.UnmarshalText([]byte(host))
+	if err != nil {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "invalid public key",
+		})
+		return
+	}
+	pcs, err := api.getPriceChanges(network, pk)
+	if err != nil {
+		api.log.Error("couldn't get price changes", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "internal error",
+		})
+		return
+	}
+	writeJSON(w, priceChangeResponse{
+		APIResponse:  APIResponse{Status: "ok"},
+		PublicKey:    pk,
+		PriceChanges: pcs,
 	})
 }
 

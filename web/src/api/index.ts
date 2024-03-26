@@ -3,11 +3,12 @@ import {
 	Host,
 	NodeStatus,
 	HostScan,
-	HostBenchmark
+	HostBenchmark,
+	PriceChange
 } from './types'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
-const locations = ['eu', 'us']
+const locations = ['eu', 'us', 'ap']
 const excludedPaths = ['/about', '/status']
 
 export const useLocations = () => (locations)
@@ -92,6 +93,16 @@ export const getBenchmarks = async (
 		(from ? '&from=' + from.toISOString() : '') +
 		(to ? '&to=' + to.toISOString() : '') +
 		(num ? '&number=' + num : '') + (success ? '&success=true' : '')
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getPriceChanges = async (
+	network: string,
+	publicKey: string
+): Promise<{ status: string, message: string, priceChanges: PriceChange[] }> => {
+	const url = '/changes?network=' + network + '&host=' + publicKey
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

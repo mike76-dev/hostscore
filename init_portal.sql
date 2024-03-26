@@ -2,6 +2,7 @@ DROP TABLE IF EXISTS locations;
 DROP TABLE IF EXISTS scans;
 DROP TABLE IF EXISTS benchmarks;
 DROP TABLE IF EXISTS interactions;
+DROP TABLE IF EXISTS price_changes;
 DROP TABLE IF EXISTS hosts;
 
 CREATE TABLE hosts (
@@ -63,6 +64,21 @@ CREATE TABLE benchmarks (
 	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
+    FOREIGN KEY (public_key) REFERENCES hosts(public_key)
+);
+
+CREATE TABLE price_changes (
+    id                BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    network           VARCHAR(8) NOT NULL,
+    public_key        BINARY(32) NOT NULL,
+    changed_at        BIGINT NOT NULL,
+    remaining_storage BIGINT UNSIGNED NOT NULL,
+    total_storage     BIGINT UNSIGNED NOT NULL,
+    collateral        TINYBLOB NOT NULL,
+    storage_price     TINYBLOB NOT NULL,
+    upload_price      TINYBLOB NOT NULL,
+    download_price    TINYBLOB NOT NULL,
+    PRIMARY KEY (id),
     FOREIGN KEY (public_key) REFERENCES hosts(public_key)
 );
 
