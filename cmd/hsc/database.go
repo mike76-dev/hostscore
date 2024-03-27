@@ -144,6 +144,17 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 	defer benchmarkStmt.Close()
 
+	priceChangeCountStmt, err := tx.Prepare(`
+		SELECT COUNT(*)
+		FROM price_changes
+		WHERE public_key = ?
+	`)
+	if err != nil {
+		tx.Rollback()
+		return utils.AddContext(err, "couldn't prepare price change count statement")
+	}
+	defer priceChangeCountStmt.Close()
+
 	priceChangeStmt, err := tx.Prepare(`
 		INSERT INTO price_changes (
 			network,
@@ -222,7 +233,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		} else {
 			host, exists = api.hostsZen[h.PublicKey]
 		}
-		if !exists || pricesChanged(h.Settings, host.Settings) {
+		var count int
+		if err := priceChangeCountStmt.QueryRow(h.PublicKey[:]).Scan(&count); err != nil {
+			tx.Rollback()
+			api.mu.Unlock()
+			return utils.AddContext(err, "couldn't count price changes")
+		}
+		if !exists || count == 0 || pricesChanged(h.Settings, host.Settings) {
 			var cb, spb, upb, dpb bytes.Buffer
 			e := types.NewEncoder(&cb)
 			types.V1Currency(h.Settings.Collateral).EncodeTo(e)
