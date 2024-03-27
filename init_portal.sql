@@ -34,7 +34,8 @@ CREATE TABLE interactions (
 	recent_failed_interactions       DOUBLE NOT NULL,
 	last_update                      BIGINT UNSIGNED NOT NULL,
 	PRIMARY KEY (network, node, public_key),
-    FOREIGN KEY (public_key) REFERENCES hosts(public_key)
+    FOREIGN KEY (public_key) REFERENCES hosts(public_key),
+    INDEX idx_interactions (network, public_key)
 );
 
 CREATE TABLE scans (
@@ -49,7 +50,8 @@ CREATE TABLE scans (
 	settings     BLOB,
 	price_table  BLOB,
 	PRIMARY KEY (id),
-    FOREIGN KEY (public_key) REFERENCES hosts(public_key)
+    FOREIGN KEY (public_key) REFERENCES hosts(public_key),
+    INDEX idx_scans (network, node, public_key, ran_at)
 );
 
 CREATE TABLE benchmarks (
