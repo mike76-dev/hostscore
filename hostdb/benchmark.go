@@ -128,7 +128,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			hdb.log.Info("successfully formed contract", zap.String("network", host.Network), zap.String("host", host.NetAddress), zap.Stringer("id", rev.Revision.ParentID))
 		} else {
 			// Fetch the latest revision.
-			revCtx, revCancel := context.WithTimeout(context.Background(), 15*time.Second)
+			revCtx, revCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer revCancel()
 			go func() {
 				select {
@@ -148,7 +148,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		}
 
 		// Fetch a valid price table.
-		ptCtx, ptCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ptCtx, ptCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer ptCancel()
 		go func() {
 			select {
@@ -166,9 +166,24 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 				return &payment, nil
 			})
 			if err != nil {
+				// Check if we have passed the revision deadline.
+				if strings.Contains(err.Error(), "renter is requesting revision after the revision deadline") {
+					host.Revision = types.FileContractRevision{}
+				}
 				return utils.AddContext(err, "unable to get price table")
 			}
 			host.PriceTable = pt
+
+			// Check the account balance.
+			payment, ok := rhpv3.PayByContract(&host.Revision, pt.AccountBalanceCost, rhpv3.Account(key.PublicKey()), key)
+			if !ok {
+				host.Revision = types.FileContractRevision{}
+				return errors.New("insufficient balance")
+			}
+			balance, err := rhp.RPCAccountBalance(ptCtx, t, &payment, rhpv3.Account(key.PublicKey()), pt.UID)
+			if err != nil {
+				return utils.AddContext(err, "unable to fetch account balance")
+			}
 
 			// Fund the account.
 			uploadCost, _, _, err = rhp.UploadSectorCost(pt, host.Revision.WindowEnd)
@@ -181,8 +196,13 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			}
 			amount := uploadCost.Add(downloadCost).Mul64(uint64(numSectors))
 			amount = amount.Add(pt.FundAccountCost)
-			payment, ok := rhpv3.PayByContract(&host.Revision, amount, rhpv3.Account{}, key)
+			if amount.Cmp(balance) <= 0 {
+				return nil
+			}
+			amount = amount.Sub(balance)
+			payment, ok = rhpv3.PayByContract(&host.Revision, amount, rhpv3.Account{}, key)
 			if !ok {
+				host.Revision = types.FileContractRevision{}
 				return errors.New("insufficient balance")
 			}
 			if err := rhp.RPCFundAccount(ptCtx, t, &payment, rhpv3.Account(key.PublicKey()), pt.UID); err != nil {
@@ -220,7 +240,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		var data [rhpv2.SectorSize]byte
 		roots := make([]types.Hash256, numSectors)
 		var start time.Time
-		upCtx, upCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		upCtx, upCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer upCancel()
 		go func() {
 			select {
@@ -248,7 +268,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		ul = float64(benchmarkBatchSize) / time.Since(start).Seconds()
 
 		// Run a download benchmark.
-		dnCtx, dnCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		dnCtx, dnCancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer dnCancel()
 		go func() {
 			select {
