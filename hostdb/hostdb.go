@@ -256,6 +256,9 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 	// Start the scanning thread.
 	go hdb.scanHosts()
 
+	// Periodically prune old scans and benchmarks.
+	go hdb.pruneOldRecords()
+
 	return hdb, errChan
 }
 
@@ -334,4 +337,29 @@ func (hdb *HostDB) synced(network string) bool {
 		return isSynced(hdb.syncer) && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
 	}
 	panic("wrong network provided")
+}
+
+// pruneOldRecords periodically cleans the database from old scans and benchmarks.
+func (hdb *HostDB) pruneOldRecords() {
+	if err := hdb.tg.Add(); err != nil {
+		hdb.log.Error("couldn't add thread", zap.Error(err))
+		return
+	}
+	defer hdb.tg.Done()
+
+	for {
+		select {
+		case <-hdb.tg.StopChan():
+			return
+		case <-time.After(24 * time.Hour):
+		}
+
+		if err := hdb.s.pruneOldRecords(); err != nil {
+			hdb.log.Error("couldn't prune old records", zap.String("network", "mainnet"), zap.Error(err))
+		}
+
+		if err := hdb.sZen.pruneOldRecords(); err != nil {
+			hdb.log.Error("couldn't prune old records", zap.String("network", "zen"), zap.Error(err))
+		}
+	}
 }

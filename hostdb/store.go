@@ -848,11 +848,11 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err = s.tx.Query(`
 		SELECT id, public_key, ran_at, success, latency, error, settings, price_table
-		FROM hdb_scans_` + s.network + `
+		FROM hdb_scans_`+s.network+`
 		WHERE modified > fetched
 		ORDER BY id ASC
-		LIMIT 1000
-	`)
+		LIMIT ?
+	`, 1000-len(updates.Hosts))
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query scans")
 	}
@@ -901,11 +901,11 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err = s.tx.Query(`
 		SELECT id, public_key, ran_at, success, upload_speed, download_speed, ttfb, error
-		FROM hdb_benchmarks_` + s.network + `
+		FROM hdb_benchmarks_`+s.network+`
 		WHERE modified > fetched
 		ORDER BY id ASC
-		LIMIT 1000
-	`)
+		LIMIT ?
+	`, 1000-len(updates.Hosts)-len(updates.Scans))
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query benchmarks")
 	}
@@ -1046,4 +1046,36 @@ func (s *hostDBStore) getHostsForScan() {
 			s.hdb.queueScan(host)
 		}
 	}
+}
+
+func (s *hostDBStore) pruneOldRecords() error {
+	if s.tx == nil {
+		return errors.New("no database transaction")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, err := s.tx.Exec(`
+		DELETE FROM hdb_scans_`+s.network+`
+		WHERE ran_at < ?
+	`, time.Now().AddDate(0, 0, -7).Unix())
+	if err != nil {
+		return utils.AddContext(err, "couldn't delete old scans")
+	}
+
+	_, err = s.tx.Exec(`
+		DELETE FROM hdb_benchmarks_`+s.network+`
+		WHERE ran_at < ?
+	`, time.Now().AddDate(0, 0, -28).Unix())
+	if err != nil {
+		return utils.AddContext(err, "couldn't delete old benchmarks")
+	}
+
+	if err := s.tx.Commit(); err != nil {
+		return utils.AddContext(err, "couldn't commit transaction")
+	}
+
+	s.tx, err = s.db.Begin()
+	return err
 }

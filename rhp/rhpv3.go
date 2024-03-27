@@ -402,3 +402,24 @@ func RPCFundAccount(ctx context.Context, t *rhpv3.Transport, payment rhpv3.Payme
 	}
 	return nil
 }
+
+// RPCAccountBalance fetches the balance of an ephemeral account.
+func RPCAccountBalance(ctx context.Context, t *rhpv3.Transport, payment rhpv3.PaymentMethod, account rhpv3.Account, settingsID rhpv3.SettingsID) (bal types.Currency, err error) {
+	s := t.DialStream()
+	defer s.Close()
+
+	req := rhpv3.RPCAccountBalanceRequest{
+		Account: account,
+	}
+	var resp rhpv3.RPCAccountBalanceResponse
+	if err := s.WriteRequest(rhpv3.RPCAccountBalanceID, &settingsID); err != nil {
+		return types.ZeroCurrency, err
+	} else if err := processPayment(s, payment); err != nil {
+		return types.ZeroCurrency, err
+	} else if err := s.WriteResponse(&req); err != nil {
+		return types.ZeroCurrency, err
+	} else if err := s.ReadResponse(&resp, 128); err != nil {
+		return types.ZeroCurrency, err
+	}
+	return resp.Balance, nil
+}

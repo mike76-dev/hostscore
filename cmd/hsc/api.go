@@ -149,6 +149,7 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 	}
 
 	go api.requestUpdates()
+	go api.pruneOldRecords()
 
 	return api, nil
 }
