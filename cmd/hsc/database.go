@@ -1203,3 +1203,30 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs [
 
 	return
 }
+
+// pruneOldRecords periodically cleans the database from old scan and benchmarks.
+func (api *portalAPI) pruneOldRecords() {
+	for {
+		select {
+		case <-api.stopChan:
+			return
+		case <-time.After(24 * time.Hour):
+		}
+
+		_, err := api.db.Exec(`
+			DELETE FROM scans
+			WHERE ran_at < ?
+		`, time.Now().AddDate(0, 0, -14).Unix())
+		if err != nil {
+			api.log.Error("couldn't delete old scans", zap.Error(err))
+		}
+
+		_, err = api.db.Exec(`
+			DELETE FROM benchmarks
+			WHERE ran_at < ?
+		`, time.Now().AddDate(0, 0, -56).Unix())
+		if err != nil {
+			api.log.Error("couldn't delete old benchmarks", zap.Error(err))
+		}
+	}
+}
