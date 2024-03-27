@@ -32,7 +32,7 @@ export const HostInfo = (props: HostInfoProps) => {
 			locations.forEach(location => {
 				let int = props.host.interactions[location]
 				if (!int) return
-				if (int.lastSeen !== '0001-01-01T00:00:00Z') {
+				if (int.lastSeen.indexOf('0001-01-01') < 0) {
 					let nls = new Date(int.lastSeen)
 					if (nls > ls) ls = nls
 				}
@@ -49,7 +49,7 @@ export const HostInfo = (props: HostInfoProps) => {
 				activeHosts = int.activeHosts
 			}
 		}
-		let lastSeen = (ls === new Date('0001-01-01T00:00:00Z')) ? 'N/A'  : ls.toDateString()
+		let lastSeen = (ls.getFullYear() === 1) ? 'N/A' : ls.toDateString()
 		let uptime = dt + ut === 0 ? '0%' : (ut * 100 / (ut + dt)).toFixed(1) + '%'
 		return { lastSeen, uptime, activeHosts }
 	}

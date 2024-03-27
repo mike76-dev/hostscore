@@ -325,9 +325,8 @@ export const HostPrices = (props: HostPricesProps) => {
     }
     const moveRight = () => {
         if (!props.data || props.data.length === 0) return
-        let ts = (new Date(props.data[props.data.length - 1].timestamp)).getTime()
         let nts = newTimestamp(props.data, maxTimestamp, scale, true)
-        if (nts <= ts) {
+        if (nts <= (new Date()).getTime()) {
             setMaxTimestamp(nts)
         }
     }
@@ -374,13 +373,15 @@ export const HostPrices = (props: HostPricesProps) => {
                 setMaxTimestamp={setMaxTimestamp}
                 darkMode={props.darkMode}
             />
-            <Controls
-                darkMode={props.darkMode}
-                zoomIn={zoomIn}
-                zoomOut={zoomOut}
-                moveLeft={moveLeft}
-                moveRight={moveRight}
-            />
+            {props.data &&
+                <Controls
+                    darkMode={props.darkMode}
+                    zoomIn={zoomIn}
+                    zoomOut={zoomOut}
+                    moveLeft={moveLeft}
+                    moveRight={moveRight}
+                />
+            }
         </div>
     )
 }

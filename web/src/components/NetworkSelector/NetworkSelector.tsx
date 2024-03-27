@@ -53,7 +53,7 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 				<option value="zen">Zen</option>
 			</select>
             <div className="network-selector-text">
-                Online hosts: {onlineHosts}
+                {network !== '' && 'Online hosts: ' + onlineHosts}
             </div>
 		</div>
 	)
