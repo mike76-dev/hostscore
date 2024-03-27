@@ -1,5 +1,5 @@
 import './Hosts.css'
-import { useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useContext } from 'react'
 import {
     HostSelector,
     HostSearch,
@@ -8,6 +8,7 @@ import {
     Loader
 } from '../'
 import { Host, getHosts } from '../../api'
+import { HostContext } from '../../contexts'
 
 type HostsProps = {
 	network: string,
@@ -16,15 +17,30 @@ type HostsProps = {
 }
 
 export const Hosts = (props: HostsProps) => {
-	const [onlineOnly, setOnlineOnly] = useState(true)
+    const {
+        offset,
+        changeOffset,
+        limit,
+        changeLimit,
+        onlineOnly,
+        setOnlineOnly,
+        query,
+        setQuery
+    } = useContext(HostContext)
+    const prevOnlineOnly = useRef(onlineOnly)
 	const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
-	const [query, setQuery] = useState('')
-	const [offset, changeOfset] = useState(0)
-	const [limit, changeLimit] = useState(10)
 	const [hosts, setHostsLocal] = useState<Host[]>([])
 	const [total, setTotal] = useState(0)
 	const [loading, setLoading] = useState(false)
 	const { network, setHosts } = props
+    const prevQuery = useRef(query)
+    useEffect(() => {
+        if (prevOnlineOnly.current !== onlineOnly || prevQuery.current !== query) {
+            changeOffset(0)
+            prevOnlineOnly.current = onlineOnly
+            prevQuery.current = query
+        }
+    }, [onlineOnly, query, changeOffset])
 	useEffect(() => {
 		setLoading(true)
 		getHosts(network, !onlineOnly, offset, limit, query)
@@ -67,7 +83,7 @@ export const Hosts = (props: HostsProps) => {
 						offset={offset}
 						limit={limit}
 						total={total}
-						changeOffset={changeOfset}
+						changeOffset={changeOffset}
 						changeLimit={changeLimit}
 					/>
 				</>

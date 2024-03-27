@@ -22,6 +22,10 @@ const App = () => {
 	const [darkMode, toggleDarkMode] = useState(mode)
 	const [network, switchNetwork] = useState('')
 	const [hosts, setHosts] = useState<Host[]>([])
+    const [offset, changeOffset] = useState(0)
+    const [limit, changeLimit] = useState(10)
+    const [onlineOnly, setOnlineOnly] = useState(true)
+    const [query, setQuery] = useState('')
     const excludedPaths = useExcludedPaths()
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
@@ -148,7 +152,18 @@ const App = () => {
 
 	return (
 		<NetworkContext.Provider value={{ network, switchNetwork }}>
-			<HostContext.Provider value={{ hosts, setHosts }}>
+			<HostContext.Provider value={{
+                hosts,
+                setHosts,
+                offset,
+                changeOffset,
+                limit,
+                changeLimit,
+                onlineOnly,
+                setOnlineOnly,
+                query,
+                setQuery
+            }}>
 				<RouterProvider router={router}/>
 			</HostContext.Provider>
 		</NetworkContext.Provider>
