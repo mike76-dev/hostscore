@@ -808,64 +808,77 @@ func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time
 		num = 0
 	}
 
-	rows, err := api.db.Query(`
-		SELECT node, ran_at, success, latency, error, settings, price_table
+	scanStmt, err := api.db.Prepare(`
+		SELECT ran_at, success, latency, error, settings, price_table
 		FROM scans
 		WHERE network = ?
+		AND node = ?
 		AND public_key = ?
 		AND ran_at > ?
 		AND ran_at < ?
 		AND (? OR success = TRUE)
 		ORDER BY ran_at DESC
 		LIMIT ?
-	`,
-		network,
-		pk[:],
-		from.Unix(),
-		to.Unix(),
-		!successful,
-		num,
-	)
+	`)
 	if err != nil {
-		return nil, utils.AddContext(err, "couldn't query scan history")
+		return nil, utils.AddContext(err, "couldn't prepare scan statement")
 	}
-	defer rows.Close()
+	defer scanStmt.Close()
 
-	for rows.Next() {
-		var ra int64
-		var success bool
-		var latency float64
-		var node, msg string
-		var settings, pt []byte
-		if err := rows.Scan(&node, &ra, &success, &latency, &msg, &settings, &pt); err != nil {
-			return nil, utils.AddContext(err, "couldn't decode scan history")
+	for node := range api.clients {
+		rows, err := scanStmt.Query(
+			network,
+			node,
+			pk[:],
+			from.Unix(),
+			to.Unix(),
+			!successful,
+			num,
+		)
+		if err != nil {
+			return nil, utils.AddContext(err, "couldn't query scan history")
 		}
-		scan := hostdb.ScanHistory{
-			HostScan: hostdb.HostScan{
-				Timestamp: time.Unix(ra, 0),
-				Success:   success,
-				Latency:   time.Duration(latency) * time.Millisecond,
-				Error:     msg,
-			},
-			PublicKey: pk,
-			Network:   network,
-			Node:      node,
-		}
-		if len(settings) > 0 {
-			d := types.NewBufDecoder(settings)
-			utils.DecodeSettings(&scan.Settings, d)
-			if err := d.Err(); err != nil {
-				return nil, utils.AddContext(err, "couldn't decode host settings")
+
+		for rows.Next() {
+			var ra int64
+			var success bool
+			var latency float64
+			var msg string
+			var settings, pt []byte
+			if err := rows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
+				rows.Close()
+				return nil, utils.AddContext(err, "couldn't decode scan history")
 			}
-		}
-		if len(pt) > 0 {
-			d := types.NewBufDecoder(pt)
-			utils.DecodePriceTable(&scan.PriceTable, d)
-			if err := d.Err(); err != nil {
-				return nil, utils.AddContext(err, "couldn't decode host price table")
+			scan := hostdb.ScanHistory{
+				HostScan: hostdb.HostScan{
+					Timestamp: time.Unix(ra, 0),
+					Success:   success,
+					Latency:   time.Duration(latency) * time.Millisecond,
+					Error:     msg,
+				},
+				PublicKey: pk,
+				Network:   network,
+				Node:      node,
 			}
+			if len(settings) > 0 {
+				d := types.NewBufDecoder(settings)
+				utils.DecodeSettings(&scan.Settings, d)
+				if err := d.Err(); err != nil {
+					rows.Close()
+					return nil, utils.AddContext(err, "couldn't decode host settings")
+				}
+			}
+			if len(pt) > 0 {
+				d := types.NewBufDecoder(pt)
+				utils.DecodePriceTable(&scan.PriceTable, d)
+				if err := d.Err(); err != nil {
+					rows.Close()
+					return nil, utils.AddContext(err, "couldn't decode host price table")
+				}
+			}
+			scans = append(scans, scan)
 		}
-		scans = append(scans, scan)
+		rows.Close()
 	}
 
 	return
@@ -880,51 +893,62 @@ func (api *portalAPI) getBenchmarks(network string, pk types.PublicKey, from, to
 		num = 0
 	}
 
-	rows, err := api.db.Query(`
-		SELECT node, ran_at, success, upload_speed, download_speed, ttfb, error
+	benchmarkStmt, err := api.db.Prepare(`
+		SELECT ran_at, success, upload_speed, download_speed, ttfb, error
 		FROM benchmarks
 		WHERE network = ?
+		AND node = ?
 		AND public_key = ?
 		AND ran_at > ?
 		AND ran_at < ?
 		AND (? OR success = TRUE)
 		ORDER BY ran_at DESC
 		LIMIT ?
-	`,
-		network,
-		pk[:],
-		from.Unix(),
-		to.Unix(),
-		!successful,
-		num,
-	)
+	`)
 	if err != nil {
-		return nil, utils.AddContext(err, "couldn't query benchmark history")
+		return nil, utils.AddContext(err, "couldn't prepare benchmark statement")
 	}
-	defer rows.Close()
+	defer benchmarkStmt.Close()
 
-	for rows.Next() {
-		var ra int64
-		var success bool
-		var ul, dl, ttfb float64
-		var node, msg string
-		if err := rows.Scan(&node, &ra, &success, &ul, &dl, &ttfb, &msg); err != nil {
+	for node := range api.clients {
+		rows, err := benchmarkStmt.Query(
+			network,
+			node,
+			pk[:],
+			from.Unix(),
+			to.Unix(),
+			!successful,
+			num,
+		)
+		if err != nil {
 			return nil, utils.AddContext(err, "couldn't query benchmark history")
 		}
-		benchmark := hostdb.BenchmarkHistory{
-			HostBenchmark: hostdb.HostBenchmark{
-				Timestamp:     time.Unix(ra, 0),
-				Success:       success,
-				UploadSpeed:   ul,
-				DownloadSpeed: dl,
-				TTFB:          time.Duration(ttfb) * time.Millisecond,
-				Error:         msg,
-			},
-			PublicKey: pk,
-			Network:   network,
-			Node:      node,
+
+		for rows.Next() {
+			var ra int64
+			var success bool
+			var ul, dl, ttfb float64
+			var msg string
+			if err := rows.Scan(&ra, &success, &ul, &dl, &ttfb, &msg); err != nil {
+				rows.Close()
+				return nil, utils.AddContext(err, "couldn't query benchmark history")
+			}
+			benchmark := hostdb.BenchmarkHistory{
+				HostBenchmark: hostdb.HostBenchmark{
+					Timestamp:     time.Unix(ra, 0),
+					Success:       success,
+					UploadSpeed:   ul,
+					DownloadSpeed: dl,
+					TTFB:          time.Duration(ttfb) * time.Millisecond,
+					Error:         msg,
+				},
+				PublicKey: pk,
+				Network:   network,
+				Node:      node,
+			}
+			benchmarks = append(benchmarks, benchmark)
 		}
-		benchmarks = append(benchmarks, benchmark)
+		rows.Close()
 	}
 
 	return
