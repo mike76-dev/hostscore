@@ -201,7 +201,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 1,
+            borderWidth: 2,
             order: 3
         })
         datasets.push({
@@ -213,7 +213,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 1,
+            borderWidth: 2,
             order: 4
         })
         datasets.push({
@@ -225,7 +225,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 1,
+            borderWidth: 2,
             order: 5
         })
         datasets.push({
@@ -237,10 +237,22 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 1,
+            borderWidth: 2,
             order: 6
         })
         return { labels, datasets }
+    }
+
+    const maxValues = (data: Dataset[]): { y: number, y1: number } => {
+        let y = 0
+        let y1 = 0
+        data.forEach(dataset => {
+            dataset.data.forEach(d => {
+                if (dataset.yAxisID === 'y' && d > y) y = d
+                if (dataset.yAxisID === 'y1' && d > y1) y1 = d
+            })
+        })
+        return { y, y1 }
     }
 
     const chartRef = useRef<Chart | null>(null)
@@ -252,9 +264,11 @@ const PriceChart = (props: PriceChartProps) => {
             if (chartRef.current) {
                 chartRef.current.destroy()
             }
+            const data = formatData(props.data)
+            const { y, y1 } = maxValues(data.datasets as Dataset[])
             chartRef.current = new Chart(ctx, {
                 type: 'line',
-                data: formatData(props.data),
+                data: data,
                 options: {
                     responsive: true,
                     scales: {
@@ -273,7 +287,8 @@ const PriceChart = (props: PriceChartProps) => {
                             beginAtZero: true,
                             grid: {
                                 color: props.darkMode ? 'rgba(127, 127, 127, 0.1)': 'rgba(0, 0, 0, 0.1)'
-                            }
+                            },
+                            suggestedMax: y * 1.05
                         },
                         y1: {
                             title: {
@@ -285,7 +300,8 @@ const PriceChart = (props: PriceChartProps) => {
                             beginAtZero: true,
                             grid: {
                                 drawOnChartArea: false
-                            }
+                            },
+                            suggestedMax: y1
                         }
                     },
                     plugins: {
