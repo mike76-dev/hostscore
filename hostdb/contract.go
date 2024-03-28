@@ -47,11 +47,11 @@ func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transact
 	if host.Network == "zen" {
 		blockHeight = hdb.sZen.tip.Height
 		state = hdb.cmZen.TipState()
-		txnFee = hdb.cmZen.RecommendedFee().Mul64(3)
+		txnFee = hdb.cmZen.RecommendedFee().Mul64(4)
 	} else {
 		blockHeight = hdb.s.tip.Height
 		state = hdb.cm.TipState()
-		txnFee = hdb.cm.RecommendedFee().Mul64(3)
+		txnFee = hdb.cm.RecommendedFee().Mul64(4)
 	}
 	settings := host.Settings
 	ourKey := hdb.w.Key(host.Network)
