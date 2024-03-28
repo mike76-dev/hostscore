@@ -116,7 +116,7 @@ function browseHost(obj) {
 	let latencies = [];
 	let benchmarks = [];
 	fetch(apiBaseURL + '/scans?network=' + network + '&host=' + key +
-		'&number=48&success=true', options)
+		'&number=16&success=true', options)
 	.then(response => response.json())
 	.then(data => {
 		if (data.status != 'ok') console.log(data.message)
@@ -260,7 +260,7 @@ function browseHost(obj) {
 	document.getElementById('current-address').innerHTML = host.netaddress;
 	document.getElementById('current-location').innerHTML = getFlagEmoji(host.country);
 	document.getElementById('current-first').innerHTML = new Date(host.firstSeen).toDateString();
-	document.getElementById('current-last').innerHTML = host.lastSeen == '0001-01-01T00:00:00Z' ? 'N/A' : lastSeen.toDateString();
+	document.getElementById('current-last').innerHTML = lastSeen.getFullYear() <= 1970 ? 'N/A' : lastSeen.toDateString();
 	document.getElementById('current-uptime').innerHTML = downtime + uptime == 0 ? '0%' : (uptime * 100 / (uptime + downtime)).toFixed(1) + '%';
 	document.getElementById('current-version').innerHTML = host.settings.version == '' ? 'N/A' : host.settings.version;
 	document.getElementById('current-accepting').innerHTML = host.settings.acceptingcontracts ? 'Yes' : 'No';
