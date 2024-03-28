@@ -49,7 +49,7 @@ export const HostInfo = (props: HostInfoProps) => {
 				activeHosts = int.activeHosts
 			}
 		}
-		let lastSeen = (ls.getFullYear() === 1) ? 'N/A' : ls.toDateString()
+		let lastSeen = (ls.getFullYear() <=1970) ? 'N/A' : ls.toDateString()
 		let uptime = dt + ut === 0 ? '0%' : (ut * 100 / (ut + dt)).toFixed(1) + '%'
 		return { lastSeen, uptime, activeHosts }
 	}

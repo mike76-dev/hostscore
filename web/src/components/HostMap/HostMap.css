@@ -1,0 +1,23 @@
+.host-map-container {
+    height: 20rem;
+    margin-top: 1rem;
+    border: 1px solid var(--borderLight);
+}
+
+.host-map-dark {
+    border-color: var(--borderDark);
+}
+
+.leaflet-container {
+    height: 100%;
+}
+
+.host-map-dark .leaflet-popup-content-wrapper,
+.host-map-dark .leaflet-popup-tip {
+    background-color: var(--outlineDark);
+    color: var(--textDark);
+}
+
+.host-map-dark .leaflet-popup-close-button span {
+    color: var(--textDark);
+}

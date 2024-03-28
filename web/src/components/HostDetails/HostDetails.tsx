@@ -17,6 +17,7 @@ import {
 import {
     Button,
     HostInfo,
+    HostMap,
     HostPrices,
     HostResults,
     Loader,
@@ -103,6 +104,10 @@ export const HostDetails = (props: HostDetailsProps) => {
 		        			host={host}
                             node={node}
 				        />
+                        <HostMap
+                            darkMode={props.darkMode}
+                            host={host}
+                        />
                         <HostPrices
                             darkMode={props.darkMode}
                             data={priceChanges}
