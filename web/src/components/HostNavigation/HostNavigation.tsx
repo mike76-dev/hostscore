@@ -14,11 +14,11 @@ export const HostNavigation = (props: HostNavigationProps) => {
 	const first = () => {props.changeOffset(0)}
 	const prev = () => {props.changeOffset(props.offset - props.limit)}
 	const next = () => {props.changeOffset(props.offset + props.limit)}
-	const last = () => {props.changeOffset(props.limit * Math.floor(props.total / props.limit))}
+	const last = () => {props.changeOffset(props.limit * (Math.ceil(props.total / props.limit) - 1))}
 	const goto = (event: React.ChangeEvent<HTMLInputElement>) => {
 		let oldValue = Math.floor(props.offset / props.limit) + 1
 		let newValue = Number.parseInt(event.target.value, 10)
-		if (newValue > 0 && Number.isInteger(newValue) && newValue <= props.limit * Math.floor(props.total / props.limit) + 1) {
+		if (newValue > 0 && Number.isInteger(newValue) && newValue <= Math.ceil(props.total / props.limit)) {
 			props.changeOffset((newValue - 1) * props.limit)
 		} else {
 			event.target.value = '' + oldValue
