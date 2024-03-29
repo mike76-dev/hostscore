@@ -77,7 +77,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		var uploadCost, downloadCost types.Currency
 
 		// Check if we have a contract with this host and if it has enough money in it.
-		if host.Revision.WindowStart <= height ||
+		if host.Revision.WindowStart <= height+144 ||
 			host.Revision.ValidRenterPayout().Cmp(benchmarkCost(host)) < 0 {
 			var rev rhpv2.ContractRevision
 			var txnSet []types.Transaction
