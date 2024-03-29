@@ -409,56 +409,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 	s.tip.Height = height
 	copy(s.tip.ID[:], id)
 
-	scanStmt, err := s.db.Prepare(`
-		SELECT ran_at, success, latency, error, settings, price_table
-		FROM hdb_scans_` + s.network + `
-		WHERE public_key = ?
-		ORDER BY ran_at DESC
-		LIMIT 2
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't prepare scan statement")
-	}
-	defer scanStmt.Close()
-
-	settingsStmt, err := s.db.Prepare(`
-		SELECT settings
-		FROM hdb_scans_` + s.network + `
-		WHERE public_key = ?
-		AND settings IS NOT NULL
-		ORDER BY ran_at DESC
-		LIMIT 1
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't prepare settings statement")
-	}
-	defer settingsStmt.Close()
-
-	priceTableStmt, err := s.db.Prepare(`
-		SELECT price_table
-		FROM hdb_scans_` + s.network + `
-		WHERE public_key = ?
-		AND price_table IS NOT NULL
-		ORDER BY ran_at DESC
-		LIMIT 1
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't prepare price table statement")
-	}
-	defer priceTableStmt.Close()
-
-	benchmarkStmt, err := s.db.Prepare(`
-		SELECT ran_at, success, upload_speed, download_speed, ttfb, error
-		FROM hdb_benchmarks_` + s.network + `
-		WHERE public_key = ?
-		ORDER BY ran_at DESC
-		LIMIT 1
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't prepare benchmark statement")
-	}
-	defer benchmarkStmt.Close()
-
 	rows, err := s.db.Query(`
 		SELECT
 			id,
@@ -544,20 +494,72 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			host.Blocked = true
 			s.blockedHosts[host.PublicKey] = struct{}{}
 		}
+		s.hosts[host.PublicKey] = host
+	}
+	rows.Close()
 
-		scanRows, err := scanStmt.Query(pk)
+	scanStmt, err := s.db.Prepare(`
+		SELECT ran_at, success, latency, error, settings, price_table
+		FROM hdb_scans_` + s.network + `
+		WHERE public_key = ?
+		ORDER BY ran_at DESC
+		LIMIT 2
+	`)
+	if err != nil {
+		return utils.AddContext(err, "couldn't prepare scan statement")
+	}
+	defer scanStmt.Close()
+
+	settingsStmt, err := s.db.Prepare(`
+		SELECT settings
+		FROM hdb_scans_` + s.network + `
+		WHERE public_key = ?
+		AND settings IS NOT NULL
+		ORDER BY ran_at DESC
+		LIMIT 1
+	`)
+	if err != nil {
+		return utils.AddContext(err, "couldn't prepare settings statement")
+	}
+	defer settingsStmt.Close()
+
+	priceTableStmt, err := s.db.Prepare(`
+		SELECT price_table
+		FROM hdb_scans_` + s.network + `
+		WHERE public_key = ?
+		AND price_table IS NOT NULL
+		ORDER BY ran_at DESC
+		LIMIT 1
+	`)
+	if err != nil {
+		return utils.AddContext(err, "couldn't prepare price table statement")
+	}
+	defer priceTableStmt.Close()
+
+	benchmarkStmt, err := s.db.Prepare(`
+		SELECT ran_at, success, upload_speed, download_speed, ttfb, error
+		FROM hdb_benchmarks_` + s.network + `
+		WHERE public_key = ?
+		ORDER BY ran_at DESC
+		LIMIT 1
+	`)
+	if err != nil {
+		return utils.AddContext(err, "couldn't prepare benchmark statement")
+	}
+	defer benchmarkStmt.Close()
+
+	for _, host := range s.hosts {
+		rows, err := scanStmt.Query(host.PublicKey[:])
 		if err != nil {
-			rows.Close()
 			return utils.AddContext(err, "couldn't query scans")
 		}
-		for scanRows.Next() {
+		for rows.Next() {
 			var ra int64
 			var success bool
 			var latency float64
 			var msg string
 			var settings, pt []byte
-			if err := scanRows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
-				scanRows.Close()
+			if err := rows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't load scan history")
 			}
@@ -571,7 +573,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				d := types.NewBufDecoder(settings)
 				utils.DecodeSettings(&scan.Settings, d)
 				if err := d.Err(); err != nil {
-					scanRows.Close()
 					rows.Close()
 					return utils.AddContext(err, "couldn't decode host settings")
 				}
@@ -580,42 +581,39 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				d := types.NewBufDecoder(pt)
 				utils.DecodePriceTable(&scan.PriceTable, d)
 				if err := d.Err(); err != nil {
-					scanRows.Close()
 					rows.Close()
 					return utils.AddContext(err, "couldn't decode host price table")
 				}
 			}
 			host.ScanHistory = append([]HostScan{scan}, host.ScanHistory...)
 		}
-		scanRows.Close()
+		rows.Close()
 
-		if len(settings) == 0 {
-			err = settingsStmt.QueryRow(pk).Scan(&settings)
+		if (host.Settings == rhpv2.HostSettings{}) {
+			var settings []byte
+			err = settingsStmt.QueryRow(host.PublicKey[:]).Scan(&settings)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				rows.Close()
 				return utils.AddContext(err, "couldn't load host settings")
 			}
 			if len(settings) > 0 {
 				d := types.NewBufDecoder(settings)
 				utils.DecodeSettings(&host.Settings, d)
 				if err := d.Err(); err != nil {
-					rows.Close()
 					return utils.AddContext(err, "couldn't decode host settings")
 				}
 			}
 		}
 
-		if len(pt) == 0 {
-			err = priceTableStmt.QueryRow(pk).Scan(&pt)
+		if (host.PriceTable == rhpv3.HostPriceTable{}) {
+			var pt []byte
+			err = priceTableStmt.QueryRow(host.PublicKey[:]).Scan(&pt)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
-				rows.Close()
 				return utils.AddContext(err, "couldn't load host price table")
 			}
 			if len(pt) > 0 {
 				d := types.NewBufDecoder(pt)
 				utils.DecodePriceTable(&host.PriceTable, d)
 				if err := d.Err(); err != nil {
-					rows.Close()
 					return utils.AddContext(err, "couldn't decode host price table")
 				}
 			}
@@ -625,9 +623,8 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		var success bool
 		var ul, dl, ttfb float64
 		var msg string
-		err = benchmarkStmt.QueryRow(pk).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
+		err = benchmarkStmt.QueryRow(host.PublicKey[:]).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			rows.Close()
 			return utils.AddContext(err, "couldn't load benchmarks")
 		}
 		if err == nil {
@@ -640,12 +637,10 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				Error:         msg,
 			}
 		}
-		s.hosts[host.PublicKey] = host
 		if (len(host.ScanHistory) > 0 && host.ScanHistory[len(host.ScanHistory)-1].Success) && (len(host.ScanHistory) > 1 && host.ScanHistory[len(host.ScanHistory)-2].Success || len(host.ScanHistory) == 1) {
 			s.activeHostsCache[host.PublicKey] = host.IPNets
 		}
 	}
-	rows.Close()
 
 	s.log.Info("loading complete", zap.String("network", s.network))
 
