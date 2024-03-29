@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -560,25 +561,45 @@ func balanceStatus(balance types.Currency) string {
 func (api *portalAPI) statusHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	var nodes []nodeStatus
 	for n, c := range api.clients {
-		status, err := c.NodeStatus()
-		if err != nil {
-			api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var status client.NodeStatusResponse
+		var err error
+		done := make(chan struct{})
+		go func() {
+			status, err = c.NodeStatus()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			if err != nil {
+				api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
+				nodes = append(nodes, nodeStatus{
+					Location: n,
+					Status:   false,
+				})
+			} else {
+				nodes = append(nodes, nodeStatus{
+					Location:   n,
+					Status:     true,
+					Version:    status.Version,
+					Height:     status.Height,
+					HeightZen:  status.HeightZen,
+					Balance:    balanceStatus(status.Balance.Siacoins),
+					BalanceZen: balanceStatus(status.BalanceZen.Siacoins),
+				})
+			}
+		case <-ctx.Done():
+			api.log.Error("NodeStatus call timed out", zap.String("node", n))
 			nodes = append(nodes, nodeStatus{
 				Location: n,
 				Status:   false,
 			})
-		} else {
-			nodes = append(nodes, nodeStatus{
-				Location:   n,
-				Status:     true,
-				Version:    status.Version,
-				Height:     status.Height,
-				HeightZen:  status.HeightZen,
-				Balance:    balanceStatus(status.Balance.Siacoins),
-				BalanceZen: balanceStatus(status.BalanceZen.Siacoins),
-			})
 		}
 	}
+
 	writeJSON(w, statusResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		Version:     build.ClientVersion,
