@@ -4,6 +4,14 @@
 	position: relative;
 }
 
+.hosts-not-found {
+    margin-top: 1rem;
+}
+
+.hosts-not-found-dark {
+    color: var(--textDark);
+}
+
 @media screen and (max-width: 1000px) {
     .hosts-container {
         width: 100%;
