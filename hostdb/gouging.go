@@ -44,33 +44,30 @@ var (
 // checkGouging performs a number of gouging checks before forming
 // a contract with the host.
 func checkGouging(hs *rhpv2.HostSettings, pt *rhpv3.HostPriceTable, limits hostDBPriceLimits) (err error) {
-	if hs == nil {
-		return errors.New("host's settings unknown")
-	}
-	if pt == nil {
-		return errors.New("host has no price table")
-	}
-
 	// Host settings checks.
-	if err = checkContractGougingRHPv2(*hs); err != nil {
-		return
-	}
-	if err = checkPriceGougingHS(*hs, limits); err != nil {
-		return
+	if hs != nil && (*hs != rhpv2.HostSettings{}) {
+		if err = checkContractGougingRHPv2(*hs); err != nil {
+			return
+		}
+		if err = checkPriceGougingHS(*hs, limits); err != nil {
+			return
+		}
 	}
 
 	// Price table checks.
-	if err = checkDownloadGougingRHPv3(*pt, limits); err != nil {
-		return
-	}
-	if err = checkPriceGougingPT(*pt, limits); err != nil {
-		return
-	}
-	if err = checkUploadGougingRHPv3(*pt, limits); err != nil {
-		return
-	}
-	if err = checkContractGougingRHPv3(*pt); err != nil {
-		return
+	if pt != nil && (*pt != rhpv3.HostPriceTable{}) {
+		if err = checkDownloadGougingRHPv3(*pt, limits); err != nil {
+			return
+		}
+		if err = checkPriceGougingPT(*pt, limits); err != nil {
+			return
+		}
+		if err = checkUploadGougingRHPv3(*pt, limits); err != nil {
+			return
+		}
+		if err = checkContractGougingRHPv3(*pt); err != nil {
+			return
+		}
 	}
 
 	return nil

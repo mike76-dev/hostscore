@@ -51,11 +51,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		// Do some checks first.
 		settings := host.Settings
 		if (settings == rhpv2.HostSettings{}) {
-			return errors.New("couldn't fetch host settings")
-		}
-		pt := host.PriceTable
-		if (pt == rhpv3.HostPriceTable{}) {
-			return errors.New("couldn't fetch price table")
+			return errors.New("host settings unavailable")
 		}
 		var count int
 		if host.Network == "zen" {
@@ -66,7 +62,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		if count > 5 {
 			return errors.New("too many hosts in the same subnet")
 		}
-		err := checkGouging(&settings, &pt, limits)
+		err := checkGouging(&settings, nil, limits)
 		if err != nil {
 			return err
 		}
@@ -145,6 +141,9 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 				host.Revision = rev
 				return nil
 			})
+			if err != nil {
+				return err
+			}
 		}
 
 		// Fetch a valid price table.
@@ -158,7 +157,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			}
 		}()
 		err = rhp.WithTransportV3(ptCtx, addr, host.PublicKey, func(t *rhpv3.Transport) error {
-			pt, err = rhp.RPCPriceTable(ptCtx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
+			pt, err := rhp.RPCPriceTable(ptCtx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
 				payment, ok := rhpv3.PayByContract(&host.Revision, pt.UpdatePriceTableCost, rhpv3.Account(key.PublicKey()), key)
 				if !ok {
 					return nil, errors.New("insufficient balance")
@@ -173,6 +172,10 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 				return utils.AddContext(err, "unable to get price table")
 			}
 			host.PriceTable = pt
+			err = checkGouging(nil, &pt, limits)
+			if err != nil {
+				return err
+			}
 
 			// Check the account balance.
 			payment, ok := rhpv3.PayByContract(&host.Revision, pt.AccountBalanceCost, rhpv3.Account(key.PublicKey()), key)
@@ -254,7 +257,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			for i := 0; i < numSectors; i++ {
 				frand.Read(data[:256])
 				payment := rhpv3.PayByEphemeralAccount(rhpv3.Account(key.PublicKey()), uploadCost, host.PriceTable.HostBlockHeight+6, key)
-				root, _, err := rhp.RPCAppendSector(upCtx, t, key, pt, &host.Revision, &payment, &data)
+				root, _, err := rhp.RPCAppendSector(upCtx, t, key, host.PriceTable, &host.Revision, &payment, &data)
 				if err != nil {
 					return utils.AddContext(err, "unable to upload sector")
 				}
@@ -282,7 +285,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			for i := 0; i < numSectors; i++ {
 				payment := rhpv3.PayByEphemeralAccount(rhpv3.Account(key.PublicKey()), downloadCost, host.PriceTable.HostBlockHeight+6, key)
 				buf := bytes.NewBuffer(data[:])
-				_, _, err := rhp.RPCReadSector(dnCtx, t, buf, pt, &payment, 0, rhpv2.SectorSize, roots[i])
+				_, _, err := rhp.RPCReadSector(dnCtx, t, buf, host.PriceTable, &payment, 0, rhpv2.SectorSize, roots[i])
 				if err != nil {
 					return utils.AddContext(err, "unable to download sector")
 				}
