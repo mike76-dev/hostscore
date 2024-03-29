@@ -1,4 +1,7 @@
 .host-map-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     height: 20rem;
     margin-top: 1rem;
     border: 1px solid var(--borderLight);
@@ -9,6 +12,7 @@
 }
 
 .leaflet-container {
+    width: 100%;
     height: 100%;
 }
 
@@ -18,6 +22,7 @@
     color: var(--textDark);
 }
 
-.host-map-dark .leaflet-popup-close-button span {
+.host-map-dark .leaflet-popup-close-button span,
+.host-map-dark .host-map-unknown {
     color: var(--textDark);
 }
