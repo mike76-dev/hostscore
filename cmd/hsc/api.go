@@ -93,12 +93,24 @@ type priceChangeResponse struct {
 	PriceChanges []priceChange   `json:"priceChanges"`
 }
 
+type scoreBreakdown struct {
+	PricesScore       float64 `json:"prices"`
+	StorageScore      float64 `json:"storage"`
+	CollateralScore   float64 `json:"collateral"`
+	InteractionsScore float64 `json:"interactions"`
+	UptimeScore       float64 `json:"uptime"`
+	AgeScore          float64 `json:"age"`
+	VersionScore      float64 `json:"version"`
+	TotalScore        float64 `json:"total"`
+}
+
 type nodeInteractions struct {
 	Uptime      time.Duration     `json:"uptime"`
 	Downtime    time.Duration     `json:"downtime"`
 	ScanHistory []hostdb.HostScan `json:"scanHistory"`
 	LastSeen    time.Time         `json:"lastSeen"`
 	ActiveHosts int               `json:"activeHosts"`
+	Score       scoreBreakdown    `json:"score"`
 	hostdb.HostInteractions
 }
 
@@ -177,7 +189,7 @@ func (api *portalAPI) requestUpdates() {
 			if err := api.insertUpdates(node, updates); err != nil {
 				api.log.Error("failed to insert updates", zap.String("node", node), zap.Error(err))
 			}
-			if len(updates.Hosts)+len(updates.Scans)+len(updates.Benchmarks) > 1000 {
+			if len(updates.Hosts)+len(updates.Scans)+len(updates.Benchmarks) > 500 {
 				timeout = 5 * time.Second
 			}
 		}

@@ -65,18 +65,34 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			downtime,
 			last_seen,
 			active_hosts,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			historic_successful_interactions,
 			historic_failed_interactions,
 			recent_successful_interactions,
 			recent_failed_interactions,
 			last_update
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			uptime = new.uptime,
 			downtime = new.downtime,
 			last_seen = new.last_seen,
 			active_hosts = new.active_hosts,
+			price_score = new.price_score,
+			storage_score = new.storage_score,
+			collateral_score = new.collateral_score,
+			interactions_score = new.interactions_score,
+			uptime_score = new.uptime_score,
+			age_score = new.age_score,
+			version_score = new.version_score,
+			total_score = new.total_score,
 			historic_successful_interactions = new.historic_successful_interactions,
 			historic_failed_interactions = new.historic_failed_interactions,
 			recent_successful_interactions = new.recent_successful_interactions,
@@ -212,6 +228,14 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			int64(host.Downtime.Seconds()),
 			host.LastSeen.Unix(),
 			host.ActiveHosts,
+			calculateScore(host).PricesScore,
+			calculateScore(host).StorageScore,
+			calculateScore(host).CollateralScore,
+			calculateScore(host).InteractionsScore,
+			calculateScore(host).UptimeScore,
+			calculateScore(host).AgeScore,
+			calculateScore(host).VersionScore,
+			calculateScore(host).TotalScore,
 			host.Interactions.HistoricSuccesses,
 			host.Interactions.HistoricFailures,
 			host.Interactions.RecentSuccesses,
@@ -281,6 +305,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				ScanHistory: h.ScanHistory,
 				LastSeen:    h.LastSeen,
 				ActiveHosts: h.ActiveHosts,
+				Score:       calculateScore(h),
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -310,6 +335,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				ScanHistory: h.ScanHistory,
 				LastSeen:    h.LastSeen,
 				ActiveHosts: h.ActiveHosts,
+				Score:       calculateScore(h),
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -554,6 +580,14 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 					downtime,
 					last_seen,
 					active_hosts,
+					price_score,
+					storage_score,
+					collateral_score,
+					interactions_score,
+					uptime_score,
+					age_score,
+					version_score,
+					total_score,
 					historic_successful_interactions,
 					historic_failed_interactions,
 					recent_successful_interactions,
@@ -570,10 +604,30 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 			for rows.Next() {
 				var lu uint64
 				var ut, dt, ls int64
+				var ps, ss, cs, is, us, as, vs, ts float64
 				var hsi, hfi, rsi, rfi float64
 				var ah int
 				var node string
-				if err := rows.Scan(&node, &ut, &dt, &ls, &ah, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
+				if err := rows.Scan(
+					&node,
+					&ut,
+					&dt,
+					&ls,
+					&ah,
+					&ps,
+					&ss,
+					&cs,
+					&is,
+					&us,
+					&as,
+					&vs,
+					&ts,
+					&hsi,
+					&hfi,
+					&rsi,
+					&rfi,
+					&lu,
+				); err != nil {
 					rows.Close()
 					return nil, false, 0, utils.AddContext(err, "couldn't decode interactions")
 				}
@@ -582,6 +636,16 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 					Downtime:    time.Duration(dt) * time.Second,
 					LastSeen:    time.Unix(ls, 0),
 					ActiveHosts: ah,
+					Score: scoreBreakdown{
+						PricesScore:       ps,
+						StorageScore:      ss,
+						CollateralScore:   cs,
+						InteractionsScore: is,
+						UptimeScore:       us,
+						AgeScore:          as,
+						VersionScore:      vs,
+						TotalScore:        ts,
+					},
 					HostInteractions: hostdb.HostInteractions{
 						HistoricSuccesses: hsi,
 						HistoricFailures:  hfi,
@@ -1048,6 +1112,14 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 			downtime,
 			last_seen,
 			active_hosts,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			historic_successful_interactions,
 			historic_failed_interactions,
 			recent_successful_interactions,
@@ -1072,9 +1144,29 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 			var node string
 			var lu uint64
 			var ut, dt, ls int64
+			var ps, ss, cs, is, us, as, vs, ts float64
 			var hsi, hfi, rsi, rfi float64
 			var ah int
-			if err := rows.Scan(&node, &ut, &dt, &ls, &ah, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
+			if err := rows.Scan(
+				&node,
+				&ut,
+				&dt,
+				&ls,
+				&ah,
+				&ps,
+				&ss,
+				&cs,
+				&is,
+				&us,
+				&as,
+				&vs,
+				&ts,
+				&hsi,
+				&hfi,
+				&rsi,
+				&rfi,
+				&lu,
+			); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode interactions")
 			}
@@ -1083,6 +1175,16 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 				Downtime:    time.Duration(dt) * time.Second,
 				LastSeen:    time.Unix(ls, 0),
 				ActiveHosts: ah,
+				Score: scoreBreakdown{
+					PricesScore:       ps,
+					StorageScore:      ss,
+					CollateralScore:   cs,
+					InteractionsScore: is,
+					UptimeScore:       us,
+					AgeScore:          as,
+					VersionScore:      vs,
+					TotalScore:        ts,
+				},
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: hsi,
 					HistoricFailures:  hfi,
