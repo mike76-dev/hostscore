@@ -22,13 +22,13 @@ var (
 
 // calculateScore calculates the total host's score.
 func calculateScore(host hostdb.HostDBEntry) scoreBreakdown {
-	hostPeriodCost := hostPeriodCostForScore(host)
+	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
 	sb := scoreBreakdown{
 		PricesScore:       priceAdjustmentScore(hostPeriodCost),
 		StorageScore:      storageRemainingScore(host.Settings),
 		CollateralScore:   collateralScore(host.PriceTable),
-		InteractionsScore: interactionScore(host.Interactions),
-		UptimeScore:       uptimeScore(host),
+		InteractionsScore: interactionScore(host.Interactions.HistoricSuccesses, host.Interactions.HistoricFailures),
+		UptimeScore:       uptimeScore(host.Uptime, host.Downtime, host.ScanHistory),
 		AgeScore:          ageScore(host.FirstSeen),
 		VersionScore:      versionScore(host.Settings),
 	}
@@ -40,6 +40,36 @@ func calculateScore(host hostdb.HostDBEntry) scoreBreakdown {
 		sb.AgeScore *
 		sb.VersionScore
 	return sb
+}
+
+// calculateGlobalScore calculates the average score over all nodes.
+func calculateGlobalScore(host *portalHost) float64 {
+	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
+	sb := scoreBreakdown{
+		PricesScore:     priceAdjustmentScore(hostPeriodCost),
+		StorageScore:    storageRemainingScore(host.Settings),
+		CollateralScore: collateralScore(host.PriceTable),
+		AgeScore:        ageScore(host.FirstSeen),
+		VersionScore:    versionScore(host.Settings),
+	}
+	var us, is float64
+	var count int
+	for _, interactions := range host.Interactions {
+		us += uptimeScore(interactions.Uptime, interactions.Downtime, interactions.ScanHistory)
+		is += interactionScore(interactions.HistoricSuccesses, interactions.HistoricFailures)
+		count++
+	}
+	if count > 0 {
+		sb.UptimeScore = us / float64(count)
+		sb.InteractionsScore = is / float64(count)
+	}
+	return sb.PricesScore *
+		sb.StorageScore *
+		sb.CollateralScore *
+		sb.InteractionsScore *
+		sb.UptimeScore *
+		sb.AgeScore *
+		sb.VersionScore
 }
 
 // priceAdjustmentScore computes a score between 0 and 1 for a host given its
@@ -176,19 +206,19 @@ func collateralScore(pt rhpv3.HostPriceTable) float64 {
 	}
 }
 
-func interactionScore(i hostdb.HostInteractions) float64 {
+func interactionScore(hs, hf float64) float64 {
 	success, fail := 30.0, 1.0
-	success += i.HistoricSuccesses
-	fail += i.HistoricFailures
+	success += hs
+	fail += hf
 	return math.Pow(success/(success+fail), 10)
 }
 
-func uptimeScore(i hostdb.HostDBEntry) float64 {
-	secondToLastScanSuccess := len(i.ScanHistory) > 1 && i.ScanHistory[1].Success
-	lastScanSuccess := len(i.ScanHistory) > 0 && i.ScanHistory[0].Success
-	uptime := i.Uptime
-	downtime := i.Downtime
-	totalScans := len(i.ScanHistory)
+func uptimeScore(ut, dt time.Duration, history []hostdb.HostScan) float64 {
+	secondToLastScanSuccess := len(history) > 1 && history[1].Success
+	lastScanSuccess := len(history) > 0 && history[0].Success
+	uptime := ut
+	downtime := dt
+	totalScans := len(history)
 
 	// Special cases.
 	switch totalScans {
@@ -213,7 +243,7 @@ func uptimeScore(i hostdb.HostDBEntry) float64 {
 	// Account for the interval between the most recent interaction and the
 	// current time.
 	if totalScans > 0 {
-		finalInterval := time.Since(i.ScanHistory[0].Timestamp)
+		finalInterval := time.Since(history[0].Timestamp)
 		if lastScanSuccess {
 			uptime += finalInterval
 		} else {
@@ -257,10 +287,10 @@ func versionScore(settings rhpv2.HostSettings) float64 {
 // contractPriceForScore returns the contract price of the host used for
 // scoring. Since we don't know whether rhpv2 or rhpv3 are used, we return the
 // bigger one for a pesimistic score.
-func contractPriceForScore(h hostdb.HostDBEntry) types.Currency {
-	cp := h.Settings.ContractPrice
-	if cp.Cmp(h.PriceTable.ContractPrice) > 0 {
-		cp = h.PriceTable.ContractPrice
+func contractPriceForScore(settings rhpv2.HostSettings, pt rhpv3.HostPriceTable) types.Currency {
+	cp := settings.ContractPrice
+	if cp.Cmp(pt.ContractPrice) > 0 {
+		cp = pt.ContractPrice
 	}
 	return cp
 }
@@ -303,13 +333,13 @@ func storageCostForScore(pt rhpv3.HostPriceTable, bytes uint64) types.Currency {
 	return storeSectorCostRHPv3.Mul64(numSectors)
 }
 
-func hostPeriodCostForScore(h hostdb.HostDBEntry) types.Currency {
+func hostPeriodCostForScore(settings rhpv2.HostSettings, pt rhpv3.HostPriceTable) types.Currency {
 	// Compute the individual costs.
-	hostCollateral := rhpv2.ContractFormationCollateral(contractPeriod, dataPerHost, h.Settings)
-	hostContractPrice := contractPriceForScore(h)
-	hostUploadCost := uploadCostForScore(h.PriceTable, dataPerHost)
-	hostDownloadCost := downloadCostForScore(h.PriceTable, dataPerHost)
-	hostStorageCost := storageCostForScore(h.PriceTable, dataPerHost)
+	hostCollateral := rhpv2.ContractFormationCollateral(contractPeriod, dataPerHost, settings)
+	hostContractPrice := contractPriceForScore(settings, pt)
+	hostUploadCost := uploadCostForScore(pt, dataPerHost)
+	hostDownloadCost := downloadCostForScore(pt, dataPerHost)
+	hostStorageCost := storageCostForScore(pt, dataPerHost)
 	siafundFee := hostCollateral.
 		Add(hostContractPrice).
 		Add(hostUploadCost).

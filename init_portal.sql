@@ -15,6 +15,7 @@ CREATE TABLE hosts (
 	net_address    VARCHAR(255) NOT NULL,
 	ip_nets        TEXT NOT NULL,
 	last_ip_change BIGINT NOT NULL,
+    score          DOUBLE NOT NULL,
 	settings       BLOB,
 	price_table    BLOB,
 	PRIMARY KEY (id, network)
