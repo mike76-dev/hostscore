@@ -84,12 +84,24 @@ export type HostBenchmark = {
 	node: string
 }
 
+export type HostScore = {
+    prices: number,
+    storage: number,
+    collateral: number,
+    interactions: number,
+    uptime: number,
+    age: number,
+    version: number,
+    total: number
+}
+
 export type HostInteractions = {
 	uptime: number,
 	downtime: number,
 	scanHistory: HostScan[],
 	lastSeen: string,
 	activeHosts: number,
+    score: HostScore,
 	historicSuccessfulInteractions: number,
 	historicFailedInteractions: number,
 	recentSuccessfulInteractions: number,
@@ -106,6 +118,7 @@ export type Host = {
 	interactions: { [node: string]: HostInteractions },
 	ipNets: string[],
 	lastIPChange: string,
+    score: HostScore,
 	settings: HostSettings,
 	priceTable: HostPriceTable,
 	ip: string,

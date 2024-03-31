@@ -36,11 +36,18 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			net_address,
 			ip_nets,
 			last_ip_change,
-			score,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			settings,
 			price_table
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -194,7 +201,14 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 
 	updateScoreStmt, err := tx.Prepare(`
 		UPDATE hosts
-		SET score = ?
+		SET price_score = ?,
+			storage_score = ?,
+			collateral_score = ?,
+			interactions_score = ?,
+			uptime_score = ?,
+			age_score = ?,
+			version_score = ?,
+			total_score = ?
 		WHERE network = ?
 		AND public_key = ?
 	`)
@@ -227,6 +241,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			strings.Join(host.IPNets, ";"),
 			host.LastIPChange.Unix(),
 			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
 			settings.Bytes(),
 			pt.Bytes(),
 		)
@@ -234,6 +255,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			tx.Rollback()
 			return utils.AddContext(err, "couldn't update host record")
 		}
+		sb := calculateScore(host)
 		_, err = interactionsStmt.Exec(
 			host.Network,
 			node,
@@ -242,14 +264,14 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			int64(host.Downtime.Seconds()),
 			host.LastSeen.Unix(),
 			host.ActiveHosts,
-			calculateScore(host).PricesScore,
-			calculateScore(host).StorageScore,
-			calculateScore(host).CollateralScore,
-			calculateScore(host).InteractionsScore,
-			calculateScore(host).UptimeScore,
-			calculateScore(host).AgeScore,
-			calculateScore(host).VersionScore,
-			calculateScore(host).TotalScore,
+			sb.PricesScore,
+			sb.StorageScore,
+			sb.CollateralScore,
+			sb.InteractionsScore,
+			sb.UptimeScore,
+			sb.AgeScore,
+			sb.VersionScore,
+			sb.TotalScore,
 			host.Interactions.HistoricSuccesses,
 			host.Interactions.HistoricFailures,
 			host.Interactions.RecentSuccesses,
@@ -360,7 +382,18 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			}
 		}
 		host.Score = calculateGlobalScore(host)
-		_, err := updateScoreStmt.Exec(host.Score, h.Network, h.PublicKey[:])
+		_, err := updateScoreStmt.Exec(
+			host.Score.PricesScore,
+			host.Score.StorageScore,
+			host.Score.CollateralScore,
+			host.Score.InteractionsScore,
+			host.Score.UptimeScore,
+			host.Score.AgeScore,
+			host.Score.VersionScore,
+			host.Score.TotalScore,
+			h.Network,
+			h.PublicKey[:],
+		)
 		if err != nil {
 			api.log.Error("couldn't update score", zap.String("network", h.Network), zap.Stringer("hsot", h.PublicKey), zap.Error(err))
 		}
@@ -536,7 +569,14 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				net_address,
 				ip_nets,
 				last_ip_change,
-				score,
+				price_score,
+				storage_score,
+				collateral_score,
+				interactions_score,
+				uptime_score,
+				age_score,
+				version_score,
+				total_score,
 				settings,
 				price_table
 			FROM hosts
@@ -556,7 +596,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 			var b bool
 			var na, ip string
 			var fs, lc int64
-			var score float64
+			var ps, ss, cs, is, us, as, vs, ts float64
 			var settings, pt []byte
 			if err := rows.Scan(
 				&id,
@@ -567,7 +607,14 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				&na,
 				&ip,
 				&lc,
-				&score,
+				&ps,
+				&ss,
+				&cs,
+				&is,
+				&us,
+				&as,
+				&vs,
+				&ts,
 				&settings,
 				&pt,
 			); err != nil {
@@ -583,7 +630,16 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				NetAddress:   na,
 				IPNets:       strings.Split(ip, ";"),
 				LastIPChange: time.Unix(lc, 0),
-				Score:        score,
+				Score: scoreBreakdown{
+					PricesScore:       ps,
+					StorageScore:      ss,
+					CollateralScore:   cs,
+					InteractionsScore: is,
+					UptimeScore:       us,
+					AgeScore:          as,
+					VersionScore:      vs,
+					TotalScore:        ts,
+				},
 				Interactions: make(map[string]nodeInteractions),
 			}
 			if len(settings) > 0 {
@@ -1065,7 +1121,14 @@ func (api *portalAPI) load() error {
 			net_address,
 			ip_nets,
 			last_ip_change,
-			score,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			settings,
 			price_table
 		FROM hosts
@@ -1087,7 +1150,7 @@ func (api *portalAPI) load() error {
 		var fs, lc int64
 		var ks uint64
 		var blocked bool
-		var score float64
+		var ps, ss, cs, is, us, as, vs, ts float64
 		var settings, pt []byte
 		if err := rows.Scan(
 			&id,
@@ -1099,7 +1162,14 @@ func (api *portalAPI) load() error {
 			&netaddress,
 			&ipNets,
 			&lc,
-			&score,
+			&ps,
+			&ss,
+			&cs,
+			&is,
+			&us,
+			&as,
+			&vs,
+			&ts,
 			&settings,
 			&pt,
 		); err != nil {
@@ -1115,7 +1185,16 @@ func (api *portalAPI) load() error {
 			NetAddress:   netaddress,
 			IPNets:       strings.Split(ipNets, ";"),
 			LastIPChange: time.Unix(lc, 0),
-			Score:        score,
+			Score: scoreBreakdown{
+				PricesScore:       ps,
+				StorageScore:      ss,
+				CollateralScore:   cs,
+				InteractionsScore: is,
+				UptimeScore:       us,
+				AgeScore:          as,
+				VersionScore:      vs,
+				TotalScore:        ts,
+			},
 			Interactions: make(map[string]nodeInteractions),
 		}
 		if len(settings) > 0 {

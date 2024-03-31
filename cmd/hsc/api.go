@@ -124,7 +124,7 @@ type portalHost struct {
 	Interactions map[string]nodeInteractions `json:"interactions"`
 	IPNets       []string                    `json:"ipNets"`
 	LastIPChange time.Time                   `json:"lastIPChange"`
-	Score        float64                     `json:"score"`
+	Score        scoreBreakdown              `json:"score"`
 	Settings     rhpv2.HostSettings          `json:"settings"`
 	PriceTable   rhpv3.HostPriceTable        `json:"priceTable"`
 	external.IPInfo

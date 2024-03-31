@@ -43,7 +43,7 @@ func calculateScore(host hostdb.HostDBEntry) scoreBreakdown {
 }
 
 // calculateGlobalScore calculates the average score over all nodes.
-func calculateGlobalScore(host *portalHost) float64 {
+func calculateGlobalScore(host *portalHost) scoreBreakdown {
 	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
 	sb := scoreBreakdown{
 		PricesScore:     priceAdjustmentScore(hostPeriodCost),
@@ -63,13 +63,14 @@ func calculateGlobalScore(host *portalHost) float64 {
 		sb.UptimeScore = us / float64(count)
 		sb.InteractionsScore = is / float64(count)
 	}
-	return sb.PricesScore *
+	sb.TotalScore = sb.PricesScore *
 		sb.StorageScore *
 		sb.CollateralScore *
 		sb.InteractionsScore *
 		sb.UptimeScore *
 		sb.AgeScore *
 		sb.VersionScore
+	return sb
 }
 
 // priceAdjustmentScore computes a score between 0 and 1 for a host given its
@@ -214,7 +215,6 @@ func interactionScore(hs, hf float64) float64 {
 }
 
 func uptimeScore(ut, dt time.Duration, history []hostdb.HostScan) float64 {
-	secondToLastScanSuccess := len(history) > 1 && history[1].Success
 	lastScanSuccess := len(history) > 0 && history[0].Success
 	uptime := ut
 	downtime := dt
@@ -229,14 +229,6 @@ func uptimeScore(ut, dt time.Duration, history []hostdb.HostScan) float64 {
 			return 0.75 // 1 successful scan
 		} else {
 			return 0.25 // 1 failed scan
-		}
-	case 2:
-		if lastScanSuccess && secondToLastScanSuccess {
-			return 0.85
-		} else if lastScanSuccess || secondToLastScanSuccess {
-			return 0.5
-		} else {
-			return 0.05
 		}
 	}
 
