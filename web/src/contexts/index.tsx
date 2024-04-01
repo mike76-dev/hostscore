@@ -1,5 +1,5 @@
 import { createContext } from 'react'
-import { Host } from '../api'
+import { Host, HostSortType } from '../api'
 
 type NetworkContextType = {
 	network: string,
@@ -17,6 +17,8 @@ type HostContextType = {
     setOnlineOnly: (onlineOnly: boolean) => any,
     query: string,
     setQuery: (query: string) => any,
+    sorting: HostSortType,
+    changeSorting: (sorting: HostSortType) => any,
 }
 
 export const NetworkContext = createContext<NetworkContextType>({
@@ -35,4 +37,6 @@ export const HostContext = createContext<HostContextType>({
     setOnlineOnly: (onlineOnly: boolean) => true,
     query: '',
     setQuery: (query: string) => '',
+    sorting: { sortBy: 'rank', order: 'asc' },
+    changeSorting: (sorting: HostSortType) => {}
 })

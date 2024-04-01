@@ -23,3 +23,27 @@
 .host-info-small {
 	font-size: 0.7rem;
 }
+
+.host-info-score span {
+    cursor: pointer;
+}
+
+.host-info-score span::after {
+    display: inline-block;
+    content: '\025be';
+    margin-left: 0.5rem;
+    font-size: 1.1rem;
+    line-height: 0.9rem;
+    transition: transform 0.1s linear;
+}
+
+.host-info-score-expanded span::after {
+    -webkit-transform: rotate(-180deg);
+	-moz-transform: rotate(-180deg);
+	-o-transform: rotate(-180deg);
+	transform: rotate(-180deg);
+}
+
+.host-info-score-details td {
+    padding-left: 1rem;
+}

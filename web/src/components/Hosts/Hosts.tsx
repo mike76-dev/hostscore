@@ -25,7 +25,9 @@ export const Hosts = (props: HostsProps) => {
         onlineOnly,
         setOnlineOnly,
         query,
-        setQuery
+        setQuery,
+        sorting,
+        changeSorting
     } = useContext(HostContext)
     const prevOnlineOnly = useRef(onlineOnly)
 	const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
@@ -43,7 +45,7 @@ export const Hosts = (props: HostsProps) => {
     }, [onlineOnly, query, changeOffset])
 	useEffect(() => {
 		setLoading(true)
-		getHosts(network, !onlineOnly, offset, limit, query)
+		getHosts(network, !onlineOnly, offset, limit, query, sorting)
 		.then(data => {
 			if (data && data.status === 'ok' && data.hosts) {
 				setHostsLocal(data.hosts)
@@ -56,7 +58,7 @@ export const Hosts = (props: HostsProps) => {
 			}
 			setLoading(false)
 		})
-	}, [network, onlineOnly, offset, limit, query, setHosts])
+	}, [network, onlineOnly, offset, limit, query, sorting, setHosts])
 	return (
 		<div className="hosts-container">
 			{loading &&
@@ -77,6 +79,8 @@ export const Hosts = (props: HostsProps) => {
 					<HostsTable
 						darkMode={props.darkMode}
 						hosts={hosts}
+                        sorting={sorting}
+                        changeSorting={changeSorting}
 					/>
 					<HostNavigation
 						darkMode={props.darkMode}

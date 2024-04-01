@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"math"
 	"slices"
 	"strings"
 	"time"
@@ -36,10 +35,18 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			net_address,
 			ip_nets,
 			last_ip_change,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			settings,
 			price_table
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -65,18 +72,34 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			downtime,
 			last_seen,
 			active_hosts,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			historic_successful_interactions,
 			historic_failed_interactions,
 			recent_successful_interactions,
 			recent_failed_interactions,
 			last_update
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			uptime = new.uptime,
 			downtime = new.downtime,
 			last_seen = new.last_seen,
 			active_hosts = new.active_hosts,
+			price_score = new.price_score,
+			storage_score = new.storage_score,
+			collateral_score = new.collateral_score,
+			interactions_score = new.interactions_score,
+			uptime_score = new.uptime_score,
+			age_score = new.age_score,
+			version_score = new.version_score,
+			total_score = new.total_score,
 			historic_successful_interactions = new.historic_successful_interactions,
 			historic_failed_interactions = new.historic_failed_interactions,
 			recent_successful_interactions = new.recent_successful_interactions,
@@ -175,6 +198,25 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 	defer priceChangeStmt.Close()
 
+	updateScoreStmt, err := tx.Prepare(`
+		UPDATE hosts
+		SET price_score = ?,
+			storage_score = ?,
+			collateral_score = ?,
+			interactions_score = ?,
+			uptime_score = ?,
+			age_score = ?,
+			version_score = ?,
+			total_score = ?
+		WHERE network = ?
+		AND public_key = ?
+	`)
+	if err != nil {
+		tx.Rollback()
+		return utils.AddContext(err, "couldn't prepare score update statement")
+	}
+	defer updateScoreStmt.Close()
+
 	for _, host := range updates.Hosts {
 		var settings, pt bytes.Buffer
 		e := types.NewEncoder(&settings)
@@ -197,6 +239,14 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.NetAddress,
 			strings.Join(host.IPNets, ";"),
 			host.LastIPChange.Unix(),
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
 			settings.Bytes(),
 			pt.Bytes(),
 		)
@@ -204,6 +254,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			tx.Rollback()
 			return utils.AddContext(err, "couldn't update host record")
 		}
+		sb := calculateScore(host)
 		_, err = interactionsStmt.Exec(
 			host.Network,
 			node,
@@ -212,6 +263,14 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			int64(host.Downtime.Seconds()),
 			host.LastSeen.Unix(),
 			host.ActiveHosts,
+			sb.PricesScore,
+			sb.StorageScore,
+			sb.CollateralScore,
+			sb.InteractionsScore,
+			sb.UptimeScore,
+			sb.AgeScore,
+			sb.VersionScore,
+			sb.TotalScore,
 			host.Interactions.HistoricSuccesses,
 			host.Interactions.HistoricFailures,
 			host.Interactions.RecentSuccesses,
@@ -281,6 +340,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				ScanHistory: h.ScanHistory,
 				LastSeen:    h.LastSeen,
 				ActiveHosts: h.ActiveHosts,
+				Score:       calculateScore(h),
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -310,6 +370,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				ScanHistory: h.ScanHistory,
 				LastSeen:    h.LastSeen,
 				ActiveHosts: h.ActiveHosts,
+				Score:       calculateScore(h),
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -319,11 +380,60 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				},
 			}
 		}
+		host.Score = calculateGlobalScore(host)
+		_, err := updateScoreStmt.Exec(
+			host.Score.PricesScore,
+			host.Score.StorageScore,
+			host.Score.CollateralScore,
+			host.Score.InteractionsScore,
+			host.Score.UptimeScore,
+			host.Score.AgeScore,
+			host.Score.VersionScore,
+			host.Score.TotalScore,
+			h.Network,
+			h.PublicKey[:],
+		)
+		if err != nil {
+			api.log.Error("couldn't update score", zap.String("network", h.Network), zap.Stringer("hsot", h.PublicKey), zap.Error(err))
+		}
 		if h.Network == "mainnet" {
 			api.hosts[h.PublicKey] = host
 		} else if h.Network == "zen" {
 			api.hostsZen[h.PublicKey] = host
 		}
+	}
+	var hosts, hostsZen []portalHost
+	for _, host := range api.hosts {
+		hosts = append(hosts, *host)
+	}
+	for _, host := range api.hostsZen {
+		hostsZen = append(hostsZen, *host)
+	}
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	for i := range hosts {
+		api.hosts[hosts[i].PublicKey].Rank = i + 1
+	}
+	for i := range hostsZen {
+		api.hostsZen[hostsZen[i].PublicKey].Rank = i + 1
 	}
 	api.mu.Unlock()
 
@@ -457,228 +567,91 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 }
 
 // getHosts retrieves the given number of host records.
-func (api *portalAPI) getHosts(network string, all bool, offset, limit int, query string) (hosts []portalHost, more bool, total int, err error) {
+func (api *portalAPI) getHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, err error) {
 	if offset < 0 {
 		offset = 0
 	}
 
-	if all {
-		query = "%" + query + "%"
-		err = api.db.QueryRow(`
-			SELECT COUNT(*)
-			FROM hosts
-			WHERE network = ?
-			AND net_address LIKE ?
-		`, network, query).Scan(&total)
-		if err != nil {
-			return nil, false, 0, utils.AddContext(err, "couldn't count hosts")
-		}
-		if total == 0 {
-			return
-		}
-		more = limit > 0 && offset+limit < total
-		if limit < 0 {
-			limit = math.MaxInt64
-		}
-
-		rows, err := api.db.Query(`
-			SELECT
-				id,
-				public_key,
-				first_seen,
-				known_since,
-				blocked,
-				net_address,
-				ip_nets,
-				last_ip_change,
-				settings,
-				price_table
-			FROM hosts
-			WHERE network = ?
-			AND net_address LIKE ?
-			ORDER BY id ASC
-			LIMIT ?, ?
-		`, network, query, offset, limit)
-		if err != nil {
-			return nil, false, 0, utils.AddContext(err, "couldn't query hosts")
-		}
-
-		for rows.Next() {
-			var id int
-			pk := make([]byte, 32)
-			var ks uint64
-			var b bool
-			var na, ip string
-			var fs, lc int64
-			var settings, pt []byte
-			if err := rows.Scan(&id, &pk, &fs, &ks, &b, &na, &ip, &lc, &settings, &pt); err != nil {
-				rows.Close()
-				return nil, false, 0, utils.AddContext(err, "couldn't decode host data")
-			}
-			host := portalHost{
-				ID:           id,
-				PublicKey:    types.PublicKey(pk),
-				FirstSeen:    time.Unix(fs, 0),
-				KnownSince:   ks,
-				Blocked:      b,
-				NetAddress:   na,
-				IPNets:       strings.Split(ip, ";"),
-				LastIPChange: time.Unix(lc, 0),
-				Interactions: make(map[string]nodeInteractions),
-			}
-			if len(settings) > 0 {
-				d := types.NewBufDecoder(settings)
-				utils.DecodeSettings(&host.Settings, d)
-				if err := d.Err(); err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't decode host settings")
-				}
-			}
-			if len(pt) > 0 {
-				d := types.NewBufDecoder(pt)
-				utils.DecodePriceTable(&host.PriceTable, d)
-				if err := d.Err(); err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't decode host price table")
-				}
-			}
-			hosts = append(hosts, host)
-		}
-		rows.Close()
-
-		for i := range hosts {
-			rows, err = api.db.Query(`
-				SELECT
-					node,
-					uptime,
-					downtime,
-					last_seen,
-					active_hosts,
-					historic_successful_interactions,
-					historic_failed_interactions,
-					recent_successful_interactions,
-					recent_failed_interactions,
-					last_update
-				FROM interactions
-				WHERE network = ?
-				AND public_key = ?
-			`, network, hosts[i].PublicKey[:])
-			if err != nil {
-				return nil, false, 0, utils.AddContext(err, "couldn't query interactions")
-			}
-
-			for rows.Next() {
-				var lu uint64
-				var ut, dt, ls int64
-				var hsi, hfi, rsi, rfi float64
-				var ah int
-				var node string
-				if err := rows.Scan(&node, &ut, &dt, &ls, &ah, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't decode interactions")
-				}
-				interactions := nodeInteractions{
-					Uptime:      time.Duration(ut) * time.Second,
-					Downtime:    time.Duration(dt) * time.Second,
-					LastSeen:    time.Unix(ls, 0),
-					ActiveHosts: ah,
-					HostInteractions: hostdb.HostInteractions{
-						HistoricSuccesses: hsi,
-						HistoricFailures:  hfi,
-						RecentSuccesses:   rsi,
-						RecentFailures:    rfi,
-						LastUpdate:        lu,
-					},
-				}
-
-				scanRows, err := api.db.Query(`
-					SELECT ran_at, success, latency, error, settings, price_table
-					FROM scans
-					WHERE network = ?
-					AND public_key = ?
-					AND node = ?
-					ORDER BY ran_at DESC
-					LIMIT 2
-				`, network, hosts[i].PublicKey[:], node)
-				if err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't query scan history")
-				}
-
-				for scanRows.Next() {
-					var ra int64
-					var success bool
-					var latency float64
-					var msg string
-					var settings, pt []byte
-					if err := scanRows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
-						scanRows.Close()
-						rows.Close()
-						return nil, false, 0, utils.AddContext(err, "couldn't decode scan history")
-					}
-					scan := hostdb.HostScan{
-						Timestamp: time.Unix(ra, 0),
-						Success:   success,
-						Latency:   time.Duration(latency) * time.Millisecond,
-						Error:     msg,
-					}
-					if len(settings) > 0 {
-						d := types.NewBufDecoder(settings)
-						utils.DecodeSettings(&scan.Settings, d)
-						if err := d.Err(); err != nil {
-							scanRows.Close()
-							rows.Close()
-							return nil, false, 0, utils.AddContext(err, "couldn't decode host settings")
-						}
-					}
-					if len(pt) > 0 {
-						d := types.NewBufDecoder(pt)
-						utils.DecodePriceTable(&scan.PriceTable, d)
-						if err := d.Err(); err != nil {
-							scanRows.Close()
-							rows.Close()
-							return nil, false, 0, utils.AddContext(err, "couldn't decode host price table")
-						}
-					}
-					interactions.ScanHistory = append([]hostdb.HostScan{scan}, interactions.ScanHistory...)
-				}
-				scanRows.Close()
-				hosts[i].Interactions[node] = interactions
-			}
-			rows.Close()
-		}
-	} else {
-		api.mu.RLock()
-		if network == "mainnet" {
-			for _, host := range api.hosts {
-				if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
-					hosts = append(hosts, *host)
-				}
-			}
-		} else if network == "zen" {
-			for _, host := range api.hostsZen {
-				if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
-					hosts = append(hosts, *host)
-				}
+	api.mu.RLock()
+	if network == "mainnet" {
+		for _, host := range api.hosts {
+			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+				hosts = append(hosts, *host)
 			}
 		}
-		api.mu.RUnlock()
-
-		slices.SortFunc(hosts, func(a, b portalHost) int { return a.ID - b.ID })
-
-		if limit < 0 {
-			limit = len(hosts)
+	} else if network == "zen" {
+		for _, host := range api.hostsZen {
+			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+				hosts = append(hosts, *host)
+			}
 		}
-		if offset > len(hosts) {
-			offset = len(hosts)
-		}
-		if offset+limit > len(hosts) {
-			limit = len(hosts) - offset
-		}
-		total = len(hosts)
-		more = offset+limit < total
-		hosts = hosts[offset : offset+limit]
 	}
+	api.mu.RUnlock()
+
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
+		switch sortBy {
+		case sortByID:
+			if asc {
+				return a.ID - b.ID
+			} else {
+				return b.ID - a.ID
+			}
+		case sortByRank:
+			if asc {
+				return a.Rank - b.Rank
+			} else {
+				return b.Rank - a.Rank
+			}
+		case sortByTotalStorage:
+			if a.Settings.TotalStorage == b.Settings.TotalStorage {
+				return a.ID - b.ID
+			}
+			if a.Settings.TotalStorage > b.Settings.TotalStorage {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		case sortByRemainingStorage:
+			if a.Settings.RemainingStorage == b.Settings.RemainingStorage {
+				return a.ID - b.ID
+			}
+			if a.Settings.RemainingStorage > b.Settings.RemainingStorage {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		}
+		return 0
+	})
+
+	if limit < 0 {
+		limit = len(hosts)
+	}
+	if offset > len(hosts) {
+		offset = len(hosts)
+	}
+	if offset+limit > len(hosts) {
+		limit = len(hosts) - offset
+	}
+	total = len(hosts)
+	more = offset+limit < total
+	hosts = hosts[offset : offset+limit]
 
 	for i := range hosts {
 		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, hosts[i].NetAddress)
@@ -967,6 +940,14 @@ func (api *portalAPI) load() error {
 			net_address,
 			ip_nets,
 			last_ip_change,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			settings,
 			price_table
 		FROM hosts
@@ -988,8 +969,29 @@ func (api *portalAPI) load() error {
 		var fs, lc int64
 		var ks uint64
 		var blocked bool
+		var ps, ss, cs, is, us, as, vs, ts float64
 		var settings, pt []byte
-		if err := rows.Scan(&id, &network, &pk, &fs, &ks, &blocked, &netaddress, &ipNets, &lc, &settings, &pt); err != nil {
+		if err := rows.Scan(
+			&id,
+			&network,
+			&pk,
+			&fs,
+			&ks,
+			&blocked,
+			&netaddress,
+			&ipNets,
+			&lc,
+			&ps,
+			&ss,
+			&cs,
+			&is,
+			&us,
+			&as,
+			&vs,
+			&ts,
+			&settings,
+			&pt,
+		); err != nil {
 			rows.Close()
 			return utils.AddContext(err, "couldn't decode host data")
 		}
@@ -1002,6 +1004,16 @@ func (api *portalAPI) load() error {
 			NetAddress:   netaddress,
 			IPNets:       strings.Split(ipNets, ";"),
 			LastIPChange: time.Unix(lc, 0),
+			Score: scoreBreakdown{
+				PricesScore:       ps,
+				StorageScore:      ss,
+				CollateralScore:   cs,
+				InteractionsScore: is,
+				UptimeScore:       us,
+				AgeScore:          as,
+				VersionScore:      vs,
+				TotalScore:        ts,
+			},
 			Interactions: make(map[string]nodeInteractions),
 		}
 		if len(settings) > 0 {
@@ -1029,6 +1041,40 @@ func (api *portalAPI) load() error {
 	}
 	rows.Close()
 
+	var hosts, hostsZen []portalHost
+	for _, host := range api.hosts {
+		hosts = append(hosts, *host)
+	}
+	for _, host := range api.hostsZen {
+		hostsZen = append(hostsZen, *host)
+	}
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	for i := range hosts {
+		api.hosts[hosts[i].PublicKey].Rank = i + 1
+	}
+	for i := range hostsZen {
+		api.hostsZen[hostsZen[i].PublicKey].Rank = i + 1
+	}
+
 	if err := api.loadInteractions(api.hosts, "mainnet"); err != nil {
 		return utils.AddContext(err, "couldn't load mainnet interactions")
 	}
@@ -1048,6 +1094,14 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 			downtime,
 			last_seen,
 			active_hosts,
+			price_score,
+			storage_score,
+			collateral_score,
+			interactions_score,
+			uptime_score,
+			age_score,
+			version_score,
+			total_score,
 			historic_successful_interactions,
 			historic_failed_interactions,
 			recent_successful_interactions,
@@ -1072,9 +1126,29 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 			var node string
 			var lu uint64
 			var ut, dt, ls int64
+			var ps, ss, cs, is, us, as, vs, ts float64
 			var hsi, hfi, rsi, rfi float64
 			var ah int
-			if err := rows.Scan(&node, &ut, &dt, &ls, &ah, &hsi, &hfi, &rsi, &rfi, &lu); err != nil {
+			if err := rows.Scan(
+				&node,
+				&ut,
+				&dt,
+				&ls,
+				&ah,
+				&ps,
+				&ss,
+				&cs,
+				&is,
+				&us,
+				&as,
+				&vs,
+				&ts,
+				&hsi,
+				&hfi,
+				&rsi,
+				&rfi,
+				&lu,
+			); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode interactions")
 			}
@@ -1083,6 +1157,16 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 				Downtime:    time.Duration(dt) * time.Second,
 				LastSeen:    time.Unix(ls, 0),
 				ActiveHosts: ah,
+				Score: scoreBreakdown{
+					PricesScore:       ps,
+					StorageScore:      ss,
+					CollateralScore:   cs,
+					InteractionsScore: is,
+					UptimeScore:       us,
+					AgeScore:          as,
+					VersionScore:      vs,
+					TotalScore:        ts,
+				},
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: hsi,
 					HistoricFailures:  hfi,

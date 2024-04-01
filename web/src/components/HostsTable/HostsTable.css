@@ -72,8 +72,17 @@
 .hosts-table-link {
 	color: black;
 	text-decoration: none;
+    border-radius: 0.25rem;
+}
+
+.hosts-table-link:focus {
+    outline: 1px solid var(--outlineLight);
 }
 
 .hosts-table-dark .hosts-table-link {
 	color: var(--textDark);
+}
+
+.hosts-table-dark .hosts-table-link:focus {
+	outline: 1px solid var(--outlineDark);
 }

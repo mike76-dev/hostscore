@@ -28,6 +28,8 @@ type cachedHosts struct {
 	offset   int
 	limit    int
 	query    string
+	sortBy   sortType
+	asc      bool
 	modified time.Time
 }
 
@@ -146,11 +148,18 @@ func (rc *responseCache) getHost(network string, pk types.PublicKey) (host porta
 	return
 }
 
-func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query string) (hosts []portalHost, more bool, total int, ok bool) {
+func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, ch := range rc.hosts {
-		if ch.network == network && ch.all == all && ch.offset == offset && ch.limit == limit && ch.query == query && time.Since(ch.modified) < hostsExpireThreshold {
+		if ch.network == network &&
+			ch.all == all &&
+			ch.offset == offset &&
+			ch.limit == limit &&
+			ch.query == query &&
+			ch.sortBy == sortBy &&
+			ch.asc == asc &&
+			time.Since(ch.modified) < hostsExpireThreshold {
 			hosts = ch.hosts
 			more = ch.more
 			total = ch.total
@@ -161,7 +170,7 @@ func (rc *responseCache) getHosts(network string, all bool, offset, limit int, q
 	return
 }
 
-func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query string, hosts []portalHost, more bool, total int) {
+func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool, hosts []portalHost, more bool, total int) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.hosts = append(rc.hosts, cachedHosts{
@@ -173,6 +182,8 @@ func (rc *responseCache) putHosts(network string, all bool, offset, limit int, q
 		offset:   offset,
 		limit:    limit,
 		query:    query,
+		sortBy:   sortBy,
+		asc:      asc,
 		modified: time.Now(),
 	})
 	if len(rc.hosts) > hostsRequestsLimit {
@@ -184,7 +195,13 @@ func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to t
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, cs := range rc.scans {
-		if cs.network == network && cs.publicKey == pk && cs.number == num && cs.successful == successful && math.Abs(from.Sub(cs.from).Seconds()) < float64(scansExpireThreshold) && math.Abs(to.Sub(cs.to).Seconds()) < float64(scansExpireThreshold) && time.Since(cs.modified) < scansExpireThreshold {
+		if cs.network == network &&
+			cs.publicKey == pk &&
+			cs.number == num &&
+			cs.successful == successful &&
+			math.Abs(from.Sub(cs.from).Seconds()) < float64(scansExpireThreshold) &&
+			math.Abs(to.Sub(cs.to).Seconds()) < float64(scansExpireThreshold) &&
+			time.Since(cs.modified) < scansExpireThreshold {
 			scans = cs.scans
 			ok = true
 			return
@@ -215,7 +232,13 @@ func (rc *responseCache) getBenchmarks(network string, pk types.PublicKey, from,
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, cb := range rc.benchmarks {
-		if cb.network == network && cb.publicKey == pk && cb.number == num && cb.successful == successful && math.Abs(from.Sub(cb.from).Seconds()) < float64(benchmarksExpireThreshold) && math.Abs(to.Sub(cb.to).Seconds()) < float64(benchmarksExpireThreshold) && time.Since(cb.modified) < benchmarksExpireThreshold {
+		if cb.network == network &&
+			cb.publicKey == pk &&
+			cb.number == num &&
+			cb.successful == successful &&
+			math.Abs(from.Sub(cb.from).Seconds()) < float64(benchmarksExpireThreshold) &&
+			math.Abs(to.Sub(cb.to).Seconds()) < float64(benchmarksExpireThreshold) &&
+			time.Since(cb.modified) < benchmarksExpireThreshold {
 			benchmarks = cb.benchmarks
 			ok = true
 			return

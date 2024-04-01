@@ -93,17 +93,30 @@ type priceChangeResponse struct {
 	PriceChanges []priceChange   `json:"priceChanges"`
 }
 
+type scoreBreakdown struct {
+	PricesScore       float64 `json:"prices"`
+	StorageScore      float64 `json:"storage"`
+	CollateralScore   float64 `json:"collateral"`
+	InteractionsScore float64 `json:"interactions"`
+	UptimeScore       float64 `json:"uptime"`
+	AgeScore          float64 `json:"age"`
+	VersionScore      float64 `json:"version"`
+	TotalScore        float64 `json:"total"`
+}
+
 type nodeInteractions struct {
 	Uptime      time.Duration     `json:"uptime"`
 	Downtime    time.Duration     `json:"downtime"`
 	ScanHistory []hostdb.HostScan `json:"scanHistory"`
 	LastSeen    time.Time         `json:"lastSeen"`
 	ActiveHosts int               `json:"activeHosts"`
+	Score       scoreBreakdown    `json:"score"`
 	hostdb.HostInteractions
 }
 
 type portalHost struct {
 	ID           int                         `json:"id"`
+	Rank         int                         `json:"rank"`
 	PublicKey    types.PublicKey             `json:"publicKey"`
 	FirstSeen    time.Time                   `json:"firstSeen"`
 	KnownSince   uint64                      `json:"knownSince"`
@@ -112,10 +125,21 @@ type portalHost struct {
 	Interactions map[string]nodeInteractions `json:"interactions"`
 	IPNets       []string                    `json:"ipNets"`
 	LastIPChange time.Time                   `json:"lastIPChange"`
+	Score        scoreBreakdown              `json:"score"`
 	Settings     rhpv2.HostSettings          `json:"settings"`
 	PriceTable   rhpv3.HostPriceTable        `json:"priceTable"`
 	external.IPInfo
 }
+
+type sortType int
+
+const (
+	noSort sortType = iota
+	sortByID
+	sortByRank
+	sortByTotalStorage
+	sortByRemainingStorage
+)
 
 type portalAPI struct {
 	router   httprouter.Router
@@ -177,7 +201,7 @@ func (api *portalAPI) requestUpdates() {
 			if err := api.insertUpdates(node, updates); err != nil {
 				api.log.Error("failed to insert updates", zap.String("node", node), zap.Error(err))
 			}
-			if len(updates.Hosts)+len(updates.Scans)+len(updates.Benchmarks) > 1000 {
+			if len(updates.Hosts)+len(updates.Scans)+len(updates.Benchmarks) > 500 {
 				timeout = 5 * time.Second
 			}
 		}
@@ -312,9 +336,29 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
+	var sortBy sortType
+	sb := req.FormValue("sort")
+	switch sb {
+	case "id":
+		sortBy = sortByID
+	case "rank":
+		sortBy = sortByRank
+	case "total":
+		sortBy = sortByTotalStorage
+	case "remaining":
+		sortBy = sortByRemainingStorage
+	default:
+		sortBy = sortByID
+	}
+	order := strings.ToLower(req.FormValue("order"))
+	asc := true
+	if order == "desc" {
+		asc = false
+	}
+
+	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query, sortBy, asc)
 	if !ok {
-		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query)
+		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query, sortBy, asc)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -323,7 +367,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			})
 			return
 		}
-		api.cache.putHosts(network, all, int(offset), int(limit), query, hosts, more, total)
+		api.cache.putHosts(network, all, int(offset), int(limit), query, sortBy, asc, hosts, more, total)
 	}
 
 	// Prefetch the scans and the benchmarks.
@@ -353,13 +397,13 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	// Prefetch the next bunch of hosts.
 	if more {
 		go func() {
-			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query)
+			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc)
 			if !ok {
-				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query)
+				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc)
 				if err != nil {
 					return
 				}
-				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, h, m, t)
+				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc, h, m, t)
 			}
 		}()
 	}
