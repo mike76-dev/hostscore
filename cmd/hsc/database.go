@@ -409,7 +409,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	for _, host := range api.hostsZen {
 		hostsZen = append(hostsZen, *host)
 	}
-	slices.SortFunc(hosts, func(a, b portalHost) int {
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
 			return a.ID - b.ID
 		}
@@ -419,7 +419,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			return -1
 		}
 	})
-	slices.SortFunc(hostsZen, func(a, b portalHost) int {
+	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
 			return a.ID - b.ID
 		}
@@ -588,7 +588,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 	}
 	api.mu.RUnlock()
 
-	slices.SortFunc(hosts, func(a, b portalHost) int {
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		switch sortBy {
 		case sortByID:
 			if asc {
@@ -1048,7 +1048,7 @@ func (api *portalAPI) load() error {
 	for _, host := range api.hostsZen {
 		hostsZen = append(hostsZen, *host)
 	}
-	slices.SortFunc(hosts, func(a, b portalHost) int {
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
 			return a.ID - b.ID
 		}
@@ -1058,7 +1058,7 @@ func (api *portalAPI) load() error {
 			return -1
 		}
 	})
-	slices.SortFunc(hostsZen, func(a, b portalHost) int {
+	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
 			return a.ID - b.ID
 		}
