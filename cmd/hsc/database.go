@@ -45,9 +45,11 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			version_score,
 			total_score,
 			settings,
-			price_table
+			price_table,
+			total_storage,
+			remaining_storage
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -56,7 +58,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			ip_nets = new.ip_nets,
 			last_ip_change = new.last_ip_change,
 			settings = new.settings,
-			price_table = new.price_table
+			price_table = new.price_table,
+			total_storage = new.total_storage,
+			remaining_storage = new.remaining_storage
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -250,6 +254,8 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			0,
 			settings.Bytes(),
 			pt.Bytes(),
+			host.Settings.TotalStorage,
+			host.Settings.RemainingStorage,
 		)
 		if err != nil {
 			tx.Rollback()

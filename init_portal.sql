@@ -23,8 +23,10 @@ CREATE TABLE hosts (
     age_score          DOUBLE NOT NULL,
     version_score      DOUBLE NOT NULL,
     total_score        DOUBLE NOT NULL,
-	settings       BLOB,
-	price_table    BLOB,
+	settings          BLOB,
+	price_table       BLOB,
+    total_storage     BIGINT UNSIGNED NOT NULL,
+    remaining_storage BIGINT UNSIGNED NOT NULL,
 	PRIMARY KEY (id, network)
 );
 
