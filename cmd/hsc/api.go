@@ -116,6 +116,7 @@ type nodeInteractions struct {
 
 type portalHost struct {
 	ID           int                         `json:"id"`
+	Rank         int                         `json:"rank"`
 	PublicKey    types.PublicKey             `json:"publicKey"`
 	FirstSeen    time.Time                   `json:"firstSeen"`
 	KnownSince   uint64                      `json:"knownSince"`
@@ -129,6 +130,16 @@ type portalHost struct {
 	PriceTable   rhpv3.HostPriceTable        `json:"priceTable"`
 	external.IPInfo
 }
+
+type sortType int
+
+const (
+	noSort sortType = iota
+	sortByID
+	sortByRank
+	sortByTotalStorage
+	sortByRemainingStorage
+)
 
 type portalAPI struct {
 	router   httprouter.Router
@@ -325,9 +336,29 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			return
 		}
 	}
-	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query)
+	var sortBy sortType
+	sb := req.FormValue("sort")
+	switch sb {
+	case "id":
+		sortBy = sortByID
+	case "rank":
+		sortBy = sortByRank
+	case "total":
+		sortBy = sortByTotalStorage
+	case "remaining":
+		sortBy = sortByRemainingStorage
+	default:
+		sortBy = sortByID
+	}
+	order := strings.ToLower(req.FormValue("order"))
+	asc := true
+	if order == "desc" {
+		asc = false
+	}
+
+	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query, sortBy, asc)
 	if !ok {
-		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query)
+		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query, sortBy, asc)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -336,7 +367,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			})
 			return
 		}
-		api.cache.putHosts(network, all, int(offset), int(limit), query, hosts, more, total)
+		api.cache.putHosts(network, all, int(offset), int(limit), query, sortBy, asc, hosts, more, total)
 	}
 
 	// Prefetch the scans and the benchmarks.
@@ -366,13 +397,13 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	// Prefetch the next bunch of hosts.
 	if more {
 		go func() {
-			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query)
+			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc)
 			if !ok {
-				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query)
+				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc)
 				if err != nil {
 					return
 				}
-				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, h, m, t)
+				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc, h, m, t)
 			}
 		}()
 	}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"math"
 	"slices"
 	"strings"
 	"time"
@@ -45,11 +44,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			version_score,
 			total_score,
 			settings,
-			price_table,
-			total_storage,
-			remaining_storage
+			price_table
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -58,9 +55,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			ip_nets = new.ip_nets,
 			last_ip_change = new.last_ip_change,
 			settings = new.settings,
-			price_table = new.price_table,
-			total_storage = new.total_storage,
-			remaining_storage = new.remaining_storage
+			price_table = new.price_table
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -254,8 +249,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			0,
 			settings.Bytes(),
 			pt.Bytes(),
-			host.Settings.TotalStorage,
-			host.Settings.RemainingStorage,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -409,6 +402,39 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			api.hostsZen[h.PublicKey] = host
 		}
 	}
+	var hosts, hostsZen []portalHost
+	for _, host := range api.hosts {
+		hosts = append(hosts, *host)
+	}
+	for _, host := range api.hostsZen {
+		hostsZen = append(hostsZen, *host)
+	}
+	slices.SortFunc(hosts, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	slices.SortFunc(hostsZen, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	for i := range hosts {
+		api.hosts[hosts[i].PublicKey].Rank = i + 1
+	}
+	for i := range hostsZen {
+		api.hostsZen[hostsZen[i].PublicKey].Rank = i + 1
+	}
 	api.mu.Unlock()
 
 	for _, scan := range updates.Scans {
@@ -541,304 +567,91 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 }
 
 // getHosts retrieves the given number of host records.
-func (api *portalAPI) getHosts(network string, all bool, offset, limit int, query string) (hosts []portalHost, more bool, total int, err error) {
+func (api *portalAPI) getHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, err error) {
 	if offset < 0 {
 		offset = 0
 	}
 
-	if all {
-		query = "%" + query + "%"
-		err = api.db.QueryRow(`
-			SELECT COUNT(*)
-			FROM hosts
-			WHERE network = ?
-			AND net_address LIKE ?
-		`, network, query).Scan(&total)
-		if err != nil {
-			return nil, false, 0, utils.AddContext(err, "couldn't count hosts")
-		}
-		if total == 0 {
-			return
-		}
-		more = limit > 0 && offset+limit < total
-		if limit < 0 {
-			limit = math.MaxInt64
-		}
-
-		rows, err := api.db.Query(`
-			SELECT
-				id,
-				public_key,
-				first_seen,
-				known_since,
-				blocked,
-				net_address,
-				ip_nets,
-				last_ip_change,
-				price_score,
-				storage_score,
-				collateral_score,
-				interactions_score,
-				uptime_score,
-				age_score,
-				version_score,
-				total_score,
-				settings,
-				price_table
-			FROM hosts
-			WHERE network = ?
-			AND net_address LIKE ?
-			ORDER BY id ASC
-			LIMIT ?, ?
-		`, network, query, offset, limit)
-		if err != nil {
-			return nil, false, 0, utils.AddContext(err, "couldn't query hosts")
-		}
-
-		for rows.Next() {
-			var id int
-			pk := make([]byte, 32)
-			var ks uint64
-			var b bool
-			var na, ip string
-			var fs, lc int64
-			var ps, ss, cs, is, us, as, vs, ts float64
-			var settings, pt []byte
-			if err := rows.Scan(
-				&id,
-				&pk,
-				&fs,
-				&ks,
-				&b,
-				&na,
-				&ip,
-				&lc,
-				&ps,
-				&ss,
-				&cs,
-				&is,
-				&us,
-				&as,
-				&vs,
-				&ts,
-				&settings,
-				&pt,
-			); err != nil {
-				rows.Close()
-				return nil, false, 0, utils.AddContext(err, "couldn't decode host data")
-			}
-			host := portalHost{
-				ID:           id,
-				PublicKey:    types.PublicKey(pk),
-				FirstSeen:    time.Unix(fs, 0),
-				KnownSince:   ks,
-				Blocked:      b,
-				NetAddress:   na,
-				IPNets:       strings.Split(ip, ";"),
-				LastIPChange: time.Unix(lc, 0),
-				Score: scoreBreakdown{
-					PricesScore:       ps,
-					StorageScore:      ss,
-					CollateralScore:   cs,
-					InteractionsScore: is,
-					UptimeScore:       us,
-					AgeScore:          as,
-					VersionScore:      vs,
-					TotalScore:        ts,
-				},
-				Interactions: make(map[string]nodeInteractions),
-			}
-			if len(settings) > 0 {
-				d := types.NewBufDecoder(settings)
-				utils.DecodeSettings(&host.Settings, d)
-				if err := d.Err(); err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't decode host settings")
-				}
-			}
-			if len(pt) > 0 {
-				d := types.NewBufDecoder(pt)
-				utils.DecodePriceTable(&host.PriceTable, d)
-				if err := d.Err(); err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't decode host price table")
-				}
-			}
-			hosts = append(hosts, host)
-		}
-		rows.Close()
-
-		for i := range hosts {
-			rows, err = api.db.Query(`
-				SELECT
-					node,
-					uptime,
-					downtime,
-					last_seen,
-					active_hosts,
-					price_score,
-					storage_score,
-					collateral_score,
-					interactions_score,
-					uptime_score,
-					age_score,
-					version_score,
-					total_score,
-					historic_successful_interactions,
-					historic_failed_interactions,
-					recent_successful_interactions,
-					recent_failed_interactions,
-					last_update
-				FROM interactions
-				WHERE network = ?
-				AND public_key = ?
-			`, network, hosts[i].PublicKey[:])
-			if err != nil {
-				return nil, false, 0, utils.AddContext(err, "couldn't query interactions")
-			}
-
-			for rows.Next() {
-				var lu uint64
-				var ut, dt, ls int64
-				var ps, ss, cs, is, us, as, vs, ts float64
-				var hsi, hfi, rsi, rfi float64
-				var ah int
-				var node string
-				if err := rows.Scan(
-					&node,
-					&ut,
-					&dt,
-					&ls,
-					&ah,
-					&ps,
-					&ss,
-					&cs,
-					&is,
-					&us,
-					&as,
-					&vs,
-					&ts,
-					&hsi,
-					&hfi,
-					&rsi,
-					&rfi,
-					&lu,
-				); err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't decode interactions")
-				}
-				interactions := nodeInteractions{
-					Uptime:      time.Duration(ut) * time.Second,
-					Downtime:    time.Duration(dt) * time.Second,
-					LastSeen:    time.Unix(ls, 0),
-					ActiveHosts: ah,
-					Score: scoreBreakdown{
-						PricesScore:       ps,
-						StorageScore:      ss,
-						CollateralScore:   cs,
-						InteractionsScore: is,
-						UptimeScore:       us,
-						AgeScore:          as,
-						VersionScore:      vs,
-						TotalScore:        ts,
-					},
-					HostInteractions: hostdb.HostInteractions{
-						HistoricSuccesses: hsi,
-						HistoricFailures:  hfi,
-						RecentSuccesses:   rsi,
-						RecentFailures:    rfi,
-						LastUpdate:        lu,
-					},
-				}
-
-				scanRows, err := api.db.Query(`
-					SELECT ran_at, success, latency, error, settings, price_table
-					FROM scans
-					WHERE network = ?
-					AND public_key = ?
-					AND node = ?
-					ORDER BY ran_at DESC
-					LIMIT 2
-				`, network, hosts[i].PublicKey[:], node)
-				if err != nil {
-					rows.Close()
-					return nil, false, 0, utils.AddContext(err, "couldn't query scan history")
-				}
-
-				for scanRows.Next() {
-					var ra int64
-					var success bool
-					var latency float64
-					var msg string
-					var settings, pt []byte
-					if err := scanRows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
-						scanRows.Close()
-						rows.Close()
-						return nil, false, 0, utils.AddContext(err, "couldn't decode scan history")
-					}
-					scan := hostdb.HostScan{
-						Timestamp: time.Unix(ra, 0),
-						Success:   success,
-						Latency:   time.Duration(latency) * time.Millisecond,
-						Error:     msg,
-					}
-					if len(settings) > 0 {
-						d := types.NewBufDecoder(settings)
-						utils.DecodeSettings(&scan.Settings, d)
-						if err := d.Err(); err != nil {
-							scanRows.Close()
-							rows.Close()
-							return nil, false, 0, utils.AddContext(err, "couldn't decode host settings")
-						}
-					}
-					if len(pt) > 0 {
-						d := types.NewBufDecoder(pt)
-						utils.DecodePriceTable(&scan.PriceTable, d)
-						if err := d.Err(); err != nil {
-							scanRows.Close()
-							rows.Close()
-							return nil, false, 0, utils.AddContext(err, "couldn't decode host price table")
-						}
-					}
-					interactions.ScanHistory = append([]hostdb.HostScan{scan}, interactions.ScanHistory...)
-				}
-				scanRows.Close()
-				hosts[i].Interactions[node] = interactions
-			}
-			rows.Close()
-		}
-	} else {
-		api.mu.RLock()
-		if network == "mainnet" {
-			for _, host := range api.hosts {
-				if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
-					hosts = append(hosts, *host)
-				}
-			}
-		} else if network == "zen" {
-			for _, host := range api.hostsZen {
-				if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
-					hosts = append(hosts, *host)
-				}
+	api.mu.RLock()
+	if network == "mainnet" {
+		for _, host := range api.hosts {
+			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+				hosts = append(hosts, *host)
 			}
 		}
-		api.mu.RUnlock()
-
-		slices.SortFunc(hosts, func(a, b portalHost) int { return a.ID - b.ID })
-
-		if limit < 0 {
-			limit = len(hosts)
+	} else if network == "zen" {
+		for _, host := range api.hostsZen {
+			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+				hosts = append(hosts, *host)
+			}
 		}
-		if offset > len(hosts) {
-			offset = len(hosts)
-		}
-		if offset+limit > len(hosts) {
-			limit = len(hosts) - offset
-		}
-		total = len(hosts)
-		more = offset+limit < total
-		hosts = hosts[offset : offset+limit]
 	}
+	api.mu.RUnlock()
+
+	slices.SortFunc(hosts, func(a, b portalHost) int {
+		switch sortBy {
+		case sortByID:
+			if asc {
+				return a.ID - b.ID
+			} else {
+				return b.ID - a.ID
+			}
+		case sortByRank:
+			if asc {
+				return a.Rank - b.Rank
+			} else {
+				return b.Rank - a.Rank
+			}
+		case sortByTotalStorage:
+			if a.Settings.TotalStorage == b.Settings.TotalStorage {
+				return a.ID - b.ID
+			}
+			if a.Settings.TotalStorage > b.Settings.TotalStorage {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		case sortByRemainingStorage:
+			if a.Settings.RemainingStorage == b.Settings.RemainingStorage {
+				return a.ID - b.ID
+			}
+			if a.Settings.RemainingStorage > b.Settings.RemainingStorage {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		}
+		return 0
+	})
+
+	if limit < 0 {
+		limit = len(hosts)
+	}
+	if offset > len(hosts) {
+		offset = len(hosts)
+	}
+	if offset+limit > len(hosts) {
+		limit = len(hosts) - offset
+	}
+	total = len(hosts)
+	more = offset+limit < total
+	hosts = hosts[offset : offset+limit]
 
 	for i := range hosts {
 		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, hosts[i].NetAddress)
@@ -1227,6 +1040,40 @@ func (api *portalAPI) load() error {
 		}
 	}
 	rows.Close()
+
+	var hosts, hostsZen []portalHost
+	for _, host := range api.hosts {
+		hosts = append(hosts, *host)
+	}
+	for _, host := range api.hostsZen {
+		hostsZen = append(hostsZen, *host)
+	}
+	slices.SortFunc(hosts, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	slices.SortFunc(hostsZen, func(a, b portalHost) int {
+		if a.Score.TotalScore == b.Score.TotalScore {
+			return a.ID - b.ID
+		}
+		if a.Score.TotalScore < b.Score.TotalScore {
+			return 1
+		} else {
+			return -1
+		}
+	})
+	for i := range hosts {
+		api.hosts[hosts[i].PublicKey].Rank = i + 1
+	}
+	for i := range hostsZen {
+		api.hostsZen[hostsZen[i].PublicKey].Rank = i + 1
+	}
 
 	if err := api.loadInteractions(api.hosts, "mainnet"); err != nil {
 		return utils.AddContext(err, "couldn't load mainnet interactions")
