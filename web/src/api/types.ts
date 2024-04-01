@@ -110,6 +110,7 @@ export type HostInteractions = {
 
 export type Host = {
 	id: number,
+    rank: number,
 	publicKey: string,
 	firstSeen: string,
 	knownSince: number,
@@ -150,4 +151,9 @@ export type PriceChange = {
 	storagePrice: string,
 	uploadPrice: string,
 	downloadPrice: string
+}
+
+export type HostSortType = {
+    sortBy: 'id' | 'rank' | 'total' | 'remaining',
+    order: 'asc' | 'desc'
 }

@@ -75,6 +75,7 @@ export const HostInfo = (props: HostInfoProps) => {
 			<table>
 				<tbody>
     				<tr><td>ID</td><td>{props.host.id}</td></tr>
+                    <tr><td>Rank</td><td>{props.host.rank}</td></tr>
 	    			<tr><td>Public Key</td><td className="host-info-small">{props.host.publicKey}</td></tr>
 		    		<tr><td>Address</td><td>{props.host.netaddress}</td></tr>
 			    	<tr><td>Location</td><td>{getFlagEmoji(props.host.country)}</td></tr>

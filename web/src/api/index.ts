@@ -4,7 +4,8 @@ import {
 	NodeStatus,
 	HostScan,
 	HostBenchmark,
-	PriceChange
+	PriceChange,
+    HostSortType
 } from './types'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
@@ -27,12 +28,15 @@ export const getHosts = async (
 	all: boolean,
 	offset: number,
 	limit: number,
-	query: string
+	query: string,
+    sorting: HostSortType
 ): Promise<{ status: string, message: string, hosts?: Host[], more: boolean, total: number }> => {
 	const url = '/hosts?network=' + network +
 		'&all=' + (all ? 'true' : 'false') +
 		'&offset=' + offset + '&limit=' + limit +
-		'&query=' + query
+		'&query=' + query +
+        '&sort=' + sorting.sortBy +
+        '&order=' + sorting.order
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

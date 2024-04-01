@@ -1,0 +1,44 @@
+.sort-container {
+	display: inline-block;
+	width: 0.8rem;
+	height: 0.8rem;
+	cursor: pointer;
+	margin-left: 0.25rem;
+}
+
+.sort-container svg {
+	display: inline-block;
+	width: 100%;
+	height: 100%;
+    border-radius: 0.25rem;
+}
+
+.sort-container svg:focus {
+	outline: 1px solid var(--outlineLight);
+}
+
+.sort-path {
+    stroke: var(--borderLight);
+    stroke-width: 1;
+	fill: #ffffff;
+}
+
+.sort-path-active {
+    stroke: var(--borderLight);
+    stroke-width: 1;
+	fill: var(--borderLight);
+}
+
+.sort-dark svg:focus {
+	outline: 1px solid var(--outlineDark);
+}
+
+.sort-dark .sort-path {
+    stroke: var(--borderDark);
+	fill: var(--backgroundDark);
+}
+
+.sort-dark .sort-path-active {
+    stroke: var(--borderDark);
+	fill: var(--borderDark);
+}

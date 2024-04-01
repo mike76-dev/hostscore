@@ -13,7 +13,7 @@ import {
     HostDetails,
     Status
 } from './components'
-import { Host, useExcludedPaths } from './api'
+import { Host, useExcludedPaths, HostSortType } from './api'
 import { NetworkContext, HostContext } from './contexts'
 
 const App = () => {
@@ -26,6 +26,7 @@ const App = () => {
     const [limit, changeLimit] = useState(10)
     const [onlineOnly, setOnlineOnly] = useState(true)
     const [query, setQuery] = useState('')
+    const [sorting, changeSorting] = useState<HostSortType>({ sortBy: 'rank', order: 'asc' })
     const excludedPaths = useExcludedPaths()
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
@@ -162,7 +163,9 @@ const App = () => {
                 onlineOnly,
                 setOnlineOnly,
                 query,
-                setQuery
+                setQuery,
+                sorting,
+                changeSorting
             }}>
 				<RouterProvider router={router}/>
 			</HostContext.Provider>
