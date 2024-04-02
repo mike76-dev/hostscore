@@ -7,7 +7,6 @@
     font-size: 0.8rem;
     font-weight: bold;
     text-align: center;
-    border: 1px solid var(--borderLight);
     background-color: var(--outlineDark);
     cursor: pointer;
 }
@@ -18,7 +17,6 @@
     top: 1.5rem;
     z-index: 100;
     font-weight: normal;
-    border: 1px solid var(--borderLight);
     border-radius: 0.25rem;
     background-color: var(--outlineDark);
     padding: 0.25rem;
@@ -26,7 +24,6 @@
 }
 
 .tooltip-spot-dark, .tooltip-text-dark {
-    border: 1px solid var(--borderDark);
     background-color: var(--outlineLight);
 }
 

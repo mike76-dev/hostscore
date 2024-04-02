@@ -1,5 +1,5 @@
 .host-search-container {
-	margin-top: 0.5rem 0;
+	margin-left: 1rem;
 }
 
 .host-search-input {
@@ -27,4 +27,11 @@
 .host-search-dark input:focus {
 	border: 1px solid transparent;
 	outline: 2px solid var(--outlineDark);
+}
+
+@media screen and (max-width: 1000px) {
+    .host-search-container {
+        margin-left: 0;
+        margin-top: 0.5rem;
+    }
 }

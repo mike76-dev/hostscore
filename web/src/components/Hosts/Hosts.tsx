@@ -70,16 +70,18 @@ export const Hosts = (props: HostsProps) => {
                 network={network}
                 query={query}
             />
-			<HostSelector
-				darkMode={props.darkMode}
-				value={onlineOnly ? 'online' : 'all'}
-				onChange={switchHosts}
-			/>
-			<HostSearch
-				darkMode={props.darkMode}
-				value={query}
-				onChange={setQuery}
-			/>
+            <div className="hosts-subcontainer">
+    			<HostSelector
+	    			darkMode={props.darkMode}
+		    		value={onlineOnly ? 'online' : 'all'}
+			    	onChange={switchHosts}
+    			/>
+	    		<HostSearch
+		    		darkMode={props.darkMode}
+			    	value={query}
+				    onChange={setQuery}
+			    />
+            </div>
 			{hosts.length > 0 ?
 				<>
 					<HostsTable

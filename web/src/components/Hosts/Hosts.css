@@ -4,6 +4,13 @@
 	position: relative;
 }
 
+.hosts-subcontainer {
+    display: flex;
+    flex-direction: row;
+    margin-top: 0.5rem;
+    padding: 1rem 0;
+}
+
 .hosts-not-found {
     margin-top: 1rem;
 }
@@ -15,5 +22,9 @@
 @media screen and (max-width: 1000px) {
     .hosts-container {
         width: 100%;
+    }
+
+    .hosts-subcontainer {
+        flex-direction: column;
     }
 }
