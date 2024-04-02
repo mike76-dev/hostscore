@@ -22,7 +22,8 @@ import {
 type HostMapProps = {
     darkMode: boolean,
     network: string,
-    host?: Host
+    host?: Host,
+    query: string
 }
 
 const defaultLocation = '52.37,5.22'
@@ -36,11 +37,12 @@ const UpdateMap = () => {
 }
 
 interface BoundsProps {
-    network: string
+    network: string,
+    query: string
     onBoundsChange: (bounds: LatLngBounds) => void
 }
 
-const Bounds: React.FC<BoundsProps> = ({ network, onBoundsChange }) => {
+const Bounds: React.FC<BoundsProps> = ({ network, query, onBoundsChange }) => {
     const map = useMap()
     useEffect(() => {
         onBoundsChange(map.getBounds())
@@ -54,7 +56,7 @@ const Bounds: React.FC<BoundsProps> = ({ network, onBoundsChange }) => {
             map.off('zoomend', updateBounds)
         }
     // eslint-disable-next-line
-    }, [map, network])
+    }, [map, network, query])
     return null
 }
 
@@ -81,7 +83,7 @@ export const HostMap = (props: HostMapProps) => {
 		return href + '/host/' + stripePrefix(host.publicKey)
 	}
     const handleBoundsChange = (bounds: LatLngBounds) => {
-        getHostsOnMap(props.network, bounds.getNorthWest(), bounds.getSouthEast())
+        getHostsOnMap(props.network, bounds.getNorthWest(), bounds.getSouthEast(), props.query)
 		.then(data => {
 			if (data && data.status === 'ok' && data.hosts) {
 				setHosts(data.hosts)
@@ -153,6 +155,7 @@ export const HostMap = (props: HostMapProps) => {
                     <UpdateMap/>
                     <Bounds
                         network={props.network}
+                        query={props.query}
                         onBoundsChange={handleBoundsChange}
                     />
                 </MapContainer>

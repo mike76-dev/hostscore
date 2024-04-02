@@ -752,7 +752,8 @@ func (api *portalAPI) mapHostsHandler(w http.ResponseWriter, req *http.Request, 
 		})
 		return
 	}
-	hosts, err := api.getHostsOnMap(network, from, to)
+	query := strings.ToLower(req.FormValue("query"))
+	hosts, err := api.getHostsOnMap(network, from, to, query)
 	if err != nil {
 		api.log.Error("couldn't get hosts on map", zap.String("network", network), zap.Error(err))
 		writeJSON(w, APIResponse{

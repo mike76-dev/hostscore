@@ -68,6 +68,7 @@ export const Hosts = (props: HostsProps) => {
             <HostMap
                 darkMode={props.darkMode}
                 network={network}
+                query={query}
             />
 			<HostSelector
 				darkMode={props.darkMode}

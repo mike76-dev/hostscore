@@ -1343,7 +1343,7 @@ func (api *portalAPI) pruneOldRecords() {
 
 // getHostsOnMap returns the online hosts that are located within the
 // provided geo coordinates.
-func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string) (hosts []portalHost, err error) {
+func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string, query string) (hosts []portalHost, err error) {
 	coords0 := strings.Split(northWest, ",")
 	if len(coords0) != 2 {
 		return nil, fmt.Errorf("wrong coordinates provided: %s", northWest)
@@ -1381,13 +1381,13 @@ func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string)
 	var totalHosts []portalHost
 	if network == "mainnet" {
 		for _, host := range api.hosts {
-			if api.isOnline(*host) {
+			if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
 				totalHosts = append(totalHosts, *host)
 			}
 		}
 	} else if network == "zen" {
 		for _, host := range api.hostsZen {
-			if api.isOnline(*host) {
+			if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
 				totalHosts = append(totalHosts, *host)
 			}
 		}

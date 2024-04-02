@@ -108,6 +108,7 @@ export const HostDetails = (props: HostDetailsProps) => {
                             darkMode={props.darkMode}
                             network={network}
                             host={host}
+                            query=""
                         />
                         <HostPrices
                             darkMode={props.darkMode}

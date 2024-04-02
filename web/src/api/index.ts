@@ -46,11 +46,13 @@ export const getHosts = async (
 export const getHostsOnMap = async (
 	network: string,
     northWest: LatLng,
-    southEast: LatLng
+    southEast: LatLng,
+    query: string
 ): Promise<{ status: string, message: string, hosts?: Host[] }> => {
 	const url = '/hosts/map?network=' + network +
 		'&from=' + northWest.lat.toFixed(2) + ',' + northWest.lng.toFixed(2) +
-		'&to=' + southEast.lat.toFixed(2) + ',' + southEast.lng.toFixed(2)
+		'&to=' + southEast.lat.toFixed(2) + ',' + southEast.lng.toFixed(2) +
+        '&query=' + query
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))
