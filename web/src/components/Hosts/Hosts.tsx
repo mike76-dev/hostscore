@@ -5,6 +5,7 @@ import {
     HostSearch,
     HostNavigation,
     HostsTable,
+    HostMap,
     Loader
 } from '../'
 import { Host, getHosts } from '../../api'
@@ -64,6 +65,10 @@ export const Hosts = (props: HostsProps) => {
 			{loading &&
 				<Loader darkMode={props.darkMode}/>
 			}
+            <HostMap
+                darkMode={props.darkMode}
+                network={network}
+            />
 			<HostSelector
 				darkMode={props.darkMode}
 				value={onlineOnly ? 'online' : 'all'}

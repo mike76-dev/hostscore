@@ -16,13 +16,46 @@
     height: 100%;
 }
 
-.host-map-dark .leaflet-popup-content-wrapper,
-.host-map-dark .leaflet-popup-tip {
-    background-color: var(--outlineDark);
+.leaflet-container a {
+    color: #000000;
+}
+
+.host-map-dark .leaflet-container a {
     color: var(--textDark);
 }
 
-.host-map-dark .leaflet-popup-close-button span,
+.leaflet-popup-content {
+    margin: 0.5rem 1rem;
+}
+
+.host-map-link {
+    text-decoration: none;
+}
+
+.host-map-marker {
+    background-color: #009fff;
+    border-radius: 50%;
+    display: block;
+    width: 1rem;
+    height: 1rem;
+}
+
+.host-map-dark .leaflet-popup-content-wrapper,
+.host-map-dark .leaflet-popup-tip {
+    background-color: var(--outlineLight);
+    color: var(--textDark);
+}
+
 .host-map-dark .host-map-unknown {
     color: var(--textDark);
+}
+
+.host-map-dark .leaflet-popup-close-button span {
+    color: var(--borderDark);
+}
+
+.host-map-dark .leaflet-control-zoom-in,
+.host-map-dark .leaflet-control-zoom-out,
+.host-map-dark .leaflet-control-attribution {
+    background-color: var(--borderDark);
 }

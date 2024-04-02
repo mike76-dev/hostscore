@@ -7,6 +7,7 @@ import {
 	PriceChange,
     HostSortType
 } from './types'
+import { LatLng } from 'leaflet'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
 const locations = ['eu', 'us', 'ap']
@@ -37,6 +38,19 @@ export const getHosts = async (
 		'&query=' + query +
         '&sort=' + sorting.sortBy +
         '&order=' + sorting.order
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getHostsOnMap = async (
+	network: string,
+    northWest: LatLng,
+    southEast: LatLng
+): Promise<{ status: string, message: string, hosts?: Host[] }> => {
+	const url = '/hosts/map?network=' + network +
+		'&from=' + northWest.lat.toFixed(2) + ',' + northWest.lng.toFixed(2) +
+		'&to=' + southEast.lat.toFixed(2) + ',' + southEast.lng.toFixed(2)
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))
