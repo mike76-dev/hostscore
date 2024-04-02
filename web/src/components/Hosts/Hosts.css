@@ -1,10 +1,17 @@
 .hosts-container {
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
 	position: relative;
+    width: 100%;
 }
 
 .hosts-subcontainer {
+    display: flex;
+    flex-direction: column;
+    width: 70%;
+}
+
+.hosts-row {
     display: flex;
     flex-direction: row;
     margin-top: 0.5rem;
@@ -22,9 +29,14 @@
 @media screen and (max-width: 1000px) {
     .hosts-container {
         width: 100%;
+        flex-direction: column;
     }
 
     .hosts-subcontainer {
+        width: 100%;
+    }
+
+    .hosts-row {
         flex-direction: column;
     }
 }
