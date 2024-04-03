@@ -39,6 +39,8 @@ export const HostInfo = (props: HostInfoProps) => {
             uptime: 0,
             age: 0,
             version: 0,
+            latency: 0,
+            benchmarks: 0,
             total: 0
         }
 		if (props.node === 'global') {
@@ -110,7 +112,9 @@ export const HostInfo = (props: HostInfoProps) => {
                                 Interactions<br/>
                                 Uptime<br/>
                                 Age<br/>
-                                Version
+                                Version<br/>
+                                Latency<br/>
+                                Benchmarks
                             </td>
                             <td>
                                 {score.prices.toPrecision(2)}<br/>
@@ -119,7 +123,9 @@ export const HostInfo = (props: HostInfoProps) => {
                                 {score.interactions.toPrecision(2)}<br/>
                                 {score.uptime.toPrecision(2)}<br/>
                                 {score.age.toPrecision(2)}<br/>
-                                {score.version.toPrecision(2)}
+                                {score.version.toPrecision(2)}<br/>
+                                {score.latency.toPrecision(2)}<br/>
+                                {score.benchmarks.toPrecision(2)}
                             </td>
                         </tr>
                     }

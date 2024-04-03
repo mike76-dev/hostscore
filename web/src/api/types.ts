@@ -65,8 +65,6 @@ export type HostScan = {
 	success: boolean,
 	latency: number,
 	error: string,
-	settings: HostSettings,
-	priceTable: HostPriceTable,
 	publicKey: string,
 	network: string,
 	node: string
@@ -92,6 +90,8 @@ export type HostScore = {
     uptime: number,
     age: number,
     version: number,
+    latency: number,
+    benchmarks: number,
     total: number
 }
 
@@ -99,6 +99,7 @@ export type HostInteractions = {
 	uptime: number,
 	downtime: number,
 	scanHistory: HostScan[],
+    benchmarkHistory: HostBenchmark[],
 	lastSeen: string,
 	activeHosts: number,
     score: HostScore,

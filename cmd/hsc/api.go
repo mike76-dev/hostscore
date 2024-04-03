@@ -101,16 +101,26 @@ type scoreBreakdown struct {
 	UptimeScore       float64 `json:"uptime"`
 	AgeScore          float64 `json:"age"`
 	VersionScore      float64 `json:"version"`
+	LatencyScore      float64 `json:"latency"`
+	BenchmarksScore   float64 `json:"benchmarks"`
 	TotalScore        float64 `json:"total"`
 }
 
+type portalScan struct {
+	Timestamp time.Time     `json:"timestamp"`
+	Success   bool          `json:"success"`
+	Latency   time.Duration `json:"latency"`
+	Error     string        `json:"error"`
+}
+
 type nodeInteractions struct {
-	Uptime      time.Duration     `json:"uptime"`
-	Downtime    time.Duration     `json:"downtime"`
-	ScanHistory []hostdb.HostScan `json:"scanHistory"`
-	LastSeen    time.Time         `json:"lastSeen"`
-	ActiveHosts int               `json:"activeHosts"`
-	Score       scoreBreakdown    `json:"score"`
+	Uptime           time.Duration          `json:"uptime"`
+	Downtime         time.Duration          `json:"downtime"`
+	ScanHistory      []portalScan           `json:"scanHistory"`
+	BenchmarkHistory []hostdb.HostBenchmark `json:"benchmarkHistory"`
+	LastSeen         time.Time              `json:"lastSeen"`
+	ActiveHosts      int                    `json:"activeHosts"`
+	Score            scoreBreakdown         `json:"score"`
 	hostdb.HostInteractions
 }
 

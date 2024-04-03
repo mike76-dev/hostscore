@@ -21,16 +21,18 @@ var (
 )
 
 // calculateScore calculates the total host's score.
-func calculateScore(host hostdb.HostDBEntry) scoreBreakdown {
+func calculateScore(host hostdb.HostDBEntry, scans []portalScan, benchmarks []hostdb.HostBenchmark) scoreBreakdown {
 	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
 	sb := scoreBreakdown{
 		PricesScore:       priceAdjustmentScore(hostPeriodCost),
 		StorageScore:      storageRemainingScore(host.Settings),
 		CollateralScore:   collateralScore(host.PriceTable),
 		InteractionsScore: interactionScore(host.Interactions.HistoricSuccesses, host.Interactions.HistoricFailures),
-		UptimeScore:       uptimeScore(host.Uptime, host.Downtime, host.ScanHistory),
+		UptimeScore:       uptimeScore(host.Uptime, host.Downtime, scans),
 		AgeScore:          ageScore(host.FirstSeen),
 		VersionScore:      versionScore(host.Settings),
+		LatencyScore:      latencyScore(scans),
+		BenchmarksScore:   benchmarksScore(benchmarks),
 	}
 	sb.TotalScore = sb.PricesScore *
 		sb.StorageScore *
@@ -38,7 +40,9 @@ func calculateScore(host hostdb.HostDBEntry) scoreBreakdown {
 		sb.InteractionsScore *
 		sb.UptimeScore *
 		sb.AgeScore *
-		sb.VersionScore
+		sb.VersionScore *
+		sb.LatencyScore *
+		sb.BenchmarksScore
 	return sb
 }
 
@@ -52,16 +56,20 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 		AgeScore:        ageScore(host.FirstSeen),
 		VersionScore:    versionScore(host.Settings),
 	}
-	var us, is float64
+	var us, is, ls, bs float64
 	var count int
 	for _, interactions := range host.Interactions {
 		us += uptimeScore(interactions.Uptime, interactions.Downtime, interactions.ScanHistory)
 		is += interactionScore(interactions.HistoricSuccesses, interactions.HistoricFailures)
+		ls += latencyScore(interactions.ScanHistory)
+		bs += benchmarksScore(interactions.BenchmarkHistory)
 		count++
 	}
 	if count > 0 {
 		sb.UptimeScore = us / float64(count)
 		sb.InteractionsScore = is / float64(count)
+		sb.LatencyScore = ls / float64(count)
+		sb.BenchmarksScore = bs / float64(count)
 	}
 	sb.TotalScore = sb.PricesScore *
 		sb.StorageScore *
@@ -69,7 +77,9 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 		sb.InteractionsScore *
 		sb.UptimeScore *
 		sb.AgeScore *
-		sb.VersionScore
+		sb.VersionScore *
+		sb.LatencyScore *
+		sb.BenchmarksScore
 	return sb
 }
 
@@ -214,7 +224,8 @@ func interactionScore(hs, hf float64) float64 {
 	return math.Pow(success/(success+fail), 10)
 }
 
-func uptimeScore(ut, dt time.Duration, history []hostdb.HostScan) float64 {
+func uptimeScore(ut, dt time.Duration, history []portalScan) float64 {
+	secondToLastScanSuccess := len(history) > 1 && history[1].Success
 	lastScanSuccess := len(history) > 0 && history[0].Success
 	uptime := ut
 	downtime := dt
@@ -229,6 +240,14 @@ func uptimeScore(ut, dt time.Duration, history []hostdb.HostScan) float64 {
 			return 0.75 // 1 successful scan
 		} else {
 			return 0.25 // 1 failed scan
+		}
+	case 2:
+		if lastScanSuccess && secondToLastScanSuccess {
+			return 0.85
+		} else if lastScanSuccess || secondToLastScanSuccess {
+			return 0.5
+		} else {
+			return 0.05
 		}
 	}
 
@@ -347,4 +366,76 @@ func hostPeriodCostForScore(settings rhpv2.HostSettings, pt rhpv3.HostPriceTable
 		Add(hostDownloadCost).
 		Add(hostStorageCost).
 		Add(siafundFee)
+}
+
+// latencyScore calculates a score from the host's latency measurements.
+func latencyScore(history []portalScan) float64 {
+	var averageLatency float64
+	var totalLatency time.Duration
+	var totalSuccessfulScans int
+	for _, scan := range history {
+		if scan.Success {
+			totalLatency += scan.Latency
+			totalSuccessfulScans++
+		}
+	}
+
+	if totalSuccessfulScans > 0 {
+		averageLatency = float64(totalLatency.Milliseconds()) / float64(totalSuccessfulScans)
+	}
+
+	// Catch an edge case.
+	if averageLatency == 0 {
+		return 0
+	}
+
+	// Slow (>1s) hosts are penalized with the zero score.
+	if averageLatency > 1000 {
+		return 0
+	}
+
+	// If the latency is below 10ms, return 1.
+	if averageLatency < 10 {
+		return 1
+	}
+
+	return (1000 - averageLatency) / 1000
+}
+
+// benchmarksScore calculates a score from the host's latest benchmarks.
+func benchmarksScore(benchmarks []hostdb.HostBenchmark) float64 {
+	var averageUploadSpeed, averageDownloadSpeed float64
+	var totalSuccessfulBenchmarks int
+	for _, benchmark := range benchmarks {
+		if benchmark.Success {
+			averageUploadSpeed += benchmark.UploadSpeed
+			averageDownloadSpeed += benchmark.DownloadSpeed
+			totalSuccessfulBenchmarks++
+		}
+	}
+
+	if totalSuccessfulBenchmarks == 0 {
+		return 0
+	}
+
+	averageUploadSpeed /= float64(totalSuccessfulBenchmarks)
+	averageDownloadSpeed /= float64(totalSuccessfulBenchmarks)
+
+	var uploadSpeedFactor, downloadSpeedFactor float64
+	if averageUploadSpeed >= 5e7 { // 50 MB/s
+		uploadSpeedFactor = 1
+	} else if averageUploadSpeed <= 1e6 { // 1 MB/s
+		uploadSpeedFactor = 0
+	} else {
+		uploadSpeedFactor = averageUploadSpeed / 5e7
+	}
+	if averageDownloadSpeed >= 1e8 { // 100 MB/s
+		downloadSpeedFactor = 1
+	} else if averageDownloadSpeed <= 1e6 { // 1 MB/s
+		downloadSpeedFactor = 0
+	} else {
+		downloadSpeedFactor = averageDownloadSpeed / 1e8
+	}
+
+	return uploadSpeedFactor * downloadSpeedFactor
 }
