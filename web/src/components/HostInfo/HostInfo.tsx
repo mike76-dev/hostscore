@@ -41,6 +41,7 @@ export const HostInfo = (props: HostInfoProps) => {
             version: 0,
             latency: 0,
             benchmarks: 0,
+            contracts: 0,
             total: 0
         }
 		if (props.node === 'global') {
@@ -106,6 +107,7 @@ export const HostInfo = (props: HostInfoProps) => {
                     {scoreExpanded &&
                         <tr className="host-info-score-details">
                             <td>
+                                Accepting Contracts<br/>
                                 Prices<br/>
                                 Storage<br/>
                                 Collateral<br/>
@@ -117,6 +119,7 @@ export const HostInfo = (props: HostInfoProps) => {
                                 Benchmarks
                             </td>
                             <td>
+                                {score.contracts.toPrecision(2)}<br/>
                                 {score.prices.toPrecision(2)}<br/>
                                 {score.storage.toPrecision(2)}<br/>
                                 {score.collateral.toPrecision(2)}<br/>

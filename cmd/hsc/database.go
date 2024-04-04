@@ -46,11 +46,12 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			version_score,
 			latency_score,
 			benchmarks_score,
+			contracts_score,
 			total_score,
 			settings,
 			price_table
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -85,6 +86,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			version_score,
 			latency_score,
 			benchmarks_score,
+			contracts_score,
 			total_score,
 			historic_successful_interactions,
 			historic_failed_interactions,
@@ -92,7 +94,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			recent_failed_interactions,
 			last_update
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			uptime = new.uptime,
 			downtime = new.downtime,
@@ -107,6 +109,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			version_score = new.version_score,
 			latency_score = new.latency_score,
 			benchmarks_score = new.benchmarks_score,
+			contracts_score = new.contracts_score,
 			total_score = new.total_score,
 			historic_successful_interactions = new.historic_successful_interactions,
 			historic_failed_interactions = new.historic_failed_interactions,
@@ -217,6 +220,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			version_score = ?,
 			latency_score = ?,
 			benchmarks_score = ?,
+			contracts_score = ?,
 			total_score = ?
 		WHERE network = ?
 		AND public_key = ?
@@ -277,6 +281,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			0,
 			0,
 			0,
+			0,
 			settings.Bytes(),
 			pt.Bytes(),
 		)
@@ -302,6 +307,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			sb.VersionScore,
 			sb.LatencyScore,
 			sb.BenchmarksScore,
+			sb.ContractsScore,
 			sb.TotalScore,
 			host.Interactions.HistoricSuccesses,
 			host.Interactions.HistoricFailures,
@@ -508,6 +514,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.Score.VersionScore,
 			host.Score.LatencyScore,
 			host.Score.BenchmarksScore,
+			host.Score.ContractsScore,
 			host.Score.TotalScore,
 			h.Network,
 			h.PublicKey[:],
@@ -1036,6 +1043,7 @@ func (api *portalAPI) load() error {
 			version_score,
 			latency_score,
 			benchmarks_score,
+			contracts_score,
 			total_score,
 			settings,
 			price_table
@@ -1058,7 +1066,7 @@ func (api *portalAPI) load() error {
 		var fs, lc int64
 		var ks uint64
 		var blocked bool
-		var ps, ss, cs, is, us, as, vs, ls, bs, ts float64
+		var ps, ss, cs, is, us, as, vs, ls, bs, cons, ts float64
 		var settings, pt []byte
 		if err := rows.Scan(
 			&id,
@@ -1079,6 +1087,7 @@ func (api *portalAPI) load() error {
 			&vs,
 			&ls,
 			&bs,
+			&cons,
 			&ts,
 			&settings,
 			&pt,
@@ -1105,6 +1114,7 @@ func (api *portalAPI) load() error {
 				VersionScore:      vs,
 				LatencyScore:      ls,
 				BenchmarksScore:   bs,
+				ContractsScore:    cons,
 				TotalScore:        ts,
 			},
 			Interactions: make(map[string]nodeInteractions),
@@ -1210,6 +1220,7 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 			version_score,
 			latency_score,
 			benchmarks_score,
+			contracts_score,
 			total_score,
 			historic_successful_interactions,
 			historic_failed_interactions,
@@ -1235,7 +1246,7 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 			var node string
 			var lu uint64
 			var ut, dt, lastSeen int64
-			var ps, ss, cs, is, us, as, vs, ls, bs, ts float64
+			var ps, ss, cs, is, us, as, vs, ls, bs, cons, ts float64
 			var hsi, hfi, rsi, rfi float64
 			var ah int
 			if err := rows.Scan(
@@ -1253,6 +1264,7 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 				&vs,
 				&ls,
 				&bs,
+				&cons,
 				&ts,
 				&hsi,
 				&hfi,
@@ -1278,6 +1290,7 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 					VersionScore:      vs,
 					LatencyScore:      ls,
 					BenchmarksScore:   bs,
+					ContractsScore:    cons,
 					TotalScore:        ts,
 				},
 				HostInteractions: hostdb.HostInteractions{

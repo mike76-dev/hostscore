@@ -92,6 +92,7 @@ export type HostScore = {
     version: number,
     latency: number,
     benchmarks: number,
+    contracts: number,
     total: number
 }
 

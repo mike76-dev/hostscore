@@ -33,6 +33,7 @@ func calculateScore(host hostdb.HostDBEntry, scans []portalScan, benchmarks []ho
 		VersionScore:      versionScore(host.Settings),
 		LatencyScore:      latencyScore(scans),
 		BenchmarksScore:   benchmarksScore(benchmarks),
+		ContractsScore:    contractsScore(host.Settings),
 	}
 	sb.TotalScore = sb.PricesScore *
 		sb.StorageScore *
@@ -42,7 +43,8 @@ func calculateScore(host hostdb.HostDBEntry, scans []portalScan, benchmarks []ho
 		sb.AgeScore *
 		sb.VersionScore *
 		sb.LatencyScore *
-		sb.BenchmarksScore
+		sb.BenchmarksScore *
+		sb.ContractsScore
 	return sb
 }
 
@@ -55,6 +57,7 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 		CollateralScore: collateralScore(host.PriceTable),
 		AgeScore:        ageScore(host.FirstSeen),
 		VersionScore:    versionScore(host.Settings),
+		ContractsScore:  contractsScore(host.Settings),
 	}
 	var us, is, ls, bs float64
 	var count int
@@ -79,7 +82,8 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 		sb.AgeScore *
 		sb.VersionScore *
 		sb.LatencyScore *
-		sb.BenchmarksScore
+		sb.BenchmarksScore *
+		sb.ContractsScore
 	return sb
 }
 
@@ -438,4 +442,13 @@ func benchmarksScore(benchmarks []hostdb.HostBenchmark) float64 {
 	}
 
 	return uploadSpeedFactor * downloadSpeedFactor
+}
+
+// contractsScore returns 1 if the host is accepting contracts,
+// 0 otherwise.
+func contractsScore(settings rhpv2.HostSettings) float64 {
+	if settings.AcceptingContracts {
+		return 1
+	}
+	return 0
 }

@@ -103,6 +103,7 @@ type scoreBreakdown struct {
 	VersionScore      float64 `json:"version"`
 	LatencyScore      float64 `json:"latency"`
 	BenchmarksScore   float64 `json:"benchmarks"`
+	ContractsScore    float64 `json:"contracts"`
 	TotalScore        float64 `json:"total"`
 }
 
