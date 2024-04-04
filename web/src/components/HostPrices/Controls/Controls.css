@@ -2,8 +2,8 @@
     display: flex;
     flex-direction: row;
     position: absolute;
-    top: 0.8rem;
-    right: 3.5rem;
+    top: 0;
+    right: 0;
 }
 
 .host-prices-control {
