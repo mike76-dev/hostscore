@@ -531,6 +531,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
+			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			if aIsOnline && !bIsOnline {
+				return -1
+			}
+			if !aIsOnline && bIsOnline {
+				return 1
+			}
 			return a.ID - b.ID
 		}
 		if a.Score.TotalScore < b.Score.TotalScore {
@@ -541,6 +548,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	})
 	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
+			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			if aIsOnline && !bIsOnline {
+				return -1
+			}
+			if !aIsOnline && bIsOnline {
+				return 1
+			}
 			return a.ID - b.ID
 		}
 		if a.Score.TotalScore < b.Score.TotalScore {
@@ -1129,6 +1143,13 @@ func (api *portalAPI) load() error {
 	}
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
+			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			if aIsOnline && !bIsOnline {
+				return -1
+			}
+			if !aIsOnline && bIsOnline {
+				return 1
+			}
 			return a.ID - b.ID
 		}
 		if a.Score.TotalScore < b.Score.TotalScore {
@@ -1139,6 +1160,13 @@ func (api *portalAPI) load() error {
 	})
 	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
+			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			if aIsOnline && !bIsOnline {
+				return -1
+			}
+			if !aIsOnline && bIsOnline {
+				return 1
+			}
 			return a.ID - b.ID
 		}
 		if a.Score.TotalScore < b.Score.TotalScore {
