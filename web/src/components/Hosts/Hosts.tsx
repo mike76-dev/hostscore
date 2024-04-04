@@ -9,13 +9,27 @@ import {
     HostMap,
     Loader
 } from '../'
-import { Host, getHosts } from '../../api'
+import {
+    Host,
+    AveragePrices,
+    NetworkAverages,
+    getHosts,
+    getAverages
+} from '../../api'
 import { HostContext } from '../../contexts'
 
 type HostsProps = {
 	network: string,
 	darkMode: boolean,
 	setHosts: (hosts: Host[]) => any,
+}
+
+const initialValues: AveragePrices = {
+    storagePrice: '',
+    collateral: '',
+    uploadPrice: '',
+    downloadPrice: '',
+    ok: false
 }
 
 export const Hosts = (props: HostsProps) => {
@@ -39,8 +53,12 @@ export const Hosts = (props: HostsProps) => {
     const [loadingAverages, setLoadingAverages] = useState(false)
 	const { network, setHosts } = props
     const prevQuery = useRef(query)
-    const [totalHosts, setTotalHosts] = useState<Host[]>([])
     const [time, setTime] = useState(new Date())
+    const [averages, setAverages] = useState<NetworkAverages>({
+        tier1: structuredClone(initialValues),
+        tier2: structuredClone(initialValues),
+        tier3: structuredClone(initialValues)
+    })
 	useEffect((): any => {
 		const interval = setInterval(() => {
 			setTime(new Date())
@@ -72,16 +90,14 @@ export const Hosts = (props: HostsProps) => {
 	}, [network, onlineOnly, offset, limit, query, sorting, setHosts])
     useEffect(() => {
         setLoadingAverages(true)
-        getHosts(network, false, 0, -1, '', { sortBy: 'rank', order: 'asc' })
+        getAverages(network)
         .then(data => {
-            if (data && data.status === 'ok' && data.hosts) {
-                setTotalHosts(data.hosts)
-            } else {
-                setTotalHosts([])
+            if (data && data.status === 'ok' && data.averages) {
+                setAverages(data.averages)
             }
             setLoadingAverages(false)
         })
-    }, [network, time, setTotalHosts])
+    }, [network, time, getAverages, setAverages, setLoadingAverages])
 	return (
 		<div className="hosts-container">
             <div className="hosts-subcontainer">
@@ -131,16 +147,15 @@ export const Hosts = (props: HostsProps) => {
                 </div>
             </div>
             <div className="hosts-averages-div">
-                {loadingAverages &&
+                {loadingAverages ?
                     <Loader
                         darkMode={props.darkMode}
                         className="hosts-averages-loader"
                     />
-                }
-                {totalHosts.length > 0 &&
+                :
                     <Averages
                         darkMode={props.darkMode}
-                        hosts={totalHosts}
+                        averages={averages}
                     />
                 }
             </div>

@@ -5,7 +5,8 @@ import {
 	HostScan,
 	HostBenchmark,
 	PriceChange,
-    HostSortType
+    HostSortType,
+    NetworkAverages
 } from './types'
 import { LatLng } from 'leaflet'
 
@@ -123,6 +124,14 @@ export const getPriceChanges = async (
 	publicKey: string
 ): Promise<{ status: string, message: string, priceChanges: PriceChange[] }> => {
 	const url = '/changes?network=' + network + '&host=' + publicKey
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getAverages = async (network: string):
+	Promise<{ status: string, message: string, averages: NetworkAverages }> => {
+	const url = '/averages?network=' + network
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

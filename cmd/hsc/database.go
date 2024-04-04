@@ -1630,3 +1630,89 @@ func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string,
 
 	return
 }
+
+// calculateAverages calculates the averages for the given network.
+func (api *portalAPI) calculateAverages() {
+	api.mu.RLock()
+	var hosts, hostsZen []portalHost
+	for _, host := range api.hosts {
+		if api.isOnline(*host) {
+			hosts = append(hosts, *host)
+		}
+	}
+	for _, host := range api.hostsZen {
+		if api.isOnline(*host) {
+			hostsZen = append(hostsZen, *host)
+		}
+	}
+	api.mu.RUnlock()
+
+	slices.SortStableFunc(hosts, func(a, b portalHost) int {
+		return a.Rank - b.Rank
+	})
+	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
+		return a.Rank - b.Rank
+	})
+
+	api.averages = calculateTiers(hosts)
+	api.averagesZen = calculateTiers(hostsZen)
+}
+
+func calculateTiers(sortedHosts []portalHost) networkAverages {
+	calculateTier := func(hostSlice []portalHost) averagePrices {
+		var tier averagePrices
+		var count int
+		for _, host := range hostSlice {
+			tier.StoragePrice = tier.StoragePrice.Add(host.Settings.StoragePrice)
+			tier.Collateral = tier.Collateral.Add(host.Settings.Collateral)
+			tier.UploadPrice = tier.UploadPrice.Add(host.Settings.UploadBandwidthPrice)
+			tier.DownloadPrice = tier.DownloadPrice.Add(host.Settings.DownloadBandwidthPrice)
+			count++
+		}
+		if count > 0 {
+			tier.StoragePrice = tier.StoragePrice.Div64(uint64(count))
+			tier.Collateral = tier.Collateral.Div64(uint64(count))
+			tier.UploadPrice = tier.UploadPrice.Div64(uint64(count))
+			tier.DownloadPrice = tier.DownloadPrice.Div64(uint64(count))
+			tier.OK = true
+		}
+		return tier
+	}
+
+	var tier1Hosts, tier2Hosts, tier3Hosts []portalHost
+	if len(sortedHosts) >= 10 {
+		tier1Hosts = sortedHosts[:10]
+	} else {
+		tier1Hosts = sortedHosts
+	}
+	if len(sortedHosts) >= 100 {
+		tier2Hosts = sortedHosts[10:100]
+	} else {
+		if len(sortedHosts) > 10 {
+			tier2Hosts = sortedHosts[10:]
+		}
+	}
+	if len(sortedHosts) > 100 {
+		tier3Hosts = sortedHosts[100:]
+	}
+
+	return networkAverages{
+		Tier1: calculateTier(tier1Hosts),
+		Tier2: calculateTier(tier2Hosts),
+		Tier3: calculateTier(tier3Hosts),
+	}
+}
+
+// updateAverages makes periodical calculation of the network averages.
+func (api *portalAPI) updateAverages() {
+	api.calculateAverages()
+
+	for {
+		select {
+		case <-api.stopChan:
+			return
+		case <-time.After(10 * time.Minute):
+		}
+		api.calculateAverages()
+	}
+}

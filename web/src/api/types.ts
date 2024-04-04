@@ -159,3 +159,17 @@ export type HostSortType = {
     sortBy: 'id' | 'rank' | 'total' | 'remaining',
     order: 'asc' | 'desc'
 }
+
+export type AveragePrices = {
+    storagePrice: string,
+    collateral: string,
+    uploadPrice: string,
+    downloadPrice: string,
+    ok: boolean
+}
+
+export type NetworkAverages = {
+    tier1: AveragePrices,
+    tier2: AveragePrices,
+    tier3: AveragePrices
+}
