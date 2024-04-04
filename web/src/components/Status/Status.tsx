@@ -70,37 +70,47 @@ export const Status = (props: StatusProps) => {
 		    				<tr>
 			    				<th colSpan={2}>Version:</th>
 				    			{nodes && nodes.map(n => (
-					    			<td key={'version-' + n.location}>{n.version}</td>
+					    			n.status === true ?
+                                        <td key={'version-' + n.location}>{n.version}</td>
+                                    : <></>
 						    	))}
     						</tr>
 	    					<tr>
 		    					<th rowSpan={2}>Mainnet:</th>
 			    				<td>Height</td>
 				    			{nodes && nodes.map(n => (
-					    			<td key={'height-mainnet-' + n.location}>{n.heightMainnet}</td>
+                                    n.status === true ?
+					    			    <td key={'height-mainnet-' + n.location}>{n.heightMainnet}</td>
+                                    : <></>
 						    	))}
     						</tr>
 	    					<tr>
 		    					<td>Balance</td>
 			    				{nodes && nodes.map(n => (
-				    				<td key={'balance-mainnet-' + n.location}>
-					    				<div className={'status status-' + getStyle(n.balanceMainnet)}></div>
-						    		</td>
+                                    n.status === true ?
+    				    				<td key={'balance-mainnet-' + n.location}>
+	    				    				<div className={'status status-' + getStyle(n.balanceMainnet)}></div>
+		    				    		</td>
+                                    : <></>
 							    ))}
     						</tr>
 	    					<tr>
 		    					<th rowSpan={2}>Zen:</th>
 			    				<td>Height</td>
 				    			{nodes && nodes.map(n => (
-					    			<td key={'height-zen-' + n.location}>{n.heightZen}</td>
+                                    n.status === true ?
+					    			    <td key={'height-zen-' + n.location}>{n.heightZen}</td>
+                                    : <></>
 						    	))}
     						</tr>
 	    					<tr>
 		    					<td>Balance</td>
 			    				{nodes && nodes.map(n => (
-				    				<td key={'balance-zen-' + n.location}>
-					    				<div className={'status status-' + getStyle(n.balanceZen)}></div>
-						    		</td>
+                                    n.status === true ?
+    				    				<td key={'balance-zen-' + n.location}>
+	    				    				<div className={'status status-' + getStyle(n.balanceZen)}></div>
+		    				    		</td>
+                                    : <></>
 							    ))}
     						</tr>
 	    					<tr><td colSpan={nodes.length + 2}></td></tr>
