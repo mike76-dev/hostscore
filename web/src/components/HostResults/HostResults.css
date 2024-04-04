@@ -34,6 +34,14 @@
     text-align: left;
 }
 
+.host-results-tooltip .tooltip-text {
+    left: 1.5rem;
+    top: 0;
+    right: unset;
+    min-width: 12rem;
+    text-align: left;
+}
+
 .host-benchmarks-table tr > td,
 .host-benchmarks-table tr > th {
     border-right: 1px solid var(--borderLight);

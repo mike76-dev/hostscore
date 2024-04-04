@@ -26,7 +26,7 @@ type Results = {
 	data: HostBenchmark[]
 }
 
-const ttfbTooltip = () => (
+const TTFBTooltip = () => (
     <div className="host-results-tooltip">
         This is not the Time To First Byte as it is usually meant,
         but rather the time to download the first data sector
@@ -140,7 +140,9 @@ export const HostResults = (props: HostResultsProps) => {
 					<tr>
 						<td>
                             TTFB
-                            <Tooltip darkMode={props.darkMode}>{ttfbTooltip()}</Tooltip>
+                            <Tooltip className="host-results-tooltip" darkMode={props.darkMode}>
+                                <TTFBTooltip/>
+                            </Tooltip>
                         </td>
 						{results.map(res => (
 							<td key={'ttfb-' + res.node}>{res.benchmarkCount > 0 ? res.ttfb.toFixed(2) + ' s' : 'N/A'}</td>
