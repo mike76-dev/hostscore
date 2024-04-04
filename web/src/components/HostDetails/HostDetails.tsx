@@ -89,7 +89,10 @@ export const HostDetails = (props: HostDetailsProps) => {
 	return (
 		<div className={'host-details-container' + (props.darkMode ? ' host-details-dark' : '')}>
 			{loadingHost || loadingScans || loadingBenchmarks || loadingPriceChanges ?
-				<Loader darkMode={props.darkMode}/>
+				<Loader
+                    darkMode={props.darkMode}
+                    className="host-details-loader"
+                />
 			: (host ?
                 <>
                     <div className="host-details-subcontainer">

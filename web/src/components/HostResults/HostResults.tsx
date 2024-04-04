@@ -6,7 +6,7 @@ import {
 	useLocations,
 	convertSize
 } from '../../api'
-import { Benchmark } from '../'
+import { Benchmark, Tooltip } from '../'
 
 type HostResultsProps = {
 	darkMode: boolean,
@@ -25,6 +25,14 @@ type Results = {
 	ttfb: number,
 	data: HostBenchmark[]
 }
+
+const ttfbTooltip = () => (
+    <div className="host-results-tooltip">
+        This is not the Time To First Byte as it is usually meant,
+        but rather the time to download the first data sector
+        (4 MiB) from the host.
+    </div>
+)
 
 export const HostResults = (props: HostResultsProps) => {
 	const locations = useLocations()
@@ -130,7 +138,10 @@ export const HostResults = (props: HostResultsProps) => {
 						))}
 					</tr>
 					<tr>
-						<td>TTFB</td>
+						<td>
+                            TTFB
+                            <Tooltip darkMode={props.darkMode}>{ttfbTooltip()}</Tooltip>
+                        </td>
 						{results.map(res => (
 							<td key={'ttfb-' + res.node}>{res.benchmarkCount > 0 ? res.ttfb.toFixed(2) + ' s' : 'N/A'}</td>
 						))}

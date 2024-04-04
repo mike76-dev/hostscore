@@ -1,6 +1,6 @@
 .loader {
 	display: inline-block;
-	position: absolute;
+	position: relative;
 	width: 8vw;
 	height: 8vw;
 	margin: 0 auto;

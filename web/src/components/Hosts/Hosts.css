@@ -18,6 +18,7 @@
 
 .hosts-averages-div {
     position: relative;
+    min-width: 20rem;
 }
 
 .hosts-row {
@@ -36,13 +37,15 @@
 }
 
 .hosts-table-loader {
+    position: absolute!important;
     left: 45%;
     top: 35%;
 }
 
 .hosts-averages-loader {
-    left: 38%;
-    top: 22%;
+    position: absolute!important;
+    left: 35%;
+    top: 15%;
     width: 6vw;
     height: 6vw;
 }
@@ -61,9 +64,11 @@
         flex-direction: column;
     }
 
+    .hosts-table-loader,
     .hosts-averages-loader {
         width: 16vw;
         height: 16vw;
+        left: 40%;
         top: 40%;
     }
 }

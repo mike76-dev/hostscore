@@ -28,8 +28,18 @@
     right: 0;
 }
 
+.host-details-loader {
+    position: absolute!important;
+    left: 46vw;
+    top: 32vh;
+}
+
 @media screen and (max-width: 1000px) {
 	.host-details-container {
 		flex-direction: column;
 	}
+
+    .host-details-loader {
+        left: 40vw;
+    }
 }
