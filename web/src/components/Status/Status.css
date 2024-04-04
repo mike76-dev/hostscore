@@ -1,6 +1,7 @@
 .status-container {
     display: flex;
     flex-direction: column;
+    position: relative;
 }
 
 .status-container h1 {
@@ -68,9 +69,19 @@
     margin-bottom: 2rem;
 }
 
+.status-loader {
+    left: 30%;
+    top: 30%;
+}
+
 @media screen and (max-width: 1000px) {
 	.status-container h1 {
         text-align: center;
 		font-size: 1.5rem;
 	}
+
+    .status-loader {
+        left: 45%;
+        top: 35%;
+    }
 }

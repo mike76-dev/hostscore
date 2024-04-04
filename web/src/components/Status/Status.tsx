@@ -1,7 +1,7 @@
 import './Status.css'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button } from '../'
+import { Button, Loader } from '../'
 import Back from '../../assets/back.png'
 import { NodeStatus, getStatus } from '../../api'
 
@@ -12,6 +12,7 @@ export const Status = (props: StatusProps) => {
 	const [version, setVersion] = useState('')
 	const [nodes, setNodes] = useState<NodeStatus[]>([])
 	const [time, setTime] = useState(new Date())
+    const [loading, setLoading] = useState(false)
 	useEffect((): any => {
 		const interval = setInterval(() => {
 			setTime(new Date())
@@ -19,6 +20,7 @@ export const Status = (props: StatusProps) => {
 		return () => clearInterval(interval)
 	}, [])
 	useEffect(() => {
+        setLoading(true)
 		getStatus()
 		.then(data => {
 			if (data && data.status === 'ok') {
@@ -27,6 +29,7 @@ export const Status = (props: StatusProps) => {
 			} else {
 				setVersion('0.0.0')
 			}
+            setLoading(false)
 		})
 	}, [time])
 	const getStyle = (balance: string) => {
@@ -39,6 +42,12 @@ export const Status = (props: StatusProps) => {
 	return (
 		<div className={'status-container' + (props.darkMode ? ' status-container-dark' : '')}>
 			<h1>Service Status</h1>
+            {(true || loading) &&
+                <Loader
+                    darkMode={props.darkMode}
+                    className="status-loader"
+                />
+            }
 			{version === '0.0.0' ?
 				<div className="status-unavailable">Temporarily unavailable.</div>
 			:
