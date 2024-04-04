@@ -1587,9 +1587,16 @@ func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string,
 			&tz,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				continue
+				info, err := external.FetchIPInfo(host.NetAddress, api.token)
+				if err != nil {
+					continue
+				}
+				if err := api.saveLocation(host.PublicKey, info); err != nil {
+					api.log.Error("couldn't save location", zap.Stringer("host", host.PublicKey), zap.Error(err))
+					continue
+				}
+				loc = info.Location
 			}
-			return nil, utils.AddContext(err, "couldn't decode location")
 		}
 
 		coords := strings.Split(loc, ",")
