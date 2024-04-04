@@ -1,8 +1,6 @@
 .loader {
 	display: inline-block;
-	position: fixed;
-	left: 46vw;
-	top: 46vh;
+	position: absolute;
 	width: 8vw;
 	height: 8vw;
 	margin: 0 auto;
@@ -61,8 +59,6 @@
 
 @media screen and (max-width: 1000px) {
 	.loader {
-		left: 42vw;
-		top: 42vh;
 		width: 16vw;
 		height: 16vw;
 	}
