@@ -185,6 +185,7 @@ type portalAPI struct {
 	stopChan    chan struct{}
 	averages    networkAverages
 	averagesZen networkAverages
+	requests    map[string]inboundRequest
 }
 
 func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *responseCache) (*portalAPI, error) {
@@ -198,6 +199,7 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		hosts:    map[types.PublicKey]*portalHost{},
 		hostsZen: map[types.PublicKey]*portalHost{},
 		stopChan: make(chan struct{}),
+		requests: make(map[string]inboundRequest),
 	}
 
 	err := api.load()
@@ -249,6 +251,14 @@ func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Headers", "*")
 	}
 	if r.Method == "OPTIONS" {
+		return
+	}
+
+	if api.rateExceeded(getRemoteHost(r)) {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "request rate limit exceeded",
+		})
 		return
 	}
 
