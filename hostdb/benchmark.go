@@ -146,6 +146,27 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			}
 		}
 
+		// Use the channel to prevent other threads from running benchmarks
+		// at the same time.
+		for {
+			hdb.mu.Lock()
+			if !hdb.benchmarking {
+				hdb.benchmarking = true
+				hdb.mu.Unlock()
+				break
+			}
+			hdb.mu.Unlock()
+			select {
+			case <-hdb.tg.StopChan():
+			case <-time.After(time.Second):
+			}
+		}
+		defer func() {
+			hdb.mu.Lock()
+			hdb.benchmarking = false
+			hdb.mu.Unlock()
+		}()
+
 		// Fetch a valid price table.
 		ptCtx, ptCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer ptCancel()
@@ -217,27 +238,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		if err != nil {
 			return err
 		}
-
-		// Use the channel to prevent other threads from running benchmarks
-		// at the same time.
-		for {
-			hdb.mu.Lock()
-			if !hdb.benchmarking {
-				hdb.benchmarking = true
-				hdb.mu.Unlock()
-				break
-			}
-			hdb.mu.Unlock()
-			select {
-			case <-hdb.tg.StopChan():
-			case <-time.After(time.Second):
-			}
-		}
-		defer func() {
-			hdb.mu.Lock()
-			hdb.benchmarking = false
-			hdb.mu.Unlock()
-		}()
 
 		// Run an upload benchmark.
 		var data [rhpv2.SectorSize]byte
