@@ -1,7 +1,5 @@
 import './Averages.css'
-import { useState, useEffect } from 'react'
 import {
-    Host,
     NetworkAverages,
     convertPriceRaw
 } from '../../api'

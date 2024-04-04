@@ -97,7 +97,7 @@ export const Hosts = (props: HostsProps) => {
             }
             setLoadingAverages(false)
         })
-    }, [network, time, getAverages, setAverages, setLoadingAverages])
+    }, [network, time, setAverages, setLoadingAverages])
 	return (
 		<div className="hosts-container">
             <div className="hosts-subcontainer">
