@@ -243,14 +243,14 @@ func (api *portalAPI) requestUpdates() {
 
 func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// For testing only.
-	if origin := r.Header.Get("Origin"); origin != "" {
+	/*if origin := r.Header.Get("Origin"); origin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "*")
 	}
 	if r.Method == "OPTIONS" {
 		return
-	}
+	}*/
 
 	api.mu.RLock()
 	api.router.ServeHTTP(w, r)
