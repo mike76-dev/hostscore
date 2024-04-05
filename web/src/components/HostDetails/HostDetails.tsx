@@ -132,7 +132,7 @@ export const HostDetails = (props: HostDetailsProps) => {
 				icon={Back}
 				caption="back"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(-1)}}
+				onClick={() => {navigate(network === 'mainnet' ? '/' : '/zen/')}}
 			/>
 		</div>
 	)
