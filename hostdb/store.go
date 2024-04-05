@@ -843,11 +843,11 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err = s.tx.Query(`
 		SELECT id, public_key, ran_at, success, latency, error, settings, price_table
-		FROM hdb_scans_`+s.network+`
+		FROM hdb_scans_` + s.network + `
 		WHERE modified > fetched
 		ORDER BY id ASC
-		LIMIT ?
-	`, 1000-len(updates.Hosts))
+		LIMIT 1000
+	`)
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query scans")
 	}
@@ -896,11 +896,11 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err = s.tx.Query(`
 		SELECT id, public_key, ran_at, success, upload_speed, download_speed, ttfb, error
-		FROM hdb_benchmarks_`+s.network+`
+		FROM hdb_benchmarks_` + s.network + `
 		WHERE modified > fetched
 		ORDER BY id ASC
-		LIMIT ?
-	`, 1000-len(updates.Hosts)-len(updates.Scans))
+		LIMIT 1000
+	`)
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query benchmarks")
 	}
