@@ -33,6 +33,11 @@
     text-decoration: none;
 }
 
+.host-map-link:hover,
+.host-map-link:focus {
+    text-decoration: underline;
+}
+
 .host-map-marker {
     background-color: #009fff;
     border-radius: 50%;

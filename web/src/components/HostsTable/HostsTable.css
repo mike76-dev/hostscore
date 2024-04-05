@@ -75,14 +75,12 @@
     border-radius: 0.25rem;
 }
 
+.hosts-table-link:hover,
 .hosts-table-link:focus {
-    outline: 1px solid var(--outlineLight);
+    outline: none;
+    text-decoration: underline;
 }
 
 .hosts-table-dark .hosts-table-link {
 	color: var(--textDark);
-}
-
-.hosts-table-dark .hosts-table-link:focus {
-	outline: 1px solid var(--outlineDark);
 }
