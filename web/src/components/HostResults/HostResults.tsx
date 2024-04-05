@@ -27,7 +27,7 @@ type Results = {
 }
 
 const TTFBTooltip = () => (
-    <div className="host-results-tooltip">
+    <div>
         This is not the Time To First Byte as it is usually meant,
         but rather the time to download the first data sector
         (4 MiB) from the host.

@@ -1,4 +1,5 @@
 import './Averages.css'
+import { Tooltip } from '../'
 import {
     NetworkAverages,
     convertPriceRaw
@@ -8,6 +9,13 @@ type AveragesProps = {
     darkMode: boolean,
     averages: NetworkAverages
 }
+
+const AveragesTooltip = () => (
+    <div>
+        The prices given here do not count for any redundancy.
+        They are given from the hosts' perspective.
+    </div>
+)
 
 export const Averages = (props: AveragesProps) => {
     const toSia = (price: number) => {
@@ -23,7 +31,11 @@ export const Averages = (props: AveragesProps) => {
     }
     return (
         <div className={'averages-container' + (props.darkMode ? ' averages-dark' : '')}>
-            <p>Network Averages</p>
+            <p>Network Averages
+                <Tooltip className="averages-tooltip" darkMode={props.darkMode}>
+                    <AveragesTooltip/>
+                </Tooltip>
+            </p>
             <table>
                 <tbody>
                     {props.averages.tier1.ok === true &&

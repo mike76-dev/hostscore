@@ -28,6 +28,10 @@
     color: var(--textDark);
 }
 
+.averages-tooltip .tooltip-text {
+    min-width: 10rem;
+}
+
 @media screen and (max-width: 1000px) {
     .averages-container {
         margin-left: 0;

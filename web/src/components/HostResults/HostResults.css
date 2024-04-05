@@ -39,7 +39,6 @@
     top: 0;
     right: unset;
     min-width: 12rem;
-    text-align: left;
 }
 
 .host-benchmarks-table tr > td,
