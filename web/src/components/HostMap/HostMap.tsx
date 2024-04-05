@@ -99,7 +99,7 @@ export const HostMap = (props: HostMapProps) => {
                     <MapContainer
                         center={geolocation(props.host.loc)}
                         zoom={7}
-                        scrollWheelZoom={false}
+                        scrollWheelZoom={true}
                     >
                         <TileLayer
                             attribution={props.darkMode ?
@@ -127,7 +127,7 @@ export const HostMap = (props: HostMapProps) => {
                 <MapContainer
                     center={geolocation(center)}
                     zoom={7}
-                    scrollWheelZoom={false}
+                    scrollWheelZoom={true}
                 >
                     <TileLayer
                         attribution={props.darkMode ?
