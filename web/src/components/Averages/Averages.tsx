@@ -31,11 +31,11 @@ export const Averages = (props: AveragesProps) => {
     }
     return (
         <div className={'averages-container' + (props.darkMode ? ' averages-dark' : '')}>
-            <p>Network Averages
+            <div>Network Averages
                 <Tooltip className="averages-tooltip" darkMode={props.darkMode}>
                     <AveragesTooltip/>
                 </Tooltip>
-            </p>
+            </div>
             <table>
                 <tbody>
                     {props.averages.tier1.ok === true &&
