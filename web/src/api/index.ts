@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { CancelToken } from 'axios'
 import {
 	Host,
 	NodeStatus,
@@ -31,7 +31,8 @@ export const getHosts = async (
 	offset: number,
 	limit: number,
 	query: string,
-    sorting: HostSortType
+    sorting: HostSortType,
+    cancelToken: CancelToken
 ): Promise<{ status: string, message: string, hosts?: Host[], more: boolean, total: number }> => {
 	const url = '/hosts?network=' + network +
 		'&all=' + (all ? 'true' : 'false') +
@@ -39,9 +40,11 @@ export const getHosts = async (
 		'&query=' + query +
         '&sort=' + sorting.sortBy +
         '&order=' + sorting.order
-	return instance.get(url)
+    return instance.get(url, { cancelToken })
 	.then(response => response.data)
-	.catch(error => console.log(error))
+    .catch(error => {
+        if (!axios.isCancel(error)) console.log(error)
+    })
 }
 
 export const getHostsOnMap = async (

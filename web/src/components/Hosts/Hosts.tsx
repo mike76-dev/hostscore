@@ -1,5 +1,6 @@
 import './Hosts.css'
 import { useRef, useState, useEffect, useContext } from 'react'
+import axios from 'axios'
 import {
     Averages,
     HostSelector,
@@ -74,7 +75,8 @@ export const Hosts = (props: HostsProps) => {
     }, [onlineOnly, query, changeOffset])
 	useEffect(() => {
 		setLoading(true)
-		getHosts(network, !onlineOnly, offset, limit, query, sorting)
+        const cancelTokenSource = axios.CancelToken.source()
+		getHosts(network, !onlineOnly, offset, limit, query, sorting, cancelTokenSource.token)
 		.then(data => {
 			if (data && data.status === 'ok' && data.hosts) {
 				setHostsLocal(data.hosts)
@@ -87,6 +89,9 @@ export const Hosts = (props: HostsProps) => {
 			}
 			setLoading(false)
 		})
+        return () => {
+            cancelTokenSource.cancel('request canceled')
+        }
 	}, [network, onlineOnly, offset, limit, query, sorting, setHosts])
     useEffect(() => {
         setLoadingAverages(true)
