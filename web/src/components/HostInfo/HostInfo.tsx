@@ -18,6 +18,7 @@ type HostInfoProps = {
 }
 
 type Interactions = {
+    online: boolean,
 	lastSeen: string,
 	uptime: string,
 	activeHosts: number,
@@ -27,6 +28,7 @@ type Interactions = {
 export const HostInfo = (props: HostInfoProps) => {
 	const locations = useLocations()
 	const interactions = (): Interactions => {
+        let online = false
 		let ls = new Date('0001-01-01T00:00:00Z')
 		let ut = 0
 		let dt = 0
@@ -48,6 +50,11 @@ export const HostInfo = (props: HostInfoProps) => {
 			locations.forEach(location => {
 				let int = props.host.interactions[location]
 				if (!int) return
+                if (int.scanHistory.length > 0 && int.scanHistory[0].success === true &&
+					((int.scanHistory.length > 1 && int.scanHistory[1].success === true) ||
+					int.scanHistory.length === 1)) {
+					online = true
+				}
 				if (int.lastSeen.indexOf('0001-01-01') < 0) {
 					let nls = new Date(int.lastSeen)
 					if (nls > ls) ls = nls
@@ -60,6 +67,11 @@ export const HostInfo = (props: HostInfoProps) => {
 		} else {
 			let int = props.host.interactions[props.node]
 			if (int) {
+                if (int.scanHistory.length > 0 && int.scanHistory[0].success === true &&
+					((int.scanHistory.length > 1 && int.scanHistory[1].success === true) ||
+					int.scanHistory.length === 1)) {
+					online = true
+				}
 				ls = new Date(int.lastSeen)
 				ut = int.uptime
 				dt = int.downtime
@@ -69,9 +81,9 @@ export const HostInfo = (props: HostInfoProps) => {
 		}
 		let lastSeen = (ls.getFullYear() <= 1970) ? 'N/A' : ls.toDateString()
 		let uptime = dt + ut === 0 ? '0%' : (ut * 100 / (ut + dt)).toFixed(1) + '%'
-		return { lastSeen, uptime, activeHosts, score }
+		return { online, lastSeen, uptime, activeHosts, score }
 	}
-	const { lastSeen, uptime, activeHosts, score } = interactions()
+	const { online, lastSeen, uptime, activeHosts, score } = interactions()
     const [scoreExpanded, toggleScore] = useState(false)
 	return (
 		<div className={'host-info-container' + (props.darkMode ? ' host-info-dark' : '')}>
@@ -82,6 +94,7 @@ export const HostInfo = (props: HostInfoProps) => {
 	    			<tr><td>Public Key</td><td className="host-info-small">{props.host.publicKey}</td></tr>
 		    		<tr><td>Address</td><td>{props.host.netaddress}</td></tr>
 			    	<tr><td>Location</td><td>{getFlagEmoji(props.host.country)}</td></tr>
+                    <tr><td>Online</td><td>{online ? 'Yes' : 'No'}</td></tr>
 				    <tr><td>First Seen</td><td>{new Date(props.host.firstSeen).toDateString()}</td></tr>
     				<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
 	    			<tr><td>Uptime</td><td>{uptime}</td></tr>
