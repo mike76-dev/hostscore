@@ -442,10 +442,12 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				benchmarks = ints.BenchmarkHistory
 			}
 			scans = append(newScans, scans...)
+			slices.SortFunc(scans, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
 			if len(scans) > 24 {
 				scans = scans[:24]
 			}
 			benchmarks = append(newBenchmarks, benchmarks...)
+			slices.SortFunc(benchmarks, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
 			if len(benchmarks) > 24 {
 				benchmarks = benchmarks[:24]
 			}
@@ -1350,7 +1352,7 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 					Latency:   time.Duration(latency) * time.Millisecond,
 					Error:     msg,
 				}
-				int.ScanHistory = append([]portalScan{scan}, int.ScanHistory...)
+				int.ScanHistory = append(int.ScanHistory, scan)
 			}
 			rows.Close()
 			host.Interactions[node] = int
@@ -1405,7 +1407,7 @@ func (api *portalAPI) loadBenchmarks(hosts map[types.PublicKey]*portalHost, netw
 					TTFB:          time.Duration(ttfb) * time.Millisecond,
 					Error:         msg,
 				}
-				int.BenchmarkHistory = append([]hostdb.HostBenchmark{benchmark}, int.BenchmarkHistory...)
+				int.BenchmarkHistory = append(int.BenchmarkHistory, benchmark)
 			}
 			rows.Close()
 			host.Interactions[node] = int
