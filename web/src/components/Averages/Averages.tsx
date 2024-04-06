@@ -31,7 +31,7 @@ export const Averages = (props: AveragesProps) => {
     }
     return (
         <div className={'averages-container' + (props.darkMode ? ' averages-dark' : '')}>
-            <div>Network Averages
+            <div><strong>Network Averages</strong>
                 <Tooltip className="averages-tooltip" darkMode={props.darkMode}>
                     <AveragesTooltip/>
                 </Tooltip>
