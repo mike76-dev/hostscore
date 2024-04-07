@@ -46,14 +46,15 @@ export const Hosts = (props: HostsProps) => {
         sorting,
         changeSorting
     } = useContext(HostContext)
-    const prevOnlineOnly = useRef(onlineOnly)
 	const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
 	const [hosts, setHostsLocal] = useState<Host[]>([])
 	const [total, setTotal] = useState(0)
 	const [loading, setLoading] = useState(false)
     const [loadingAverages, setLoadingAverages] = useState(false)
 	const { network, setHosts } = props
+    const prevOnlineOnly = useRef(onlineOnly)
     const prevQuery = useRef(query)
+    const prevSorting = useRef(sorting)
     const [time, setTime] = useState(new Date())
     const [averages, setAverages] = useState<NetworkAverages>({
         tier1: structuredClone(initialValues),
@@ -67,12 +68,17 @@ export const Hosts = (props: HostsProps) => {
 		return () => clearInterval(interval)
 	}, [])
     useEffect(() => {
-        if (prevOnlineOnly.current !== onlineOnly || prevQuery.current !== query) {
+        if (
+            prevOnlineOnly.current !== onlineOnly ||
+            prevQuery.current !== query ||
+            prevSorting.current !== sorting
+        ) {
             changeOffset(0)
             prevOnlineOnly.current = onlineOnly
             prevQuery.current = query
+            prevSorting.current = sorting
         }
-    }, [onlineOnly, query, changeOffset])
+    }, [onlineOnly, query, sorting, changeOffset])
 	useEffect(() => {
 		setLoading(true)
         const cancelTokenSource = axios.CancelToken.source()
