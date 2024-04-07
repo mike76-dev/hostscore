@@ -153,8 +153,11 @@ export const Hosts = (props: HostsProps) => {
 	    					    changeLimit={changeLimit}
     		    			/>
 	    		    	</>
-                    : <div className={'hosts-not-found' + (props.darkMode ? ' hosts-not-found-dark' : '')}>No hosts found</div>
-	    	    	}
+                    : (loading ?
+                        <></>
+                    :
+                        <div className={'hosts-not-found' + (props.darkMode ? ' hosts-not-found-dark' : '')}>No hosts found</div>
+                    )}
                 </div>
             </div>
             <div className="hosts-averages-div">
