@@ -49,7 +49,7 @@ export const HostInfo = (props: HostInfoProps) => {
 		if (props.node === 'global') {
 			locations.forEach(location => {
 				let int = props.host.interactions[location]
-				if (!int) return
+				if (!int || !int.scanHistory) return
                 if (int.scanHistory.length > 0 && int.scanHistory[0].success === true &&
 					((int.scanHistory.length > 1 && int.scanHistory[1].success === true) ||
 					int.scanHistory.length === 1)) {
