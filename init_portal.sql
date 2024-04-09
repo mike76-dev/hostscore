@@ -107,6 +107,7 @@ CREATE TABLE price_changes (
 );
 
 CREATE TABLE locations (
+    network    VARCHAR(8) NOT NULL,
 	public_key BINARY(32) NOT NULL,
 	ip         TEXT NOT NULL,
 	host_name  TEXT NOT NULL,
@@ -118,5 +119,5 @@ CREATE TABLE locations (
 	zip        TEXT NOT NULL,
 	time_zone  TEXT NOT NULL,
 	fetched_at BIGINT NOT NULL,
-	PRIMARY KEY (public_key)
+	PRIMARY KEY (network, public_key)
 );

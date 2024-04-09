@@ -638,7 +638,7 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 	}
 
 	host = *h
-	info, lastFetched, err := api.getLocation(pk, host.NetAddress)
+	info, lastFetched, err := api.getLocation(pk, network, host.NetAddress)
 	if err != nil {
 		return portalHost{}, utils.AddContext(err, "couldn't get host location")
 	} else if host.LastIPChange.After(lastFetched) {
@@ -648,7 +648,7 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 		} else {
 			if (newInfo != external.IPInfo{}) {
 				info = newInfo
-				err = api.saveLocation(pk, info)
+				err = api.saveLocation(pk, network, info)
 				if err != nil {
 					return portalHost{}, utils.AddContext(err, "couldn't update host location")
 				}
@@ -750,7 +750,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 	hosts = hosts[offset : offset+limit]
 
 	for i := range hosts {
-		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, hosts[i].NetAddress)
+		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, network, hosts[i].NetAddress)
 		if err != nil {
 			return nil, false, 0, utils.AddContext(err, "couldn't get host location")
 		} else if hosts[i].LastIPChange.After(lastFetched) {
@@ -760,7 +760,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 			} else {
 				if (newInfo != external.IPInfo{}) {
 					info = newInfo
-					err = api.saveLocation(hosts[i].PublicKey, info)
+					err = api.saveLocation(hosts[i].PublicKey, network, info)
 					if err != nil {
 						return nil, false, 0, utils.AddContext(err, "couldn't update host location")
 					}
@@ -778,7 +778,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 
 // getLocation loads the host's geolocation from the database.
 // If there is none present, the function tries to fetch it using the API.
-func (api *portalAPI) getLocation(pk types.PublicKey, addr string) (info external.IPInfo, lastFetched time.Time, err error) {
+func (api *portalAPI) getLocation(pk types.PublicKey, network, addr string) (info external.IPInfo, lastFetched time.Time, err error) {
 	var lf int64
 	err = api.db.QueryRow(`
 		SELECT
@@ -794,7 +794,8 @@ func (api *portalAPI) getLocation(pk types.PublicKey, addr string) (info externa
 			fetched_at
 		FROM locations
 		WHERE public_key = ?
-	`, pk[:]).Scan(
+		AND network = ?
+	`, pk[:], network).Scan(
 		&info.IP,
 		&info.HostName,
 		&info.City,
@@ -814,7 +815,7 @@ func (api *portalAPI) getLocation(pk types.PublicKey, addr string) (info externa
 		if err != nil {
 			return external.IPInfo{}, time.Time{}, utils.AddContext(err, "couldn't fetch location")
 		}
-		if err := api.saveLocation(pk, info); err != nil {
+		if err := api.saveLocation(pk, network, info); err != nil {
 			return external.IPInfo{}, time.Time{}, utils.AddContext(err, "couldn't save location")
 		}
 		return info, time.Now(), nil
@@ -824,9 +825,10 @@ func (api *portalAPI) getLocation(pk types.PublicKey, addr string) (info externa
 }
 
 // saveLocation saves the host's geolocation in the database.
-func (api *portalAPI) saveLocation(pk types.PublicKey, info external.IPInfo) error {
+func (api *portalAPI) saveLocation(pk types.PublicKey, network string, info external.IPInfo) error {
 	_, err := api.db.Exec(`
 		INSERT INTO locations (
+			network,
 			public_key,
 			ip,
 			host_name,
@@ -839,7 +841,7 @@ func (api *portalAPI) saveLocation(pk types.PublicKey, info external.IPInfo) err
 			time_zone,
 			fetched_at
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			ip = new.ip,
 			host_name = new.host_name,
@@ -852,6 +854,7 @@ func (api *portalAPI) saveLocation(pk types.PublicKey, info external.IPInfo) err
 			time_zone = new.time_zone,
 			fetched_at = new.fetched_at
 	`,
+		network,
 		pk[:],
 		info.IP,
 		info.HostName,
@@ -1593,7 +1596,7 @@ func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string,
 				if err != nil {
 					continue
 				}
-				if err := api.saveLocation(host.PublicKey, info); err != nil {
+				if err := api.saveLocation(host.PublicKey, network, info); err != nil {
 					api.log.Error("couldn't save location", zap.Stringer("host", host.PublicKey), zap.Error(err))
 					continue
 				}
