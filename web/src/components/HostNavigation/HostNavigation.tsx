@@ -15,14 +15,16 @@ export const HostNavigation = (props: HostNavigationProps) => {
 	const prev = () => {props.changeOffset(props.offset - props.limit)}
 	const next = () => {props.changeOffset(props.offset + props.limit)}
 	const last = () => {props.changeOffset(props.limit * (Math.ceil(props.total / props.limit) - 1))}
-	const goto = (event: React.ChangeEvent<HTMLInputElement>) => {
-		let oldValue = Math.floor(props.offset / props.limit) + 1
-		let newValue = Number.parseInt(event.target.value, 10)
-		if (newValue > 0 && Number.isInteger(newValue) && newValue <= Math.ceil(props.total / props.limit)) {
-			props.changeOffset((newValue - 1) * props.limit)
-		} else {
-			event.target.value = '' + oldValue
-		}
+	const goto = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+    		let oldValue = Math.floor(props.offset / props.limit) + 1
+	    	let newValue = Number.parseInt((event.target as HTMLInputElement).value, 10)
+		    if (newValue > 0 && Number.isInteger(newValue) && newValue <= Math.ceil(props.total / props.limit)) {
+			    props.changeOffset((newValue - 1) * props.limit)
+    		} else {
+	    		(event.target as HTMLInputElement).value = '' + oldValue
+		    }
+        }
 	}
 	const changeRows = (event: React.ChangeEvent<HTMLSelectElement>) => {
 		let newLimit = Number.parseInt(event.target.value)
@@ -59,8 +61,8 @@ export const HostNavigation = (props: HostNavigationProps) => {
 				className="host-navigation-input"
 				type="number"
 				tabIndex={1}
-				value={Math.floor(props.offset / props.limit) + 1}
-				onChange={goto}
+				defaultValue={Math.floor(props.offset / props.limit) + 1}
+				onKeyUp={goto}
 			/>
 			<span className="host-navigation-total">/ {Math.ceil(props.total / props.limit)}</span>
 			<button
