@@ -136,7 +136,10 @@ export const Hosts = (props: HostsProps) => {
 		    	    	    onChange={setQuery}
 			            />
                     </div>
-	        		{hosts.length > 0 ?
+                    {loading ?
+                        <></>
+                    :
+	        		(hosts.length > 0 ?
 		        		<>
 			        		<HostsTable
 				        		darkMode={props.darkMode}
@@ -153,8 +156,6 @@ export const Hosts = (props: HostsProps) => {
 	    					    changeLimit={changeLimit}
     		    			/>
 	    		    	</>
-                    : (loading ?
-                        <></>
                     :
                         <div className={'hosts-not-found' + (props.darkMode ? ' hosts-not-found-dark' : '')}>No hosts found</div>
                     )}
