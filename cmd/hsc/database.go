@@ -504,7 +504,21 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 					LastUpdate:        h.Interactions.LastUpdate,
 				},
 			}
+			info, err := external.FetchIPInfo(h.NetAddress, api.token)
+			if err != nil {
+				api.log.Error("couldn't fetch host location", zap.String("host", h.NetAddress), zap.Error(err))
+			} else {
+				if (info != external.IPInfo{}) {
+					err = api.saveLocation(h.PublicKey, h.Network, info)
+					if err != nil {
+						api.log.Error("couldn't update host location", zap.String("host", h.NetAddress), zap.Error(err))
+					}
+				} else {
+					api.log.Debug("empty host location received", zap.String("host", h.NetAddress))
+				}
+			}
 		}
+
 		host.Score = calculateGlobalScore(host)
 		_, err := updateScoreStmt.Exec(
 			host.Score.PricesScore,
