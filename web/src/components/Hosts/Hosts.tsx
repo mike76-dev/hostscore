@@ -3,6 +3,7 @@ import { useRef, useState, useEffect, useContext } from 'react'
 import axios from 'axios'
 import {
     Averages,
+    CountrySelector,
     HostSelector,
     HostSearch,
     HostNavigation,
@@ -15,7 +16,8 @@ import {
     AveragePrices,
     NetworkAverages,
     getHosts,
-    getAverages
+    getAverages,
+    getCountries
 } from '../../api'
 import { HostContext } from '../../contexts'
 
@@ -45,7 +47,11 @@ export const Hosts = (props: HostsProps) => {
         query,
         setQuery,
         sorting,
-        changeSorting
+        changeSorting,
+        countries,
+        setCountries,
+        country,
+        setCountry
     } = useContext(HostContext)
 	const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
 	const [hosts, setHostsLocal] = useState<Host[]>([])
@@ -55,6 +61,7 @@ export const Hosts = (props: HostsProps) => {
 	const { network, setHosts } = props
     const prevOnlineOnly = useRef(onlineOnly)
     const prevQuery = useRef(query)
+    const prevCountry = useRef(country)
     const prevSorting = useRef(sorting)
     const [time, setTime] = useState(new Date())
     const [averages, setAverages] = useState<NetworkAverages>({
@@ -72,18 +79,20 @@ export const Hosts = (props: HostsProps) => {
         if (
             prevOnlineOnly.current !== onlineOnly ||
             prevQuery.current !== query ||
+            prevCountry.current !== country ||
             prevSorting.current !== sorting
         ) {
             changeOffset(0)
             prevOnlineOnly.current = onlineOnly
             prevQuery.current = query
+            prevCountry.current = country
             prevSorting.current = sorting
         }
-    }, [onlineOnly, query, sorting, changeOffset])
+    }, [onlineOnly, query, country, sorting, changeOffset])
 	useEffect(() => {
 		setLoading(true)
         const cancelTokenSource = axios.CancelToken.source()
-		getHosts(network, !onlineOnly, offset, limit, query, sorting, cancelTokenSource.token)
+		getHosts(network, !onlineOnly, offset, limit, query, country, sorting, cancelTokenSource.token)
 		.then(data => {
 			if (data && data.status === 'ok' && data.hosts) {
 				setHostsLocal(data.hosts)
@@ -99,7 +108,7 @@ export const Hosts = (props: HostsProps) => {
         return () => {
             cancelTokenSource.cancel('request canceled')
         }
-	}, [network, onlineOnly, offset, limit, query, sorting, setHosts])
+	}, [network, onlineOnly, offset, limit, query, country, sorting, setHosts])
     useEffect(() => {
         setLoadingAverages(true)
         getAverages(network)
@@ -109,7 +118,13 @@ export const Hosts = (props: HostsProps) => {
             }
             setLoadingAverages(false)
         })
-    }, [network, time, setAverages, setLoadingAverages])
+        getCountries(network)
+        .then(data => {
+            if (data && data.status === 'ok' && data.countries) {
+                setCountries(data.countries)
+            }
+        })
+    }, [network, time, setAverages, setLoadingAverages, setCountries])
 	return (
 		<div className="hosts-container">
             <div className="hosts-subcontainer">
@@ -136,6 +151,12 @@ export const Hosts = (props: HostsProps) => {
 	    	    	    	value={query}
 		    	    	    onChange={setQuery}
 			            />
+                        <CountrySelector
+                            darkMode={props.darkMode}
+                            options={countries}
+                            value={country}
+                            onChange={setCountry}
+                        />
                     </div>
                     {loading ?
                         <></>

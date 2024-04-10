@@ -1,0 +1,35 @@
+.country-selector-container {
+	margin-left: 1rem;
+}
+
+.country-selector-select {
+	margin-left: 0.5rem;
+	height: 1.5rem;
+	border-radius: 0.25rem;
+}
+
+.country-selector-select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.country-selector-dark .country-selector-text {
+	color: var(--textDark);
+}
+
+.country-selector-dark select {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+}
+
+.country-selector-dark select:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}
+
+@media screen and (max-width: 1000px) {
+    .country-selector-container {
+        margin-left: 0;
+        margin-top: 0.5rem;
+    }
+}

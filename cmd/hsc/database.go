@@ -677,26 +677,63 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 }
 
 // getHosts retrieves the given number of host records.
-func (api *portalAPI) getHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, err error) {
+func (api *portalAPI) getHosts(network string, all bool, offset, limit int, query, country string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, err error) {
 	if offset < 0 {
 		offset = 0
 	}
 
-	api.mu.RLock()
-	if network == "mainnet" {
-		for _, host := range api.hosts {
+	if country != "" {
+		rows, err := api.db.Query(`
+			SELECT public_key
+			FROM locations
+			WHERE network = ?
+			AND country = ?
+		`, network, country)
+		if err != nil {
+			return nil, false, 0, utils.AddContext(err, "couldn't query public keys")
+		}
+
+		var keys []types.PublicKey
+		for rows.Next() {
+			pk := make([]byte, 32)
+			if err := rows.Scan(&pk); err != nil {
+				rows.Close()
+				return nil, false, 0, utils.AddContext(err, "couldn't decode public key")
+			}
+			keys = append(keys, types.PublicKey(pk))
+		}
+		rows.Close()
+
+		api.mu.RLock()
+		for _, key := range keys {
+			var host *portalHost
+			if network == "mainnet" {
+				host = api.hosts[key]
+			} else if network == "zen" {
+				host = api.hostsZen[key]
+			}
 			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
 				hosts = append(hosts, *host)
 			}
 		}
-	} else if network == "zen" {
-		for _, host := range api.hostsZen {
-			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
-				hosts = append(hosts, *host)
+		api.mu.RUnlock()
+	} else {
+		api.mu.RLock()
+		if network == "mainnet" {
+			for _, host := range api.hosts {
+				if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+					hosts = append(hosts, *host)
+				}
+			}
+		} else if network == "zen" {
+			for _, host := range api.hostsZen {
+				if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+					hosts = append(hosts, *host)
+				}
 			}
 		}
+		api.mu.RUnlock()
 	}
-	api.mu.RUnlock()
 
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		switch sortBy {
@@ -1736,4 +1773,30 @@ func (api *portalAPI) updateAverages() {
 		}
 		api.calculateAverages()
 	}
+}
+
+// getCountries returns the list of countries the hosts in the given
+// network reside in.
+func (api *portalAPI) getCountries(network string) (countries []string, err error) {
+	rows, err := api.db.Query(`
+		SELECT DISTINCT country
+		FROM locations
+		WHERE country <> ''
+		AND network = ?
+		ORDER BY country ASC
+	`, network)
+	if err != nil {
+		return nil, utils.AddContext(err, "couldn't query countries")
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var c string
+		if err := rows.Scan(&c); err != nil {
+			return nil, utils.AddContext(err, "couldn't decode country")
+		}
+		countries = append(countries, c)
+	}
+
+	return
 }

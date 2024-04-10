@@ -31,6 +31,7 @@ export const getHosts = async (
 	offset: number,
 	limit: number,
 	query: string,
+    country: string,
     sorting: HostSortType,
     cancelToken: CancelToken
 ): Promise<{ status: string, message: string, hosts?: Host[], more: boolean, total: number }> => {
@@ -38,6 +39,7 @@ export const getHosts = async (
 		'&all=' + (all ? 'true' : 'false') +
 		'&offset=' + offset + '&limit=' + limit +
 		'&query=' + query +
+        '&country=' + country +
         '&sort=' + sorting.sortBy +
         '&order=' + sorting.order
     return instance.get(url, { cancelToken })
@@ -135,6 +137,14 @@ export const getPriceChanges = async (
 export const getAverages = async (network: string):
 	Promise<{ status: string, message: string, averages: NetworkAverages }> => {
 	const url = '/averages?network=' + network
+	return instance.get(url)
+	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getCountries = async (network: string):
+	Promise<{ status: string, message: string, countries: string[] }> => {
+	const url = '/countries?network=' + network
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

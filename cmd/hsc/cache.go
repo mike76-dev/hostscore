@@ -28,6 +28,7 @@ type cachedHosts struct {
 	offset   int
 	limit    int
 	query    string
+	country  string
 	sortBy   sortType
 	asc      bool
 	modified time.Time
@@ -148,7 +149,7 @@ func (rc *responseCache) getHost(network string, pk types.PublicKey) (host porta
 	return
 }
 
-func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, ok bool) {
+func (rc *responseCache) getHosts(network string, all bool, offset, limit int, query, country string, sortBy sortType, asc bool) (hosts []portalHost, more bool, total int, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, ch := range rc.hosts {
@@ -157,6 +158,7 @@ func (rc *responseCache) getHosts(network string, all bool, offset, limit int, q
 			ch.offset == offset &&
 			ch.limit == limit &&
 			ch.query == query &&
+			ch.country == country &&
 			ch.sortBy == sortBy &&
 			ch.asc == asc &&
 			time.Since(ch.modified) < hostsExpireThreshold {
@@ -170,7 +172,7 @@ func (rc *responseCache) getHosts(network string, all bool, offset, limit int, q
 	return
 }
 
-func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query string, sortBy sortType, asc bool, hosts []portalHost, more bool, total int) {
+func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query, country string, sortBy sortType, asc bool, hosts []portalHost, more bool, total int) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.hosts = append(rc.hosts, cachedHosts{
@@ -182,6 +184,7 @@ func (rc *responseCache) putHosts(network string, all bool, offset, limit int, q
 		offset:   offset,
 		limit:    limit,
 		query:    query,
+		country:  country,
 		sortBy:   sortBy,
 		asc:      asc,
 		modified: time.Now(),

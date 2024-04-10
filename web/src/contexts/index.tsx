@@ -19,6 +19,10 @@ type HostContextType = {
     setQuery: (query: string) => void,
     sorting: HostSortType,
     changeSorting: (sorting: HostSortType) => void,
+    countries: string[],
+    setCountries: (countries: string[]) => void,
+    country: string,
+    setCountry: (country: string) => void,
 }
 
 export const NetworkContext = createContext<NetworkContextType>({
@@ -38,5 +42,9 @@ export const HostContext = createContext<HostContextType>({
     query: '',
     setQuery: (query: string) => null,
     sorting: { sortBy: 'rank', order: 'asc' },
-    changeSorting: (sorting: HostSortType) => null
+    changeSorting: (sorting: HostSortType) => null,
+    countries: [],
+    setCountries: (countries: string[]) => null,
+    country: '',
+    setCountry: (country: string) => null
 })

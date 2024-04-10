@@ -5,7 +5,8 @@ import {
     HostSortType,
     stripePrefix,
     useLocations,
-    convertSize
+    convertSize,
+    countryByCode
 } from '../../api'
 import { Sort, Tooltip } from '../'
 
@@ -101,6 +102,7 @@ export const HostsTable = (props: HostsTableProps) => {
                                 }}
                             />
                         </th>
+                        <th>Country</th>
 						<th>
 							<div className="hosts-table-flex">
 								Status
@@ -125,6 +127,7 @@ export const HostsTable = (props: HostsTableProps) => {
 							</td>
                             <td style={{textAlign: 'center'}}>{convertSize(host.settings.remainingstorage)}</td>
                             <td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage)}</td>
+                            <td>{countryByCode(host.country)}</td>
 							<td>
 								<div className={'hosts-table-status hosts-table-status-' + hostStatus(host)}></div>
 							</td>

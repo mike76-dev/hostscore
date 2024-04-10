@@ -1,12 +1,18 @@
 export const stripePrefix = (pk: string) => (pk.slice(pk.indexOf(':') + 1))
 
+export const countryByCode = (country: string) => {
+    if (country === '') return 'N/A'
+    let regionNames = new Intl.DisplayNames(['en'], {type: 'region'})
+    return regionNames.of(country)
+}
+
 export const getFlagEmoji = (country: string) => {
 	if (country === '') return 'N/A'
 	const codePoints = country
 	.toUpperCase()
 	.split('')
 	.map(char => 127397 + char.charCodeAt(0))
-	return country + ' ' + String.fromCodePoint(...codePoints)
+	return countryByCode(country) + ' ' + String.fromCodePoint(...codePoints)
 }
 
 export const blocksToTime = (blocks: number) => {

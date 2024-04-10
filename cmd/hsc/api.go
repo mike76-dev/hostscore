@@ -98,6 +98,11 @@ type averagesResponse struct {
 	Averages networkAverages `json:"averages"`
 }
 
+type countriesResponse struct {
+	APIResponse
+	Countries []string `json:"countries"`
+}
+
 type scoreBreakdown struct {
 	PricesScore       float64 `json:"prices"`
 	StorageScore      float64 `json:"storage"`
@@ -288,6 +293,9 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/averages", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.averagesHandler(w, req, ps)
 	})
+	router.GET("/countries", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.countriesHandler(w, req, ps)
+	})
 
 	api.mu.Lock()
 	api.router = *router
@@ -347,6 +355,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		return
 	}
 	query := strings.ToLower(req.FormValue("query"))
+	country := strings.ToUpper(req.FormValue("country"))
 	allHosts := strings.ToLower(req.FormValue("all"))
 	var all bool
 	if allHosts == "true" {
@@ -396,9 +405,9 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		asc = false
 	}
 
-	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query, sortBy, asc)
+	hosts, more, total, ok := api.cache.getHosts(network, all, int(offset), int(limit), query, country, sortBy, asc)
 	if !ok {
-		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query, sortBy, asc)
+		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query, country, sortBy, asc)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
 			writeJSON(w, APIResponse{
@@ -407,7 +416,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 			})
 			return
 		}
-		api.cache.putHosts(network, all, int(offset), int(limit), query, sortBy, asc, hosts, more, total)
+		api.cache.putHosts(network, all, int(offset), int(limit), query, country, sortBy, asc, hosts, more, total)
 	}
 
 	// Prefetch the scans and the benchmarks.
@@ -437,13 +446,13 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	// Prefetch the next bunch of hosts.
 	if more {
 		go func() {
-			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc)
+			_, _, _, ok := api.cache.getHosts(network, all, int(offset+limit), int(limit), query, country, sortBy, asc)
 			if !ok {
-				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc)
+				h, m, t, err := api.getHosts(network, all, int(offset+limit), int(limit), query, country, sortBy, asc)
 				if err != nil {
 					return
 				}
-				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, sortBy, asc, h, m, t)
+				api.cache.putHosts(network, all, int(offset+limit), int(limit), query, country, sortBy, asc, h, m, t)
 			}
 		}()
 	}
@@ -830,6 +839,36 @@ func (api *portalAPI) averagesHandler(w http.ResponseWriter, req *http.Request, 
 	writeJSON(w, averagesResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		Averages:    averages,
+	})
+}
+
+func (api *portalAPI) countriesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	network := strings.ToLower(req.FormValue("network"))
+	if network == "" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "network not provided",
+		})
+		return
+	}
+	if network != "mainnet" && network != "zen" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "wrong network",
+		})
+		return
+	}
+	countries, err := api.getCountries(network)
+	if err != nil {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "internal error",
+		})
+		return
+	}
+	writeJSON(w, countriesResponse{
+		APIResponse: APIResponse{Status: "ok"},
+		Countries:   countries,
 	})
 }
 
