@@ -22,9 +22,9 @@ import {
 import { HostContext } from '../../contexts'
 
 type HostsProps = {
-	network: string,
-	darkMode: boolean,
-	setHosts: (hosts: Host[]) => any,
+    network: string,
+    darkMode: boolean,
+    setHosts: (hosts: Host[]) => any,
 }
 
 const initialValues: AveragePrices = {
@@ -53,12 +53,13 @@ export const Hosts = (props: HostsProps) => {
         country,
         setCountry
     } = useContext(HostContext)
-	const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
-	const [hosts, setHostsLocal] = useState<Host[]>([])
-	const [total, setTotal] = useState(0)
-	const [loading, setLoading] = useState(false)
+    const switchHosts = (value: string) => {setOnlineOnly(value === 'online')}
+    const [hosts, setHostsLocal] = useState<Host[]>([])
+    const [mapHosts, setMapHosts] = useState<Host[]>([])
+    const [total, setTotal] = useState(0)
+    const [loading, setLoading] = useState(false)
     const [loadingAverages, setLoadingAverages] = useState(false)
-	const { network, setHosts } = props
+    const { network, setHosts } = props
     const prevOnlineOnly = useRef(onlineOnly)
     const prevQuery = useRef(query)
     const prevCountry = useRef(country)
@@ -69,12 +70,12 @@ export const Hosts = (props: HostsProps) => {
         tier2: structuredClone(initialValues),
         tier3: structuredClone(initialValues)
     })
-	useEffect((): any => {
-		const interval = setInterval(() => {
-			setTime(new Date())
-		}, 600000)
-		return () => clearInterval(interval)
-	}, [])
+    useEffect((): any => {
+        const interval = setInterval(() => {
+            setTime(new Date())
+        }, 600000)
+        return () => clearInterval(interval)
+    }, [])
     useEffect(() => {
         if (
             prevOnlineOnly.current !== onlineOnly ||
@@ -89,26 +90,38 @@ export const Hosts = (props: HostsProps) => {
             prevSorting.current = sorting
         }
     }, [onlineOnly, query, country, sorting, changeOffset])
-	useEffect(() => {
-		setLoading(true)
+    useEffect(() => {
         const cancelTokenSource = axios.CancelToken.source()
-		getHosts(network, !onlineOnly, offset, limit, query, country, sorting, cancelTokenSource.token)
-		.then(data => {
-			if (data && data.status === 'ok' && data.hosts) {
-				setHostsLocal(data.hosts)
-				setTotal(data.total)
-				setHosts(data.hosts)
-			} else {
-				setHostsLocal([])
-				setTotal(0)
-				setHosts([])
-			}
-			setLoading(false)
-		})
+        getHosts(network, false, 0, -1, query, country, { sortBy: 'rank', order: 'asc' }, cancelTokenSource.token)
+        .then(data => {
+            if (data && data.status === 'ok' && data.hosts) {
+                setMapHosts(data.hosts)
+            }
+        })
         return () => {
             cancelTokenSource.cancel('request canceled')
         }
-	}, [network, onlineOnly, offset, limit, query, country, sorting, setHosts])
+    }, [network, query, country, time])
+    useEffect(() => {
+        setLoading(true)
+        const cancelTokenSource = axios.CancelToken.source()
+        getHosts(network, !onlineOnly, offset, limit, query, country, sorting, cancelTokenSource.token)
+        .then(data => {
+            if (data && data.status === 'ok' && data.hosts) {
+                setHostsLocal(data.hosts)
+                setTotal(data.total)
+                setHosts(data.hosts)
+            } else {
+                setHostsLocal([])
+                setTotal(0)
+                setHosts([])
+            }
+            setLoading(false)
+        })
+        return () => {
+            cancelTokenSource.cancel('request canceled')
+        }
+    }, [network, onlineOnly, offset, limit, query, country, sorting, setHosts])
     useEffect(() => {
         setLoadingAverages(true)
         getAverages(network)
@@ -125,32 +138,32 @@ export const Hosts = (props: HostsProps) => {
             }
         })
     }, [network, time, setAverages, setLoadingAverages, setCountries])
-	return (
-		<div className="hosts-container">
+    return (
+        <div className="hosts-container">
             <div className="hosts-subcontainer">
                 <HostMap
                     darkMode={props.darkMode}
                     network={network}
-                    query={query}
+                    hosts={mapHosts}
                 />
                 <div className="hosts-table-div">
                     {loading &&
-	    			    <Loader
+                        <Loader
                             darkMode={props.darkMode}
                             className="hosts-table-loader"
                         />
-        			}
+                    }
                     <div className="hosts-row">
-    	        		<HostSelector
-	    	        		darkMode={props.darkMode}
-    		        		value={onlineOnly ? 'online' : 'all'}
-	    		        	onChange={switchHosts}
-        	    		/>
-	        	    	<HostSearch
-    	    	    		darkMode={props.darkMode}
-	    	    	    	value={query}
-		    	    	    onChange={setQuery}
-			            />
+                        <HostSelector
+                            darkMode={props.darkMode}
+                            value={onlineOnly ? 'online' : 'all'}
+                            onChange={switchHosts}
+                        />
+                        <HostSearch
+                            darkMode={props.darkMode}
+                            value={query}
+                            onChange={setQuery}
+                        />
                         <CountrySelector
                             darkMode={props.darkMode}
                             options={countries}
@@ -161,23 +174,23 @@ export const Hosts = (props: HostsProps) => {
                     {loading ?
                         <></>
                     :
-	        		(hosts.length > 0 ?
-		        		<>
-			        		<HostsTable
-				        		darkMode={props.darkMode}
-					        	hosts={hosts}
+                    (hosts.length > 0 ?
+                        <>
+                            <HostsTable
+                                darkMode={props.darkMode}
+                                hosts={hosts}
                                 sorting={sorting}
                                 changeSorting={changeSorting}
-    	    				/>
-	    	    			<HostNavigation
-		    	    			darkMode={props.darkMode}
-			    	    		offset={offset}
-				    	    	limit={limit}
-					    	    total={total}
-    					    	changeOffset={changeOffset}
-	    					    changeLimit={changeLimit}
-    		    			/>
-	    		    	</>
+                            />
+                            <HostNavigation
+                                darkMode={props.darkMode}
+                                offset={offset}
+                                limit={limit}
+                                total={total}
+                                changeOffset={changeOffset}
+                                changeLimit={changeLimit}
+                            />
+                        </>
                     :
                         <div className={'hosts-not-found' + (props.darkMode ? ' hosts-not-found-dark' : '')}>No hosts found</div>
                     )}
@@ -196,6 +209,6 @@ export const Hosts = (props: HostsProps) => {
                     />
                 }
             </div>
-		</div>
-	)
+        </div>
+    )
 }

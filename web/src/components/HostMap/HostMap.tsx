@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
     Host,
-    getHostsOnMap,
     stripePrefix
 } from '../../api'
 import {
@@ -15,7 +14,6 @@ import {
 } from 'react-leaflet'
 import {
     LatLngExpression,
-    LatLngBounds,
     divIcon
 } from 'leaflet'
 
@@ -23,7 +21,7 @@ type HostMapProps = {
     darkMode: boolean,
     network: string,
     host?: Host,
-    query: string
+    hosts?: Host[]
 }
 
 const defaultLocation = '52.37,5.22'
@@ -36,33 +34,8 @@ const UpdateMap = () => {
     return null
 }
 
-interface BoundsProps {
-    network: string,
-    query: string
-    onBoundsChange: (bounds: LatLngBounds) => void
-}
-
-const Bounds: React.FC<BoundsProps> = ({ network, query, onBoundsChange }) => {
-    const map = useMap()
-    useEffect(() => {
-        onBoundsChange(map.getBounds())
-        const updateBounds = () => {
-            onBoundsChange(map.getBounds())
-        }
-        map.on('moveend', updateBounds)
-        map.on('zoomend', updateBounds)
-        return () => {
-            map.off('moveend', updateBounds)
-            map.off('zoomend', updateBounds)
-        }
-    // eslint-disable-next-line
-    }, [map, network, query])
-    return null
-}
-
 export const HostMap = (props: HostMapProps) => {
     const [center, setCenter] = useState(defaultLocation)
-    const [hosts, setHosts] = useState<Host[]>([])
     useEffect(() => {
         if (!props.host && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -76,25 +49,15 @@ export const HostMap = (props: HostMapProps) => {
         return location.split(',').map(l => Number.parseFloat(l)) as LatLngExpression
     }
     const newLocation = (host: Host) => {
-		let href = window.location.href
-		if (href[href.length - 1] === '/') {
-			return href + 'host/' + stripePrefix(host.publicKey)
-		}
-		return href + '/host/' + stripePrefix(host.publicKey)
-	}
-    const handleBoundsChange = (bounds: LatLngBounds) => {
-        getHostsOnMap(props.network, bounds.getNorthWest(), bounds.getSouthEast(), props.query)
-		.then(data => {
-			if (data && data.status === 'ok' && data.hosts) {
-				setHosts(data.hosts)
-			} else {
-				setHosts([])
-			}
-		})
+        let href = window.location.href
+        if (href[href.length - 1] === '/') {
+            return href + 'host/' + stripePrefix(host.publicKey)
+        }
+        return href + '/host/' + stripePrefix(host.publicKey)
     }
-    return (
+     return (
         <div className={'host-map-container' + (props.darkMode ? ' host-map-dark' : '')}>
-            {props.host ?
+            {props.host &&
                 (props.host.loc !== '' ?
                     <MapContainer
                         center={geolocation(props.host.loc)}
@@ -123,7 +86,8 @@ export const HostMap = (props: HostMapProps) => {
                     </MapContainer>
                 : <div className="host-map-unknown">Location unknown</div>
                 )
-            :
+            }
+            {props.hosts &&
                 <MapContainer
                     center={geolocation(center)}
                     zoom={7}
@@ -139,7 +103,7 @@ export const HostMap = (props: HostMapProps) => {
                             'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
                         }
                     />
-                    {hosts.map(host => (
+                    {props.hosts.map(host => (
                         <Marker
                             key={host.publicKey}
                             position={geolocation(host.loc)}
@@ -153,11 +117,6 @@ export const HostMap = (props: HostMapProps) => {
                         </Marker>
                     ))}
                     <UpdateMap/>
-                    <Bounds
-                        network={props.network}
-                        query={props.query}
-                        onBoundsChange={handleBoundsChange}
-                    />
                 </MapContainer>
             }
         </div>
