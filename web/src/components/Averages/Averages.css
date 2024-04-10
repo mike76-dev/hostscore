@@ -16,6 +16,10 @@
     text-align: left;
 }
 
+.averages-container td {
+    white-space: nowrap;
+}
+
 .averages-container td:first-child {
     padding-right: 1rem;
 }

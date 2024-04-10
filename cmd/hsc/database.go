@@ -1686,6 +1686,7 @@ func calculateTiers(sortedHosts []portalHost) networkAverages {
 			tier.Collateral = tier.Collateral.Add(host.Settings.Collateral)
 			tier.UploadPrice = tier.UploadPrice.Add(host.Settings.UploadBandwidthPrice)
 			tier.DownloadPrice = tier.DownloadPrice.Add(host.Settings.DownloadBandwidthPrice)
+			tier.ContractDuration += host.Settings.MaxDuration
 			count++
 		}
 		if count > 0 {
@@ -1693,6 +1694,7 @@ func calculateTiers(sortedHosts []portalHost) networkAverages {
 			tier.Collateral = tier.Collateral.Div64(uint64(count))
 			tier.UploadPrice = tier.UploadPrice.Div64(uint64(count))
 			tier.DownloadPrice = tier.DownloadPrice.Div64(uint64(count))
+			tier.ContractDuration /= uint64(count)
 			tier.OK = true
 		}
 		return tier

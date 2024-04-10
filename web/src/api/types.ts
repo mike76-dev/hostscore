@@ -165,6 +165,7 @@ export type AveragePrices = {
     collateral: string,
     uploadPrice: string,
     downloadPrice: string,
+    contractDuration: number,
     ok: boolean
 }
 

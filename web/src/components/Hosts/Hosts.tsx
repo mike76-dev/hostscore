@@ -30,6 +30,7 @@ const initialValues: AveragePrices = {
     collateral: '',
     uploadPrice: '',
     downloadPrice: '',
+    contractDuration: 0,
     ok: false
 }
 

@@ -2,7 +2,8 @@ import './Averages.css'
 import { Tooltip } from '../'
 import {
     NetworkAverages,
-    convertPriceRaw
+    convertPriceRaw,
+    blocksToTime
 } from '../../api'
 
 type AveragesProps = {
@@ -57,6 +58,10 @@ export const Averages = (props: AveragesProps) => {
                                 <td>Download Price</td>
                                 <td>{toSia(convertPriceRaw(props.averages.tier1.downloadPrice)) + '/TB'}</td>
                             </tr>
+                            <tr>
+                                <td>Contract Duration</td>
+                                <td>{blocksToTime(props.averages.tier1.contractDuration)}</td>
+                            </tr>
                         </>
                     }
                     {props.averages.tier2.ok === true &&
@@ -78,6 +83,10 @@ export const Averages = (props: AveragesProps) => {
                                 <td>Download Price</td>
                                 <td>{toSia(convertPriceRaw(props.averages.tier2.downloadPrice)) + '/TB'}</td>
                             </tr>
+                            <tr>
+                                <td>Contract Duration</td>
+                                <td>{blocksToTime(props.averages.tier2.contractDuration)}</td>
+                            </tr>
                         </>
                     }
                     {props.averages.tier3.ok === true &&
@@ -98,6 +107,10 @@ export const Averages = (props: AveragesProps) => {
                             <tr>
                                 <td>Download Price</td>
                                 <td>{toSia(convertPriceRaw(props.averages.tier3.downloadPrice)) + '/TB'}</td>
+                            </tr>
+                            <tr>
+                                <td>Contract Duration</td>
+                                <td>{blocksToTime(props.averages.tier3.contractDuration)}</td>
                             </tr>
                         </>
                     }

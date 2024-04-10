@@ -148,11 +148,12 @@ type portalHost struct {
 }
 
 type averagePrices struct {
-	StoragePrice  types.Currency `json:"storagePrice"`
-	Collateral    types.Currency `json:"collateral"`
-	UploadPrice   types.Currency `json:"uploadPrice"`
-	DownloadPrice types.Currency `json:"downloadPrice"`
-	OK            bool           `json:"ok"`
+	StoragePrice     types.Currency `json:"storagePrice"`
+	Collateral       types.Currency `json:"collateral"`
+	UploadPrice      types.Currency `json:"uploadPrice"`
+	DownloadPrice    types.Currency `json:"downloadPrice"`
+	ContractDuration uint64         `json:"contractDuration"`
+	OK               bool           `json:"ok"`
 }
 
 type networkAverages struct {
