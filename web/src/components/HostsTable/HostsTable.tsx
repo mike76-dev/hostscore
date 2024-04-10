@@ -6,7 +6,8 @@ import {
     stripePrefix,
     useLocations,
     convertSize,
-    countryByCode
+    countryByCode,
+    convertPriceRaw
 } from '../../api'
 import { Sort, Tooltip } from '../'
 
@@ -60,6 +61,19 @@ export const HostsTable = (props: HostsTableProps) => {
 		if (host.settings.acceptingcontracts === false) return 'medium'
 		return 'good'
 	}
+    const toSia = (value: string, perBlock: boolean) => {
+        let price = convertPriceRaw(value)
+        if (perBlock) price *= 144 * 30
+        if (price < 1e-12) return '0 H'
+        if (price < 1e-9) return (price * 1000).toFixed(0) + ' pS'
+        if (price < 1e-6) return (price * 1000).toFixed(0) + ' nS'
+        if (price < 1e-3) return (price * 1000).toFixed(0) + ' uS'
+        if (price < 1) return (price * 1000).toFixed(0) + ' mS'
+        if (price < 10) return price.toFixed(1) + ' SC'
+        if (price < 1e3) return price.toFixed(0) + ' SC'
+        if (price < 1e4) return (price / 1000).toFixed(1) + ' KS'
+        return (price / 1000).toFixed(0) + ' KS'
+    }
 	return (
 		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
 			<table>
@@ -84,6 +98,9 @@ export const HostsTable = (props: HostsTableProps) => {
                             />
                         </th>
 						<th style={{minWidth: '20rem'}}>Net Address</th>
+                        <th>Storage Price</th>
+                        <th>Upload Price</th>
+                        <th>Download Price</th>
                         <th>Remaining Storage
                             <Sort
                                 darkMode={props.darkMode}
@@ -125,6 +142,9 @@ export const HostsTable = (props: HostsTableProps) => {
 									{host.netaddress}
 								</Link>
 							</td>
+                            <td style={{textAlign: 'center'}}>{toSia(host.settings.storageprice, true) + '/TB/month'}</td>
+                            <td style={{textAlign: 'center'}}>{toSia(host.settings.uploadbandwidthprice, false) + '/TB'}</td>
+                            <td style={{textAlign: 'center'}}>{toSia(host.settings.downloadbandwidthprice, false) + '/TB'}</td>
                             <td style={{textAlign: 'center'}}>{convertSize(host.settings.remainingstorage)}</td>
                             <td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage)}</td>
                             <td>{countryByCode(host.country)}</td>
