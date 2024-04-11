@@ -79,45 +79,45 @@ export const HostsTable = (props: HostsTableProps) => {
 			<table>
 				<thead>
 					<tr>
-                        <th style={{minWidth: '4rem'}}>Rank
+                        <th style={{minWidth: '4rem'}}>
                             <Sort
                                 darkMode={props.darkMode}
                                 order={props.sorting.sortBy === 'rank' ? props.sorting.order : 'none'}
                                 setOrder={(order: 'asc' | 'desc') => {
                                     props.changeSorting({ sortBy: 'rank', order: order })
                                 }}
-                            />
+                            >Rank</Sort>
                         </th>
-						<th style={{minWidth: '4rem'}}>ID
+						<th style={{minWidth: '4rem'}}>
                             <Sort
                                 darkMode={props.darkMode}
                                 order={props.sorting.sortBy === 'id' ? props.sorting.order : 'none'}
                                 setOrder={(order: 'asc' | 'desc') => {
                                     props.changeSorting({ sortBy: 'id', order: order })
                                 }}
-                            />
+                            >ID</Sort>
                         </th>
 						<th style={{minWidth: '20rem'}}>Net Address</th>
                         <th>Storage Price</th>
                         <th>Upload Price</th>
                         <th>Download Price</th>
-                        <th>Remaining Storage
+                        <th>
                             <Sort
                                 darkMode={props.darkMode}
                                 order={props.sorting.sortBy === 'remaining' ? props.sorting.order : 'none'}
                                 setOrder={(order: 'asc' | 'desc') => {
                                     props.changeSorting({ sortBy: 'remaining', order: order })
                                 }}
-                            />
+                            >Remaining Storage</Sort>
                         </th>
-                        <th>Total Storage
+                        <th>
                             <Sort
                                 darkMode={props.darkMode}
                                 order={props.sorting.sortBy === 'total' ? props.sorting.order : 'none'}
                                 setOrder={(order: 'asc' | 'desc') => {
                                     props.changeSorting({ sortBy: 'total', order: order })
                                 }}
-                            />
+                            >Total Storage</Sort>
                         </th>
                         <th>Country</th>
 						<th>

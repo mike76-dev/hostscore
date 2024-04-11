@@ -1,26 +1,33 @@
 .sort-container {
-	display: inline-block;
-	width: 1rem;
-	height: 1rem;
-	cursor: pointer;
-	margin-left: 0.25rem;
-}
-
-.sort-container svg {
-	display: inline-block;
-	width: 100%;
-	height: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    cursor: pointer;
     border-radius: 0.25rem;
     padding: 0.1rem;
 }
 
-.sort-container svg:focus {
+.sort-icon-container {
+	display: inline-block;
+	width: 1rem;
+	height: 1rem;
+	margin-left: 0.25rem;
+}
+
+.sort-icon-container svg {
+	display: inline-block;
+	width: 100%;
+	height: 100%;
+    padding: 0.1rem;
+}
+
+.sort-container:focus {
 	outline: 1px solid var(--outlineLight);
 }
 
 .sort-path {
     stroke: var(--borderLight);
-    stroke-width: 1;
+    stroke-width: 2;
 	fill: #ffffff;
 }
 
@@ -30,7 +37,7 @@
 	fill: var(--borderLight);
 }
 
-.sort-dark svg:focus {
+.sort-dark:focus {
 	outline: 1px solid var(--outlineDark);
 }
 
