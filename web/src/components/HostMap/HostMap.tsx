@@ -12,7 +12,7 @@ import {
     Popup,
     useMap
 } from 'react-leaflet'
-import L, {
+import {
     LatLngExpression,
     LatLngBounds,
     divIcon
@@ -144,7 +144,7 @@ export const HostMap = (props: HostMapProps) => {
                 }
             }
             newZoom--
-        } while (newZoom > 5)
+        } while (newZoom >= 5)
     }, [props.hosts, bounds, setCenter])
      return (
         <div className={'host-map-container' + (props.darkMode ? ' host-map-dark' : '')}>
