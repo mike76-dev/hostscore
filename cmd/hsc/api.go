@@ -278,9 +278,6 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/hosts/online", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.onlineHostsHandler(w, req, ps)
 	})
-	router.GET("/hosts/map", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.mapHostsHandler(w, req, ps)
-	})
 	router.GET("/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.scansHandler(w, req, ps)
 	})
@@ -779,47 +776,6 @@ func (api *portalAPI) changesHandler(w http.ResponseWriter, req *http.Request, _
 		APIResponse:  APIResponse{Status: "ok"},
 		PublicKey:    pk,
 		PriceChanges: pcs,
-	})
-}
-
-func (api *portalAPI) mapHostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-	network := strings.ToLower(req.FormValue("network"))
-	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
-		return
-	}
-	from := req.FormValue("from")
-	if from == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "top left coordinates not provided",
-		})
-		return
-	}
-	to := req.FormValue("to")
-	if to == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "bottom right coordinates not provided",
-		})
-		return
-	}
-	query := strings.ToLower(req.FormValue("query"))
-	hosts, err := api.getHostsOnMap(network, from, to, query)
-	if err != nil {
-		api.log.Error("couldn't get hosts on map", zap.String("network", network), zap.Error(err))
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "internal error",
-		})
-		return
-	}
-	writeJSON(w, hostsResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		Hosts:       hosts,
 	})
 }
 

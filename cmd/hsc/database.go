@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -1606,136 +1604,6 @@ func (api *portalAPI) pruneOldRecords() {
 			api.log.Error("couldn't delete old benchmarks", zap.Error(err))
 		}
 	}
-}
-
-// getHostsOnMap returns the online hosts that are located within the
-// provided geo coordinates.
-func (api *portalAPI) getHostsOnMap(network string, northWest, southEast string, query string) (hosts []portalHost, err error) {
-	coords0 := strings.Split(northWest, ",")
-	if len(coords0) != 2 {
-		return nil, fmt.Errorf("wrong coordinates provided: %s", northWest)
-	}
-	x0, err := strconv.ParseFloat(coords0[0], 64)
-	if err != nil {
-		return nil, utils.AddContext(err, fmt.Sprintf("wrong coordinates provided: %s", northWest))
-	}
-	y0, err := strconv.ParseFloat(coords0[1], 64)
-	if err != nil {
-		return nil, utils.AddContext(err, fmt.Sprintf("wrong coordinates provided: %s", northWest))
-	}
-
-	coords1 := strings.Split(southEast, ",")
-	if len(coords1) != 2 {
-		return nil, fmt.Errorf("wrong coordinates provided: %s", southEast)
-	}
-	x1, err := strconv.ParseFloat(coords1[0], 64)
-	if err != nil {
-		return nil, utils.AddContext(err, fmt.Sprintf("wrong coordinates provided: %s", southEast))
-	}
-	y1, err := strconv.ParseFloat(coords1[1], 64)
-	if err != nil {
-		return nil, utils.AddContext(err, fmt.Sprintf("wrong coordinates provided: %s", southEast))
-	}
-
-	if x1 < x0 {
-		x0, x1 = x1, x0
-	}
-	if y1 < y0 {
-		y0, y1 = y1, y0
-	}
-
-	api.mu.RLock()
-	var totalHosts []portalHost
-	if network == "mainnet" {
-		for _, host := range api.hosts {
-			if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
-				totalHosts = append(totalHosts, *host)
-			}
-		}
-	} else if network == "zen" {
-		for _, host := range api.hostsZen {
-			if api.isOnline(*host) && (query == "" || strings.Contains(host.NetAddress, query)) {
-				totalHosts = append(totalHosts, *host)
-			}
-		}
-	}
-	api.mu.RUnlock()
-
-	searchStmt, err := api.db.Prepare(`
-		SELECT
-			ip,
-			host_name,
-			city,
-			region,
-			country,
-			loc,
-			isp,
-			zip,
-			time_zone
-		FROM locations
-		WHERE public_key = ?
-	`)
-	if err != nil {
-		return nil, utils.AddContext(err, "couldn't prepare search statement")
-	}
-	defer searchStmt.Close()
-
-	for _, host := range totalHosts {
-		var ip, name, city, region, country, loc, isp, zip, tz string
-		if err := searchStmt.QueryRow(host.PublicKey[:]).Scan(
-			&ip,
-			&name,
-			&city,
-			&region,
-			&country,
-			&loc,
-			&isp,
-			&zip,
-			&tz,
-		); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				info, err := external.FetchIPInfo(host.NetAddress, api.token)
-				if err != nil {
-					continue
-				}
-				if err := api.saveLocation(host.PublicKey, network, info); err != nil {
-					api.log.Error("couldn't save location", zap.Stringer("host", host.PublicKey), zap.Error(err))
-					continue
-				}
-				loc = info.Location
-			}
-		}
-
-		coords := strings.Split(loc, ",")
-		if len(coords) != 2 {
-			continue
-		}
-		x, err := strconv.ParseFloat(coords[0], 64)
-		if err != nil {
-			continue
-		}
-		y, err := strconv.ParseFloat(coords[1], 64)
-		if err != nil {
-			continue
-		}
-
-		if x > x0 && x < x1 && y > y0 && y < y1 {
-			host.IPInfo = external.IPInfo{
-				IP:       ip,
-				HostName: name,
-				City:     city,
-				Region:   region,
-				Country:  country,
-				Location: loc,
-				ISP:      isp,
-				ZIP:      zip,
-				TimeZone: tz,
-			}
-			hosts = append(hosts, host)
-		}
-	}
-
-	return
 }
 
 // calculateAverages calculates the averages for the given network.
