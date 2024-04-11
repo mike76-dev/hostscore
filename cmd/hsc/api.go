@@ -174,7 +174,10 @@ const (
 	sortByID
 	sortByRank
 	sortByTotalStorage
-	sortByRemainingStorage
+	sortByUsedStorage
+	sortByStoragePrice
+	sortByUploadPrice
+	sortByDownloadPrice
 )
 
 type portalAPI struct {
@@ -394,8 +397,14 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		sortBy = sortByRank
 	case "total":
 		sortBy = sortByTotalStorage
-	case "remaining":
-		sortBy = sortByRemainingStorage
+	case "used":
+		sortBy = sortByUsedStorage
+	case "storage":
+		sortBy = sortByStoragePrice
+	case "upload":
+		sortBy = sortByUploadPrice
+	case "download":
+		sortBy = sortByDownloadPrice
 	default:
 		sortBy = sortByID
 	}

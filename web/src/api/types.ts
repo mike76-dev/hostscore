@@ -156,7 +156,7 @@ export type PriceChange = {
 }
 
 export type HostSortType = {
-    sortBy: 'id' | 'rank' | 'total' | 'remaining',
+    sortBy: 'id' | 'rank' | 'total' | 'used' | 'storage' | 'upload' | 'download',
     order: 'asc' | 'desc'
 }
 

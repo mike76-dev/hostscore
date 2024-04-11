@@ -98,17 +98,41 @@ export const HostsTable = (props: HostsTableProps) => {
                             >ID</Sort>
                         </th>
 						<th style={{minWidth: '20rem'}}>Net Address</th>
-                        <th>Storage Price</th>
-                        <th>Upload Price</th>
-                        <th>Download Price</th>
                         <th>
                             <Sort
                                 darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'remaining' ? props.sorting.order : 'none'}
+                                order={props.sorting.sortBy === 'storage' ? props.sorting.order : 'none'}
                                 setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'remaining', order: order })
+                                    props.changeSorting({ sortBy: 'storage', order: order })
                                 }}
-                            >Remaining Storage</Sort>
+                            >Storage Price</Sort>
+                        </th>
+                        <th>
+                            <Sort
+                                darkMode={props.darkMode}
+                                order={props.sorting.sortBy === 'upload' ? props.sorting.order : 'none'}
+                                setOrder={(order: 'asc' | 'desc') => {
+                                    props.changeSorting({ sortBy: 'upload', order: order })
+                                }}
+                            >Upload Price</Sort>
+                        </th>
+                        <th>
+                            <Sort
+                                darkMode={props.darkMode}
+                                order={props.sorting.sortBy === 'download' ? props.sorting.order : 'none'}
+                                setOrder={(order: 'asc' | 'desc') => {
+                                    props.changeSorting({ sortBy: 'download', order: order })
+                                }}
+                            >Download Price</Sort>
+                        </th>
+                        <th>
+                            <Sort
+                                darkMode={props.darkMode}
+                                order={props.sorting.sortBy === 'used' ? props.sorting.order : 'none'}
+                                setOrder={(order: 'asc' | 'desc') => {
+                                    props.changeSorting({ sortBy: 'used', order: order })
+                                }}
+                            >Used Storage</Sort>
                         </th>
                         <th>
                             <Sort
@@ -145,7 +169,7 @@ export const HostsTable = (props: HostsTableProps) => {
                             <td style={{textAlign: 'center'}}>{toSia(host.settings.storageprice, true) + '/TB/month'}</td>
                             <td style={{textAlign: 'center'}}>{toSia(host.settings.uploadbandwidthprice, false) + '/TB'}</td>
                             <td style={{textAlign: 'center'}}>{toSia(host.settings.downloadbandwidthprice, false) + '/TB'}</td>
-                            <td style={{textAlign: 'center'}}>{convertSize(host.settings.remainingstorage)}</td>
+                            <td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage - host.settings.remainingstorage)}</td>
                             <td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage)}</td>
                             <td>{countryByCode(host.country)}</td>
 							<td>

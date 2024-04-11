@@ -766,11 +766,62 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 					return 1
 				}
 			}
-		case sortByRemainingStorage:
-			if a.Settings.RemainingStorage == b.Settings.RemainingStorage {
+		case sortByUsedStorage:
+			if a.Settings.TotalStorage-a.Settings.RemainingStorage == b.Settings.TotalStorage-b.Settings.RemainingStorage {
 				return a.ID - b.ID
 			}
-			if a.Settings.RemainingStorage > b.Settings.RemainingStorage {
+			if a.Settings.TotalStorage-a.Settings.RemainingStorage > b.Settings.TotalStorage-b.Settings.RemainingStorage {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		case sortByStoragePrice:
+			if a.Settings.StoragePrice.Cmp(b.Settings.StoragePrice) == 0 {
+				return a.ID - b.ID
+			}
+			if a.Settings.StoragePrice.Cmp(b.Settings.StoragePrice) > 0 {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		case sortByUploadPrice:
+			if a.Settings.UploadBandwidthPrice.Cmp(b.Settings.UploadBandwidthPrice) == 0 {
+				return a.ID - b.ID
+			}
+			if a.Settings.UploadBandwidthPrice.Cmp(b.Settings.UploadBandwidthPrice) > 0 {
+				if asc {
+					return 1
+				} else {
+					return -1
+				}
+			} else {
+				if asc {
+					return -1
+				} else {
+					return 1
+				}
+			}
+		case sortByDownloadPrice:
+			if a.Settings.DownloadBandwidthPrice.Cmp(b.Settings.DownloadBandwidthPrice) == 0 {
+				return a.ID - b.ID
+			}
+			if a.Settings.DownloadBandwidthPrice.Cmp(b.Settings.DownloadBandwidthPrice) > 0 {
 				if asc {
 					return 1
 				} else {
