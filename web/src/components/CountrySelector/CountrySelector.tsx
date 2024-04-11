@@ -22,7 +22,9 @@ export const CountrySelector = (props: CountrySelectorProps) => {
 					tabIndex={1}
 				>
                     <option key="country-none" value=""></option>
-                    {props.options && props.options.map(option => (
+                    {props.options && props.options
+                        .sort((a, b) => (countryByCode(a) || '').localeCompare(countryByCode(b) || ''))
+                        .map(option => (
                         <option
                             key={'country-' + option}
                             value={option}
