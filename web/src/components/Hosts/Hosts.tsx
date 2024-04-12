@@ -13,27 +13,16 @@ import {
 } from '../'
 import {
     Host,
-    AveragePrices,
-    NetworkAverages,
     getHosts,
     getAverages,
     getCountries
 } from '../../api'
-import { HostContext } from '../../contexts'
+import { HostContext, NetworkContext } from '../../contexts'
 
 type HostsProps = {
     network: string,
     darkMode: boolean,
     setHosts: (hosts: Host[]) => any,
-}
-
-const initialValues: AveragePrices = {
-    storagePrice: '',
-    collateral: '',
-    uploadPrice: '',
-    downloadPrice: '',
-    contractDuration: 0,
-    ok: false
 }
 
 export const Hosts = (props: HostsProps) => {
@@ -65,11 +54,7 @@ export const Hosts = (props: HostsProps) => {
     const prevCountry = useRef(country)
     const prevSorting = useRef(sorting)
     const [time, setTime] = useState(new Date())
-    const [averages, setAverages] = useState<NetworkAverages>({
-        tier1: structuredClone(initialValues),
-        tier2: structuredClone(initialValues),
-        tier3: structuredClone(initialValues)
-    })
+    const { averages, setAverages } = useContext(NetworkContext)
     useEffect((): any => {
         const interval = setInterval(() => {
             setTime(new Date())

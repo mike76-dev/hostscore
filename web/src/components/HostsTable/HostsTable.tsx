@@ -7,7 +7,7 @@ import {
     useLocations,
     convertSize,
     countryByCode,
-    convertPriceRaw
+    toSia
 } from '../../api'
 import { Sort, Tooltip } from '../'
 
@@ -61,19 +61,6 @@ export const HostsTable = (props: HostsTableProps) => {
 		if (host.settings.acceptingcontracts === false) return 'medium'
 		return 'good'
 	}
-    const toSia = (value: string, perBlock: boolean) => {
-        let price = convertPriceRaw(value)
-        if (perBlock) price *= 144 * 30
-        if (price < 1e-12) return '0 H'
-        if (price < 1e-9) return (price * 1000).toFixed(0) + ' pS'
-        if (price < 1e-6) return (price * 1000).toFixed(0) + ' nS'
-        if (price < 1e-3) return (price * 1000).toFixed(0) + ' uS'
-        if (price < 1) return (price * 1000).toFixed(0) + ' mS'
-        if (price < 10) return price.toFixed(1) + ' SC'
-        if (price < 1e3) return price.toFixed(0) + ' SC'
-        if (price < 1e4) return (price / 1000).toFixed(1) + ' KS'
-        return (price / 1000).toFixed(0) + ' KS'
-    }
 	return (
 		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
 			<table>

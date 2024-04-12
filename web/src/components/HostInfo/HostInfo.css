@@ -47,3 +47,19 @@
 .host-info-score-details td {
     padding-left: 1rem;
 }
+
+.averages-tooltip .tooltip-text {
+    left: 1.5rem;
+    top: 0;
+    right: unset;
+    white-space: nowrap;
+}
+
+.averages-tooltip-row {
+    display: flex;
+    flex-direction: row;
+}
+
+.averages-tooltip-row span:first-child {
+    margin-right: 0.5rem;
+}

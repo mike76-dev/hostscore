@@ -201,7 +201,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 2,
+            borderWidth: 1,
             order: 3
         })
         datasets.push({
@@ -213,7 +213,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 2,
+            borderWidth: 1,
             order: 4
         })
         datasets.push({
@@ -225,7 +225,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 2,
+            borderWidth: 1,
             order: 5
         })
         datasets.push({
@@ -237,7 +237,7 @@ const PriceChart = (props: PriceChartProps) => {
             fill: false,
             stepped: 'before',
             pointRadius: 0,
-            borderWidth: 2,
+            borderWidth: 1,
             order: 6
         })
         return { labels, datasets }
