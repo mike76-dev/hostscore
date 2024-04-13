@@ -1,14 +1,16 @@
 import './Status.css'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Loader } from '../'
 import Back from '../../assets/back.png'
 import { NodeStatus, getStatus } from '../../api'
+import { NetworkContext } from '../../contexts'
 
 type StatusProps = { darkMode: boolean }
 
 export const Status = (props: StatusProps) => {
 	const navigate = useNavigate()
+    const { network } = useContext(NetworkContext)
 	const [version, setVersion] = useState('')
 	const [nodes, setNodes] = useState<NodeStatus[]>([])
 	const [time, setTime] = useState(new Date())
@@ -120,7 +122,7 @@ export const Status = (props: StatusProps) => {
 				icon={Back}
 				caption="back"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(-1)}}
+				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
 			/>
 		</div>
 	)

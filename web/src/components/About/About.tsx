@@ -1,12 +1,15 @@
 import './About.css'
+import { useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../'
 import Back from '../../assets/back.png'
+import { NetworkContext } from '../../contexts'
 
 type AboutProps = { darkMode: boolean }
 
 export const About = (props: AboutProps) => {
 	const navigate = useNavigate()
+    const { network } = useContext(NetworkContext)
 	return (
 		<div className={'about-container' + (props.darkMode ? ' about-container-dark' : '')}>
 			<h1>About HostScore</h1>
@@ -35,7 +38,7 @@ export const About = (props: AboutProps) => {
 				icon={Back}
 				caption="back"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(-1)}}
+				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
 			/>
 		</div>
 	)
