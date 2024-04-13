@@ -11,7 +11,7 @@ import {
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
 const locations = ['eu', 'us', 'ap']
-const excludedPaths = ['/about', '/status']
+const excludedPaths = ['/about', '/faq', '/status']
 
 export const useLocations = () => (locations)
 export const useExcludedPaths = () => (excludedPaths)

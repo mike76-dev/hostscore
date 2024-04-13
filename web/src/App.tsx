@@ -9,6 +9,7 @@ import {
     Footer,
     Content,
     About,
+    FAQ,
     Hosts,
     HostDetails,
     Status
@@ -135,6 +136,21 @@ const App = () => {
 							/>
 							<Content darkMode={darkMode}>
 								<About darkMode={darkMode}/>
+							</Content>
+							<Footer darkMode={darkMode}/>
+						</>
+					),
+				},
+                {
+					path: 'faq',
+					element: (
+						<>
+							<Header
+								darkMode={darkMode}
+								toggleDarkMode={toggleDarkMode}
+							/>
+							<Content darkMode={darkMode}>
+								<FAQ darkMode={darkMode}/>
 							</Content>
 							<Footer darkMode={darkMode}/>
 						</>

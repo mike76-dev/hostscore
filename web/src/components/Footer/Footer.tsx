@@ -16,6 +16,13 @@ export const Footer = (props: FooterProps) => {
 			</Link>
             <Link
 				className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
+				to="/faq"
+				tabIndex={1}
+			>
+				FAQ
+			</Link>
+            <Link
+				className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
 				to="/status"
 				tabIndex={1}
 			>
