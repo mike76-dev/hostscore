@@ -655,128 +655,127 @@ func (s *hostDBStore) isSynced() bool {
 	return isSynced(s.hdb.syncer)
 }
 
-// ProcessChainApplyUpdate implements chain.Subscriber.
-func (s *hostDBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool) (err error) {
-	// Check if the update is for the right network.
-	if cau.State.Network.Name != s.network {
-		return nil
-	}
-
+// updateChainState applies the chain manager updates.
+func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.tip = cau.State.Index
-	row := 1
-	if s.network == "zen" {
-		row = 2
-	}
-	_, err = s.tx.Exec(`
-		REPLACE INTO hdb_tip (id, network, height, bid)
-		VALUES (?, ?, ?, ?)
-	`, row, s.network, s.tip.Height, s.tip.ID[:])
-	if err != nil {
-		s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
-		return err
-	}
+	for _, cau := range applied {
+		if s.network != cau.State.Network.Name {
+			continue
+		}
 
-	for _, txn := range cau.Block.Transactions {
-		for _, ad := range txn.ArbitraryData {
-			addr, pk, err := decodeAnnouncement(ad)
-			if err != nil {
-				// Not a valid host announcement.
-				continue
-			}
-			if err := utils.IsValid(addr); err != nil {
-				// Invalid netaddress.
-				continue
-			}
-			if utils.IsLocal(addr) {
-				// Local netaddress.
-				continue
-			}
-			host, exists := s.hosts[pk]
-			if !exists {
-				host = &HostDBEntry{
-					ID:         len(s.hosts) + 1,
-					Network:    s.network,
-					PublicKey:  pk,
-					FirstSeen:  cau.Block.Timestamp,
-					KnownSince: cau.State.Index.Height,
+		s.tip = cau.State.Index
+		row := 1
+		if s.network == "zen" {
+			row = 2
+		}
+		_, err := s.tx.Exec(`
+			REPLACE INTO hdb_tip (id, network, height, bid)
+			VALUES (?, ?, ?, ?)
+		`, row, s.network, s.tip.Height, s.tip.ID[:])
+		if err != nil {
+			s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
+			return err
+		}
+
+		for _, txn := range cau.Block.Transactions {
+			for _, ad := range txn.ArbitraryData {
+				addr, pk, err := decodeAnnouncement(ad)
+				if err != nil {
+					// Not a valid host announcement.
+					continue
 				}
-			}
-			host.NetAddress = addr
-			ipNets, err := utils.LookupIPNets(addr)
-			if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
-				host.IPNets = ipNets
-				host.LastIPChange = cau.Block.Timestamp
-			}
-			err = s.update(host)
-			if err != nil {
-				s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
-				return err
-			}
-			if (!exists || s.isSynced()) && !host.Blocked {
-				s.hdb.queueScan(host)
+				if err := utils.IsValid(addr); err != nil {
+					// Invalid netaddress.
+					continue
+				}
+				if utils.IsLocal(addr) {
+					// Local netaddress.
+					continue
+				}
+				host, exists := s.hosts[pk]
+				if !exists {
+					host = &HostDBEntry{
+						ID:         len(s.hosts) + 1,
+						Network:    s.network,
+						PublicKey:  pk,
+						FirstSeen:  cau.Block.Timestamp,
+						KnownSince: cau.State.Index.Height,
+					}
+				}
+				host.NetAddress = addr
+				ipNets, err := utils.LookupIPNets(addr)
+				if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
+					host.IPNets = ipNets
+					host.LastIPChange = cau.Block.Timestamp
+				}
+				err = s.update(host)
+				if err != nil {
+					s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
+					return err
+				}
+				if (!exists || s.isSynced()) && !host.Blocked {
+					s.hdb.queueScan(host)
+				}
 			}
 		}
-	}
 
-	for _, txn := range cau.Block.V2Transactions() {
-		for _, at := range txn.Attestations {
-			addr, pk, err := decodeV2Announcement(at)
-			if err != nil {
-				// Not a valid host announcement.
-				continue
-			}
-			if err := utils.IsValid(addr); err != nil {
-				// Invalid netaddress.
-				continue
-			}
-			if utils.IsLocal(addr) {
-				// Local netaddress.
-				continue
-			}
-			host, exists := s.hosts[pk]
-			if !exists {
-				host = &HostDBEntry{
-					ID:         len(s.hosts) + 1,
-					Network:    s.network,
-					PublicKey:  pk,
-					FirstSeen:  cau.Block.Timestamp,
-					KnownSince: cau.State.Index.Height,
+		for _, txn := range cau.Block.V2Transactions() {
+			for _, at := range txn.Attestations {
+				addr, pk, err := decodeV2Announcement(at)
+				if err != nil {
+					// Not a valid host announcement.
+					continue
 				}
-			}
-			host.NetAddress = addr
-			ipNets, err := utils.LookupIPNets(addr)
-			if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
-				host.IPNets = ipNets
-				host.LastIPChange = cau.Block.Timestamp
-			}
-			err = s.update(host)
-			if err != nil {
-				s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
-				return err
-			}
-			if (!exists || s.isSynced()) && !host.Blocked {
-				s.hdb.queueScan(host)
+				if err := utils.IsValid(addr); err != nil {
+					// Invalid netaddress.
+					continue
+				}
+				if utils.IsLocal(addr) {
+					// Local netaddress.
+					continue
+				}
+				host, exists := s.hosts[pk]
+				if !exists {
+					host = &HostDBEntry{
+						ID:         len(s.hosts) + 1,
+						Network:    s.network,
+						PublicKey:  pk,
+						FirstSeen:  cau.Block.Timestamp,
+						KnownSince: cau.State.Index.Height,
+					}
+				}
+				host.NetAddress = addr
+				ipNets, err := utils.LookupIPNets(addr)
+				if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
+					host.IPNets = ipNets
+					host.LastIPChange = cau.Block.Timestamp
+				}
+				err = s.update(host)
+				if err != nil {
+					s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
+					return err
+				}
+				if (!exists || s.isSynced()) && !host.Blocked {
+					s.hdb.queueScan(host)
+				}
 			}
 		}
 	}
 
 	if mayCommit || time.Since(s.lastCommitted) >= 3*time.Second {
-		err = s.tx.Commit()
+		err := s.tx.Commit()
 		if err != nil {
 			return utils.AddContext(err, "couldn't commit transaction")
 		}
 		s.lastCommitted = time.Now()
 		s.tx, err = s.db.Begin()
+		if err != nil {
+			return utils.AddContext(err, "couldn't start transaction")
+		}
 	}
 
-	return err
-}
-
-// ProcessChainRevertUpdate implements chain.Subscriber.
-func (s *hostDBStore) ProcessChainRevertUpdate(_ *chain.RevertUpdate) error {
 	return nil
 }
 

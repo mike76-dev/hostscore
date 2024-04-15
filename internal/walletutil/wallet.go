@@ -49,15 +49,17 @@ var (
 var ErrInsufficientBalance = errors.New("insufficient balance")
 
 type Wallet struct {
-	db        *sql.DB
-	s         *DBStore
-	sZen      *DBStore
-	cm        *chain.Manager
-	cmZen     *chain.Manager
-	syncer    *syncer.Syncer
-	syncerZen *syncer.Syncer
-	log       *zap.Logger
-	closeFn   func()
+	db             *sql.DB
+	s              *DBStore
+	sZen           *DBStore
+	cm             *chain.Manager
+	cmZen          *chain.Manager
+	syncer         *syncer.Syncer
+	syncerZen      *syncer.Syncer
+	unsubscribe    func()
+	unsubscribeZen func()
+	log            *zap.Logger
+	closeFn        func()
 
 	mu     sync.Mutex
 	tg     siasync.ThreadGroup
@@ -114,11 +116,24 @@ func (w *Wallet) Close() {
 	if err := w.tg.Stop(); err != nil {
 		w.log.Error("unable to stop threads", zap.Error(err))
 	}
-	w.cm.RemoveSubscriber(w.s)
-	w.cmZen.RemoveSubscriber(w.sZen)
+	w.unsubscribe()
+	w.unsubscribeZen()
 	w.s.close()
 	w.sZen.close()
 	w.closeFn()
+}
+
+func syncStore(store *DBStore, cm *chain.Manager, index types.ChainIndex) error {
+	for index != cm.Tip() {
+		crus, caus, err := cm.UpdatesSince(index, 1000)
+		if err != nil {
+			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
+		} else if err := store.updateChainState(crus, caus, caus[len(caus)-1].State.Index == cm.Tip()); err != nil {
+			return fmt.Errorf("failed to update chain state: %w", err)
+		}
+		index = caus[len(caus)-1].State.Index
+	}
+	return nil
 }
 
 // NewWallet returns a wallet that is stored in a MySQL database.
@@ -132,15 +147,9 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 	if err != nil {
 		return nil, err
 	}
-	if err := cm.AddSubscriber(store, tip); err != nil {
-		return nil, err
-	}
 
 	storeZen, tipZen, err := NewDBStore(db, seedZen, "zen", l)
 	if err != nil {
-		return nil, err
-	}
-	if err := cmZen.AddSubscriber(storeZen, tipZen); err != nil {
 		return nil, err
 	}
 
@@ -150,12 +159,58 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 		cmZen:     cmZen,
 		syncer:    syncer,
 		syncerZen: syncerZen,
-		log:       l,
-		closeFn:   closeFn,
 		s:         store,
 		sZen:      storeZen,
+		log:       l,
+		closeFn:   closeFn,
 		locked:    make(map[types.Hash256]time.Time),
 	}
+
+	go func() {
+		if err := syncStore(w.s, w.cm, tip); err != nil {
+			l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
+		}
+
+		reorgChan := make(chan types.ChainIndex, 1)
+		w.unsubscribe = w.cm.OnReorg(func(index types.ChainIndex) {
+			select {
+			case reorgChan <- index:
+			default:
+			}
+		})
+
+		for range reorgChan {
+			w.mu.Lock()
+			lastTip := w.s.tip
+			if err := syncStore(w.s, w.cm, lastTip); err != nil {
+				l.Error("failed to sync store", zap.String("network", "mainnet"), zap.Error(err))
+			}
+			w.mu.Unlock()
+		}
+	}()
+
+	go func() {
+		if err := syncStore(w.sZen, w.cmZen, tipZen); err != nil {
+			l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
+		}
+
+		reorgChan := make(chan types.ChainIndex, 1)
+		w.unsubscribeZen = w.cmZen.OnReorg(func(index types.ChainIndex) {
+			select {
+			case reorgChan <- index:
+			default:
+			}
+		})
+
+		for range reorgChan {
+			w.mu.Lock()
+			lastTip := w.sZen.tip
+			if err := syncStore(w.sZen, w.cmZen, lastTip); err != nil {
+				l.Error("failed to sync store", zap.String("network", "zen"), zap.Error(err))
+			}
+			w.mu.Unlock()
+		}
+	}()
 
 	rows, err := db.Query("SELECT id, until FROM wt_locked")
 	if err != nil {

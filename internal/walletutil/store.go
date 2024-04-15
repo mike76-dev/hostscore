@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -135,82 +136,157 @@ func (s *DBStore) load() error {
 	return err
 }
 
-// ProcessChainApplyUpdate implements chain.Subscriber.
-func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool) (err error) {
+func (s *DBStore) addSiacoinElements(sces []types.SiacoinElement) error {
+	for _, sce := range sces {
+		sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
+		s.sces[types.SiacoinOutputID(sce.ID)] = sce
+		var buf bytes.Buffer
+		e := types.NewEncoder(&buf)
+		sce.EncodeTo(e)
+		e.Flush()
+		_, err := s.tx.Exec(`
+			INSERT INTO wt_sces (scoid, network, bytes)
+			VALUES (?, ?, ?)
+		`, sce.ID[:], s.network, buf.Bytes())
+		if err != nil {
+			s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *DBStore) removeSiacoinElements(sces []types.SiacoinElement) error {
+	for _, sce := range sces {
+		delete(s.sces, types.SiacoinOutputID(sce.ID))
+		_, err := s.tx.Exec(`
+			DELETE FROM wt_sces
+			WHERE scoid = ?
+			AND network = ?
+		`, sce.ID[:], s.network)
+		if err != nil {
+			s.log.Error("couldn't delete SC output", zap.String("network", s.network), zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *DBStore) addSiafundElements(sfes []types.SiafundElement) error {
+	for _, sfe := range sfes {
+		sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
+		s.sfes[types.SiafundOutputID(sfe.ID)] = sfe
+		var buf bytes.Buffer
+		e := types.NewEncoder(&buf)
+		sfe.EncodeTo(e)
+		e.Flush()
+		_, err := s.tx.Exec(`
+			INSERT INTO wt_sfes (sfoid, network, bytes)
+			VALUES (?, ?, ?)
+		`, sfe.ID[:], s.network, buf.Bytes())
+		if err != nil {
+			s.log.Error("couldn't add SF output", zap.String("network", s.network), zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *DBStore) removeSiafundElements(sfes []types.SiafundElement) error {
+	for _, sfe := range sfes {
+		delete(s.sfes, types.SiafundOutputID(sfe.ID))
+		_, err := s.tx.Exec(`
+			DELETE FROM wt_sfes
+			WHERE sfoid = ?
+			AND network = ?
+		`, sfe.ID[:], s.network)
+		if err != nil {
+			s.log.Error("couldn't delete SF output", zap.String("network", s.network), zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
+// applyChainUpdate atomically applies a chain update to the store.
+func (s *DBStore) applyChainUpdate(cau chain.ApplyUpdate) error {
 	// Check if the update is for the right network.
 	if s.network != cau.State.Network.Name {
 		return nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// Determine which Siacoin and Siafund elements are ephemeral.
+	created := make(map[types.Hash256]bool)
+	ephemeral := make(map[types.Hash256]bool)
+	for _, txn := range cau.Block.Transactions {
+		for i := range txn.SiacoinOutputs {
+			created[types.Hash256(txn.SiacoinOutputID(i))] = true
+		}
+		for _, input := range txn.SiacoinInputs {
+			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
+		}
+		for i := range txn.SiafundOutputs {
+			created[types.Hash256(txn.SiafundOutputID(i))] = true
+		}
+		for _, input := range txn.SiafundInputs {
+			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
+		}
+	}
 
+	// Add new Siacoin elements to the store.
+	var newSiacoinElements, spentSiacoinElements []types.SiacoinElement
+	cau.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
+		if ephemeral[se.ID] {
+			return
+		}
+
+		if se.SiacoinOutput.Address != s.addr {
+			return
+		}
+
+		if spent {
+			spentSiacoinElements = append(spentSiacoinElements, se)
+		} else {
+			newSiacoinElements = append(newSiacoinElements, se)
+		}
+	})
+
+	if err := s.addSiacoinElements(newSiacoinElements); err != nil {
+		return fmt.Errorf("failed to add Siacoin elements: %w", err)
+	} else if err := s.removeSiacoinElements(spentSiacoinElements); err != nil {
+		return fmt.Errorf("failed to remove Siacoin elements: %w", err)
+	}
+
+	var newSiafundElements, spentSiafundElements []types.SiafundElement
+	cau.ForEachSiafundElement(func(se types.SiafundElement, spent bool) {
+		if ephemeral[se.ID] {
+			return
+		}
+
+		if se.SiafundOutput.Address != s.addr {
+			return
+		}
+
+		if spent {
+			spentSiafundElements = append(spentSiafundElements, se)
+		} else {
+			newSiafundElements = append(newSiafundElements, se)
+		}
+	})
+
+	if err := s.addSiafundElements(newSiafundElements); err != nil {
+		return fmt.Errorf("failed to add Siafund elements: %w", err)
+	} else if err := s.removeSiafundElements(spentSiafundElements); err != nil {
+		return fmt.Errorf("failed to remove Siafund elements: %w", err)
+	}
+
+	// Apply events.
 	events := wallet.AppliedEvents(cau.State, cau.Block, cau, s.addr)
 	for _, event := range events {
 		s.log.Info("found new event", zap.String("network", s.network), zap.Stringer("event", event))
 	}
 
-	// Add/remove outputs.
-	cau.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
-		if sce.SiacoinOutput.Address == s.addr {
-			if spent {
-				delete(s.sces, types.SiacoinOutputID(sce.ID))
-				_, err = s.tx.Exec(`
-					DELETE FROM wt_sces
-					WHERE scoid = ?
-					AND network = ?
-				`, sce.ID[:], s.network)
-				if err != nil {
-					s.log.Error("couldn't delete SC output", zap.String("network", s.network), zap.Error(err))
-				}
-			} else {
-				sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
-				s.sces[types.SiacoinOutputID(sce.ID)] = sce
-				var buf bytes.Buffer
-				e := types.NewEncoder(&buf)
-				sce.EncodeTo(e)
-				e.Flush()
-				_, err = s.tx.Exec(`
-					INSERT INTO wt_sces (scoid, network, bytes)
-					VALUES (?, ?, ?)
-				`, sce.ID[:], s.network, buf.Bytes())
-				if err != nil {
-					s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
-				}
-			}
-		}
-	})
-	cau.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
-		if sfe.SiafundOutput.Address == s.addr {
-			if spent {
-				delete(s.sfes, types.SiafundOutputID(sfe.ID))
-				_, err = s.tx.Exec(`
-					DELETE FROM wt_sfes
-					WHERE sfoid = ?
-					AND network = ?
-				`, sfe.ID[:], s.network)
-				if err != nil {
-					s.log.Error("couldn't delete SF output", zap.String("network", s.network), zap.Error(err))
-				}
-			} else {
-				sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
-				s.sfes[types.SiafundOutputID(sfe.ID)] = sfe
-				var buf bytes.Buffer
-				e := types.NewEncoder(&buf)
-				sfe.EncodeTo(e)
-				e.Flush()
-				_, err = s.tx.Exec(`
-					INSERT INTO wt_sfes (sfoid, network, bytes)
-					VALUES (?, ?, ?)
-				`, sfe.ID[:], s.network, buf.Bytes())
-				if err != nil {
-					s.log.Error("couldn't add SF output", zap.String("network", s.network), zap.Error(err))
-				}
-			}
-		}
-	})
-
-	// Update proofs.
+	// Update Siacoin element proofs.
 	for id, sce := range s.sces {
 		cau.UpdateElementProof(&sce.StateElement)
 		s.sces[id] = sce
@@ -218,7 +294,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 		e := types.NewEncoder(&buf)
 		sce.EncodeTo(e)
 		e.Flush()
-		_, err = s.tx.Exec(`
+		_, err := s.tx.Exec(`
 			UPDATE wt_sces
 			SET bytes = ?
 			WHERE scoid = ?
@@ -226,8 +302,11 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 		`, buf.Bytes(), sce.ID[:], s.network)
 		if err != nil {
 			s.log.Error("couldn't update SC element proof", zap.String("network", s.network), zap.Error(err))
+			return err
 		}
 	}
+
+	// Update Siafund element proofs.
 	for id, sfe := range s.sfes {
 		cau.UpdateElementProof(&sfe.StateElement)
 		s.sfes[id] = sfe
@@ -235,7 +314,7 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 		e := types.NewEncoder(&buf)
 		sfe.EncodeTo(e)
 		e.Flush()
-		_, err = s.tx.Exec(`
+		_, err := s.tx.Exec(`
 			UPDATE wt_sfes
 			SET bytes = ?
 			WHERE sfoid = ?
@@ -243,91 +322,93 @@ func (s *DBStore) ProcessChainApplyUpdate(cau *chain.ApplyUpdate, mayCommit bool
 		`, buf.Bytes(), sfe.ID[:], s.network)
 		if err != nil {
 			s.log.Error("couldn't update SF element proof", zap.String("network", s.network), zap.Error(err))
+			return err
 		}
 	}
 
 	s.tip = cau.State.Index
-	if mayCommit || time.Since(s.lastCommitted) >= 3*time.Second {
-		return s.save()
-	}
 
 	return nil
 }
 
-// ProcessChainRevertUpdate implements chain.Subscriber.
-func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) {
+// revertChainUpdate atomically reverts a chain update from the store.
+func (s *DBStore) revertChainUpdate(cru chain.RevertUpdate) error {
 	// Check if the update is for the right network.
 	if s.network != cru.State.Network.Name {
 		return nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, event := range wallet.AppliedEvents(cru.State, cru.Block, cru, s.addr) {
-		s.log.Info("reverting event", zap.String("network", s.network), zap.Stringer("event", event))
+	// Determine which Siacoin and Siafund elements are ephemeral.
+	created := make(map[types.Hash256]bool)
+	ephemeral := make(map[types.Hash256]bool)
+	for _, txn := range cru.Block.Transactions {
+		for i := range txn.SiacoinOutputs {
+			created[types.Hash256(txn.SiacoinOutputID(i))] = true
+		}
+		for _, input := range txn.SiacoinInputs {
+			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
+		}
+		for i := range txn.SiafundOutputs {
+			created[types.Hash256(txn.SiafundOutputID(i))] = true
+		}
+		for _, input := range txn.SiafundInputs {
+			ephemeral[types.Hash256(input.ParentID)] = created[types.Hash256(input.ParentID)]
+		}
 	}
 
-	cru.ForEachSiacoinElement(func(sce types.SiacoinElement, spent bool) {
-		if sce.SiacoinOutput.Address == s.addr {
-			if !spent {
-				delete(s.sces, types.SiacoinOutputID(sce.ID))
-				_, err = s.tx.Exec(`
-					DELETE FROM wt_sces
-					WHERE scoid = ?
-					AND network = ?
-				`, sce.ID[:], s.network)
-				if err != nil {
-					s.log.Error("couldn't delete SC output", zap.String("network", s.network), zap.Error(err))
-				}
-			} else {
-				sce.MerkleProof = append([]types.Hash256(nil), sce.MerkleProof...)
-				s.sces[types.SiacoinOutputID(sce.ID)] = sce
-				var buf bytes.Buffer
-				e := types.NewEncoder(&buf)
-				sce.EncodeTo(e)
-				e.Flush()
-				_, err = s.tx.Exec(`
-					INSERT INTO wt_sces (scoid, network, bytes)
-					VALUES (?, ?, ?)
-				`, sce.ID[:], s.network, buf.Bytes())
-				if err != nil {
-					s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
-				}
-			}
+	var removedSiacoinElements, addedSiacoinElements []types.SiacoinElement
+	cru.ForEachSiacoinElement(func(se types.SiacoinElement, spent bool) {
+		if ephemeral[se.ID] {
+			return
 		}
-	})
-	cru.ForEachSiafundElement(func(sfe types.SiafundElement, spent bool) {
-		if sfe.SiafundOutput.Address == s.addr {
-			if !spent {
-				delete(s.sfes, types.SiafundOutputID(sfe.ID))
-				_, err = s.tx.Exec(`
-					DELETE FROM wt_sfes
-					WHERE sfoid = ?
-					AND network = ?
-				`, sfe.ID[:], s.network)
-				if err != nil {
-					s.log.Error("couldn't delete SF output", zap.String("network", s.network), zap.Error(err))
-				}
-			} else {
-				sfe.MerkleProof = append([]types.Hash256(nil), sfe.MerkleProof...)
-				s.sfes[types.SiafundOutputID(sfe.ID)] = sfe
-				var buf bytes.Buffer
-				e := types.NewEncoder(&buf)
-				sfe.EncodeTo(e)
-				e.Flush()
-				_, err = s.tx.Exec(`
-					INSERT INTO wt_sfes (sfoid, network, bytes)
-					VALUES (?, ?, ?)
-				`, sfe.ID[:], s.network, buf.Bytes())
-				if err != nil {
-					s.log.Error("couldn't add SF output", zap.String("network", s.network), zap.Error(err))
-				}
-			}
+
+		if se.SiacoinOutput.Address != s.addr {
+			return
+		}
+
+		if spent {
+			// Re-add any spent Siacoin elements.
+			addedSiacoinElements = append(addedSiacoinElements, se)
+		} else {
+			// Delete any created Siacoin elements.
+			removedSiacoinElements = append(removedSiacoinElements, se)
 		}
 	})
 
-	// Update proofs.
+	// Revert Siacoin element changes.
+	if err := s.addSiacoinElements(addedSiacoinElements); err != nil {
+		return fmt.Errorf("failed to add Siacoin elements: %w", err)
+	} else if err := s.removeSiacoinElements(removedSiacoinElements); err != nil {
+		return fmt.Errorf("failed to remove Siacoin elements: %w", err)
+	}
+
+	var removedSiafundElements, addedSiafundElements []types.SiafundElement
+	cru.ForEachSiafundElement(func(se types.SiafundElement, spent bool) {
+		if ephemeral[se.ID] {
+			return
+		}
+
+		if se.SiafundOutput.Address != s.addr {
+			return
+		}
+
+		if spent {
+			// Re-add any spent Siafund elements.
+			addedSiafundElements = append(addedSiafundElements, se)
+		} else {
+			// Delete any created Siafund elements.
+			removedSiafundElements = append(removedSiafundElements, se)
+		}
+	})
+
+	// Revert Siafund element changes.
+	if err := s.addSiafundElements(addedSiafundElements); err != nil {
+		return fmt.Errorf("failed to add Siafund elements: %w", err)
+	} else if err := s.removeSiafundElements(removedSiafundElements); err != nil {
+		return fmt.Errorf("failed to remove Siafund elements: %w", err)
+	}
+
+	// Update Siacoin element proofs.
 	for id, sce := range s.sces {
 		cru.UpdateElementProof(&sce.StateElement)
 		s.sces[id] = sce
@@ -335,7 +416,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 		e := types.NewEncoder(&buf)
 		sce.EncodeTo(e)
 		e.Flush()
-		_, err = s.tx.Exec(`
+		_, err := s.tx.Exec(`
 			UPDATE wt_sces
 			SET bytes = ?
 			WHERE scoid = ?
@@ -343,8 +424,11 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 		`, buf.Bytes(), sce.ID[:], s.network)
 		if err != nil {
 			s.log.Error("couldn't update SC element proof", zap.String("network", s.network), zap.Error(err))
+			return err
 		}
 	}
+
+	// Update Siafund element proofs.
 	for id, sfe := range s.sfes {
 		cru.UpdateElementProof(&sfe.StateElement)
 		s.sfes[id] = sfe
@@ -352,7 +436,7 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 		e := types.NewEncoder(&buf)
 		sfe.EncodeTo(e)
 		e.Flush()
-		_, err = s.tx.Exec(`
+		_, err := s.tx.Exec(`
 			UPDATE wt_sfes
 			SET bytes = ?
 			WHERE sfoid = ?
@@ -360,14 +444,41 @@ func (s *DBStore) ProcessChainRevertUpdate(cru *chain.RevertUpdate) (err error) 
 		`, buf.Bytes(), sfe.ID[:], s.network)
 		if err != nil {
 			s.log.Error("couldn't update SF element proof", zap.String("network", s.network), zap.Error(err))
+			return err
 		}
 	}
 
-	s.tip = cru.State.Index
+	// Revert events.
+	for _, event := range wallet.AppliedEvents(cru.State, cru.Block, cru, s.addr) {
+		s.log.Info("reverting event", zap.String("network", s.network), zap.Stringer("event", event))
+	}
 
-	err = s.save()
-	if err != nil {
-		s.log.Error("couldn't save wallet", zap.String("network", s.network), zap.Error(err))
+	return nil
+}
+
+// updateChainState applies the chain manager updates.
+func (s *DBStore) updateChainState(reverted []chain.RevertUpdate, applied []chain.ApplyUpdate, mayCommit bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, cru := range reverted {
+		revertedIndex := types.ChainIndex{
+			ID:     cru.Block.ID(),
+			Height: cru.State.Index.Height + 1,
+		}
+		if err := s.revertChainUpdate(cru); err != nil {
+			return fmt.Errorf("failed to revert chain update %q: %w", revertedIndex, err)
+		}
+	}
+
+	for _, cau := range applied {
+		if err := s.applyChainUpdate(cau); err != nil {
+			return fmt.Errorf("failed to apply chain update %q: %w", cau.State.Index, err)
+		}
+	}
+
+	if mayCommit || time.Since(s.lastCommitted) >= 3*time.Second {
+		return s.save()
 	}
 
 	return nil

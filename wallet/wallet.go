@@ -326,7 +326,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, addr types
 		case *types.V2FileContractFinalization:
 			return relevantV2Contract(types.V2FileContract(*r))
 		case *types.V2FileContractRenewal:
-			return relevantV2Contract(r.InitialRevision) || relevantV2Contract(r.FinalRevision)
+			return relevantV2Contract(r.FinalRevision)
 		}
 		return false
 	}
@@ -462,7 +462,7 @@ func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, addr types
 					return true
 				}
 			case *types.V2FileContractRenewal:
-				if relevantV2Contract(r.InitialRevision) || relevantV2Contract(r.FinalRevision) {
+				if relevantV2Contract(r.FinalRevision) {
 					return true
 				}
 			}

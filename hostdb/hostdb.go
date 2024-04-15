@@ -2,6 +2,7 @@ package hostdb
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"path/filepath"
 	"sync"
@@ -106,15 +107,17 @@ type HostUpdates struct {
 
 // The HostDB is a database of hosts.
 type HostDB struct {
-	syncer    *syncer.Syncer
-	syncerZen *syncer.Syncer
-	cm        *chain.Manager
-	cmZen     *chain.Manager
-	s         *hostDBStore
-	sZen      *hostDBStore
-	w         *walletutil.Wallet
-	log       *zap.Logger
-	closeFn   func()
+	syncer         *syncer.Syncer
+	syncerZen      *syncer.Syncer
+	cm             *chain.Manager
+	cmZen          *chain.Manager
+	s              *hostDBStore
+	sZen           *hostDBStore
+	unsubscribe    func()
+	unsubscribeZen func()
+	w              *walletutil.Wallet
+	log            *zap.Logger
+	closeFn        func()
 
 	tg siasync.ThreadGroup
 	mu sync.Mutex
@@ -162,8 +165,8 @@ func (hdb *HostDB) Close() {
 	if err := hdb.tg.Stop(); err != nil {
 		hdb.log.Error("unable to stop threads", zap.Error(err))
 	}
-	hdb.cm.RemoveSubscriber(hdb.s)
-	hdb.cmZen.RemoveSubscriber(hdb.sZen)
+	hdb.unsubscribe()
+	hdb.unsubscribeZen()
 	hdb.s.close()
 	hdb.sZen.close()
 	hdb.closeFn()
@@ -186,6 +189,19 @@ func loadBlockedDomains(db *sql.DB) (*blockedDomains, error) {
 	}
 	rows.Close()
 	return newBlockedDomains(domains), nil
+}
+
+func syncStore(store *hostDBStore, cm *chain.Manager, index types.ChainIndex) error {
+	for index != cm.Tip() {
+		_, caus, err := cm.UpdatesSince(index, 1000)
+		if err != nil {
+			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
+		} else if err := store.updateChainState(caus, caus[len(caus)-1].State.Index == cm.Tip()); err != nil {
+			return fmt.Errorf("failed to update chain state: %w", err)
+		}
+		index = caus[len(caus)-1].State.Index
+	}
+	return nil
 }
 
 // NewHostDB returns a new HostDB.
@@ -213,19 +229,6 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 		return nil, errChan
 	}
 
-	// Subscribe in a goroutine to prevent blocking.
-	go func() {
-		defer close(errChan)
-		err := cm.AddSubscriber(store, tip)
-		if err != nil {
-			errChan <- err
-		}
-		err = cmZen.AddSubscriber(storeZen, tipZen)
-		if err != nil {
-			errChan <- err
-		}
-	}()
-
 	hdb := &HostDB{
 		syncer:    syncer,
 		syncerZen: syncerZen,
@@ -249,6 +252,53 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 	}
 	hdb.s.hdb = hdb
 	hdb.sZen.hdb = hdb
+
+	// Subscribe in a goroutine to prevent blocking.
+	go func() {
+		if err := syncStore(hdb.s, hdb.cm, tip); err != nil {
+			l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
+		}
+
+		reorgChan := make(chan types.ChainIndex, 1)
+		hdb.unsubscribe = hdb.cm.OnReorg(func(index types.ChainIndex) {
+			select {
+			case reorgChan <- index:
+			default:
+			}
+		})
+
+		for range reorgChan {
+			hdb.mu.Lock()
+			lastTip := hdb.s.tip
+			if err := syncStore(hdb.s, hdb.cm, lastTip); err != nil {
+				l.Error("failed to sync store", zap.String("network", "mainnet"), zap.Error(err))
+			}
+			hdb.mu.Unlock()
+		}
+	}()
+
+	go func() {
+		if err := syncStore(hdb.sZen, hdb.cmZen, tipZen); err != nil {
+			l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
+		}
+
+		reorgChan := make(chan types.ChainIndex, 1)
+		hdb.unsubscribeZen = hdb.cmZen.OnReorg(func(index types.ChainIndex) {
+			select {
+			case reorgChan <- index:
+			default:
+			}
+		})
+
+		for range reorgChan {
+			hdb.mu.Lock()
+			lastTip := hdb.sZen.tip
+			if err := syncStore(hdb.sZen, hdb.cmZen, lastTip); err != nil {
+				l.Error("failed to sync store", zap.String("network", "zen"), zap.Error(err))
+			}
+			hdb.mu.Unlock()
+		}
+	}()
 
 	// Fetch SC rate.
 	go hdb.updateSCRate()
