@@ -36,7 +36,7 @@ export const About = (props: AboutProps) => {
 			</ul>
 			<Button
 				icon={Back}
-				caption="back"
+				caption="home"
 				darkMode={props.darkMode}
 				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
 			/>

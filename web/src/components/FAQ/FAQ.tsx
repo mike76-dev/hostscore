@@ -306,7 +306,7 @@ export const FAQ = (props: FAQProps) => {
             ))}
             <Button
 				icon={Back}
-				caption="back"
+				caption="home"
 				darkMode={props.darkMode}
 				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
 			/>
