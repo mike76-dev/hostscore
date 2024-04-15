@@ -7,15 +7,17 @@
 }
 
 .faq-item-title {
-    margin: 1rem 0;
+    margin: 1rem 0 1rem 1rem;
     cursor: pointer;
+    position: relative;
 }
 
 .faq-item-title::before {
     display: inline-block;
+    position: absolute;
     content: '\025b8';
     color: #1ed660;
-    margin-right: 0.5rem;
+    left: -1rem;
     font-size: 1.1rem;
     line-height: 0.9rem;
     transition: transform 0.1s linear;
