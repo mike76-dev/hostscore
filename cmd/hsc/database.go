@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
+	"io"
 	"slices"
 	"strings"
 	"time"
@@ -344,7 +346,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		)
 		if err != nil {
 			tx.Rollback()
-			return utils.AddContext(err, "couldn't insert scan record")
+			return utils.AddContext(err, fmt.Sprintf("couldn't insert scan record, key: %v", scan.PublicKey))
 		}
 	}
 
@@ -362,7 +364,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		)
 		if err != nil {
 			tx.Rollback()
-			return utils.AddContext(err, "couldn't insert benchmark record")
+			return utils.AddContext(err, fmt.Sprintf("couldn't insert benchmark record, key: %v", benchmark.PublicKey))
 		}
 	}
 
@@ -1035,7 +1037,7 @@ func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time
 			if len(settings) > 0 {
 				d := types.NewBufDecoder(settings)
 				utils.DecodeSettings(&scan.Settings, d)
-				if err := d.Err(); err != nil {
+				if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
 					rows.Close()
 					return nil, utils.AddContext(err, "couldn't decode host settings")
 				}
@@ -1227,7 +1229,7 @@ func (api *portalAPI) load() error {
 		if len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
 			utils.DecodeSettings(&host.Settings, d)
-			if err := d.Err(); err != nil {
+			if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode host settings")
 			}

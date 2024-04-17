@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -477,7 +478,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		if len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
 			utils.DecodeSettings(&host.Settings, d)
-			if err := d.Err(); err != nil {
+			if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode host settings")
 			}
@@ -572,7 +573,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			if len(settings) > 0 {
 				d := types.NewBufDecoder(settings)
 				utils.DecodeSettings(&scan.Settings, d)
-				if err := d.Err(); err != nil {
+				if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
 					rows.Close()
 					return utils.AddContext(err, "couldn't decode host settings")
 				}
@@ -598,7 +599,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			if len(settings) > 0 {
 				d := types.NewBufDecoder(settings)
 				utils.DecodeSettings(&host.Settings, d)
-				if err := d.Err(); err != nil {
+				if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
 					return utils.AddContext(err, "couldn't decode host settings")
 				}
 			}
@@ -879,7 +880,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 		if len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
 			utils.DecodeSettings(&scan.Settings, d)
-			if err := d.Err(); err != nil {
+			if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
 				rows.Close()
 				return HostUpdates{}, utils.AddContext(err, "couldn't decode host settings")
 			}

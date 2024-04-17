@@ -230,6 +230,7 @@ export const HostInfo = (props: HostInfoProps) => {
     				<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
 	    			<tr><td>Uptime</td><td>{uptime}</td></tr>
 		    		<tr><td>Version</td><td>{props.host.settings.version === '' ? 'N/A' : props.host.settings.version}</td></tr>
+                    <tr><td>Release</td><td>{props.host.settings.release === '' ? 'N/A' : props.host.settings.release}</td></tr>
 			    	<tr><td>Accepting Contracts</td><td>{props.host.settings.acceptingcontracts ? 'Yes' : 'No'}</td></tr>
 				    <tr>
                         <td>Max Contract Duration</td>
