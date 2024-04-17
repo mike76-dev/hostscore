@@ -2,8 +2,6 @@ import axios, { CancelToken } from 'axios'
 import {
 	Host,
 	NodeStatus,
-	HostScan,
-	HostBenchmark,
 	PriceChange,
     HostSortType,
     NetworkAverages
@@ -69,40 +67,6 @@ export const getStatus = async ():
 export const getOnlineHosts = async (network: string):
 	Promise<{ status: string, message: string, onlineHosts: number }> => {
 	const url = '/hosts/online?network=' + network
-	return instance.get(url)
-	.then(response => response.data)
-	.catch(error => console.log(error))
-}
-
-export const getScans = async (
-	network: string,
-	publicKey: string,
-	from?: Date,
-	to?: Date,
-	num?: number,
-	success?: boolean
-): Promise<{ status: string, message: string, scans: HostScan[] }> => {
-	const url = '/scans?network=' + network + '&host=' + publicKey +
-		(from ? '&from=' + from.toISOString() : '') +
-		(to ? '&to=' + to.toISOString() : '') +
-		(num ? '&number=' + num : '') + (success ? '&success=true' : '')
-	return instance.get(url)
-	.then(response => response.data)
-	.catch(error => console.log(error))
-}
-
-export const getBenchmarks = async (
-	network: string,
-	publicKey: string,
-	from?: Date,
-	to?: Date,
-	num?: number,
-	success?: boolean
-): Promise<{ status: string, message: string, benchmarks: HostBenchmark[] }> => {
-	const url = '/benchmarks?network=' + network + '&host=' + publicKey +
-		(from ? '&from=' + from.toISOString() : '') +
-		(to ? '&to=' + to.toISOString() : '') +
-		(num ? '&number=' + num : '') + (success ? '&success=true' : '')
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

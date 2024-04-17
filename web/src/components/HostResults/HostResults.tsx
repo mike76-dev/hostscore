@@ -1,8 +1,8 @@
 import './HostResults.css'
 import { useState, useEffect } from 'react'
 import {
+    Host,
 	HostBenchmark,
-	HostScan,
 	useLocations,
 	convertSize
 } from '../../api'
@@ -10,8 +10,7 @@ import { Benchmark, Tooltip } from '../'
 
 type HostResultsProps = {
 	darkMode: boolean,
-	scans: HostScan[],
-	benchmarks: HostBenchmark[],
+	host: Host,
 	node: string
 }
 
@@ -67,28 +66,30 @@ export const HostResults = (props: HostResultsProps) => {
 				data: []
 			})
 		}
-		props.scans.forEach(scan => {
-			let i = res.findIndex(r => r.node === scan.node)
-			if (i >= 0 && scan.success) {
-				res[i].latency += scan.latency
-				res[i].scanCount++
-			}
-		})
-		props.benchmarks.forEach(benchmark => {
-			let i = res.findIndex(r => r.node === benchmark.node)
-			if (i >= 0) {
+        locations.forEach(location => {
+            if (!props.host.interactions || (props.node !== 'global' && props.node !== location)) return
+            const interactions = props.host.interactions[location]
+            const index = res.findIndex(r => r.node === location)
+            if (index < 0) return
+            interactions.scanHistory.forEach(scan => {
+                if (scan.success) {
+                    res[index].latency += scan.latency
+                    res[index].scanCount++
+                }
+            })
+            interactions.benchmarkHistory.forEach(benchmark => {
 				if (benchmark.success) {
-					res[i].upload += benchmark.uploadSpeed
-					res[i].download += benchmark.downloadSpeed
-					res[i].ttfb += benchmark.ttfb
-					res[i].benchmarkCount++
+					res[index].upload += benchmark.uploadSpeed
+					res[index].download += benchmark.downloadSpeed
+					res[index].ttfb += benchmark.ttfb
+					res[index].benchmarkCount++
 				}
-				if (res[i].data.length < 12) {
-					res[i].data.push(benchmark)
-					if (res[i].data.length > rows) rows = res[i].data.length
+				if (res[index].data.length < 12) {
+					res[index].data.push(benchmark)
+					if (res[index].data.length > rows) rows = res[index].data.length
 				}
-			}
-		})
+            })
+        })
 		for (let j = 0; j < rows; j++) {
 			let row: (HostBenchmark | undefined)[] = []
 			for (let i = 0; i < res.length; i++) {
@@ -106,7 +107,7 @@ export const HostResults = (props: HostResultsProps) => {
 		})
 		setResults(res)
 		setBenchmarkData(bd)
-	}, [props.scans, props.benchmarks, props.node, locations])
+	}, [props.host, props.node, locations])
 	return (
 		<div className={'host-results-container' + (props.darkMode ? ' host-results-dark' : '')}>
 			<table className="host-results-table">
@@ -150,7 +151,7 @@ export const HostResults = (props: HostResultsProps) => {
 					</tr>
 				</tbody>
 			</table>
-			{props.benchmarks && benchmarkData.length > 0 &&
+			{props.host && benchmarkData.length > 0 &&
 				<table className="host-benchmarks-table">
 					<thead>
 						<tr>
