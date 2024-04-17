@@ -20,7 +20,7 @@
 # Go workspace file
 go.work
 
-utils/
+utilities/
 
 web/node_modules
 web/build
