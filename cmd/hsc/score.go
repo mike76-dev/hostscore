@@ -287,7 +287,7 @@ func versionScore(settings rhpv2.HostSettings) float64 {
 		version string
 		penalty float64
 	}{
-		{"1.6.0", 0.99},
+		{"1.6.0", 0.10},
 		{"1.5.9", 0.00},
 	}
 	weight := 1.0

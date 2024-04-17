@@ -158,7 +158,7 @@ const topics: Topic[] = [
                     <p>
                         Currently, the newest hosting software is <code>hostd</code>,
                         which is equal to the version 1.6.0. <code>siad</code> hosts
-                        running the 1.5.9 version receive a version score of 0.99. All
+                        running the 1.5.9 version receive a version score of 0.1. All
                         earlier versions automatically get a score of 0.
                     </p>
                     <p>
