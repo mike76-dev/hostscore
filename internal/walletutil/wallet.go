@@ -180,12 +180,10 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 		})
 
 		for range reorgChan {
-			w.mu.Lock()
 			lastTip := w.s.tip
 			if err := syncStore(w.s, w.cm, lastTip); err != nil {
 				l.Error("failed to sync store", zap.String("network", "mainnet"), zap.Error(err))
 			}
-			w.mu.Unlock()
 		}
 	}()
 
@@ -203,12 +201,10 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 		})
 
 		for range reorgChan {
-			w.mu.Lock()
 			lastTip := w.sZen.tip
 			if err := syncStore(w.sZen, w.cmZen, lastTip); err != nil {
 				l.Error("failed to sync store", zap.String("network", "zen"), zap.Error(err))
 			}
-			w.mu.Unlock()
 		}
 	}()
 

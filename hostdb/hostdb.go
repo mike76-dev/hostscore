@@ -268,12 +268,10 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 		})
 
 		for range reorgChan {
-			hdb.mu.Lock()
 			lastTip := hdb.s.tip
 			if err := syncStore(hdb.s, hdb.cm, lastTip); err != nil {
 				l.Error("failed to sync store", zap.String("network", "mainnet"), zap.Error(err))
 			}
-			hdb.mu.Unlock()
 		}
 	}()
 
@@ -291,12 +289,10 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 		})
 
 		for range reorgChan {
-			hdb.mu.Lock()
 			lastTip := hdb.sZen.tip
 			if err := syncStore(hdb.sZen, hdb.cmZen, lastTip); err != nil {
 				l.Error("failed to sync store", zap.String("network", "zen"), zap.Error(err))
 			}
-			hdb.mu.Unlock()
 		}
 	}()
 
