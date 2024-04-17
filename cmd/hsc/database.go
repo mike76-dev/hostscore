@@ -443,13 +443,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			}
 			scans = append(newScans, scans...)
 			slices.SortFunc(scans, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
-			if len(scans) > 24 {
-				scans = scans[:24]
+			if len(scans) > 48 {
+				scans = scans[:48]
 			}
 			benchmarks = append(newBenchmarks, benchmarks...)
 			slices.SortFunc(benchmarks, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
-			if len(benchmarks) > 24 {
-				benchmarks = benchmarks[:24]
+			if len(benchmarks) > 12 {
+				benchmarks = benchmarks[:12]
 			}
 			host.NetAddress = h.NetAddress
 			host.Blocked = h.Blocked
@@ -1428,7 +1428,7 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 		AND node = ?
 		AND public_key = ?
 		ORDER BY ran_at DESC
-		LIMIT 24
+		LIMIT 48
 	`)
 	if err != nil {
 		return utils.AddContext(err, "couldn't prepare scan statement")
@@ -1481,7 +1481,7 @@ func (api *portalAPI) loadBenchmarks(hosts map[types.PublicKey]*portalHost, netw
 		AND node = ?
 		AND public_key = ?
 		ORDER BY ran_at DESC
-		LIMIT 24
+		LIMIT 12
 	`)
 	if err != nil {
 		return utils.AddContext(err, "couldn't prepare benchmark statement")
