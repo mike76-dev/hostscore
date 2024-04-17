@@ -52,22 +52,15 @@ interface BoundsProps {
     network: string,
     hosts?: Host[],
     onBoundsChange: (bounds: LatLngBounds) => void,
-    setMapWidth: (width: number) => void,
-    setMapHeight: (height: number) => void,
 }
 
 const Bounds: React.FC<BoundsProps> = ({
     network,
     hosts,
-    onBoundsChange,
-    setMapWidth,
-    setMapHeight
+    onBoundsChange
     }) => {
     const map = useMap()
     useEffect(() => {
-        const mc = map.getContainer()
-        setMapWidth(mc.clientWidth)
-        setMapHeight(mc.clientHeight)
         onBoundsChange(map.getBounds())
         const updateBounds = () => {
             onBoundsChange(map.getBounds())
@@ -87,8 +80,6 @@ export const HostMap = (props: HostMapProps) => {
     const [center, setCenter] = useState<LatLngExpression>(defaultLocation)
     const [bounds, setBounds] = useState<LatLngBounds | undefined>()
     const [zoom, setZoom] = useState(7)
-    const [mapWidth, setMapWidth] = useState(0)
-    const [mapHeight, setMapHeight] = useState(0)
     useEffect(() => {
         if (!props.host && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -145,7 +136,7 @@ export const HostMap = (props: HostMapProps) => {
             }
             newZoom--
         } while (newZoom >= 5)
-    }, [props.hosts, bounds, setCenter])
+    }, [props.hosts, bounds, center, zoom, setCenter])
      return (
         <div className={'host-map-container' + (props.darkMode ? ' host-map-dark' : '')}>
             {props.host &&
@@ -213,8 +204,6 @@ export const HostMap = (props: HostMapProps) => {
                         network={props.network}
                         hosts={props.hosts}
                         onBoundsChange={handleBoundsChange}
-                        setMapWidth={setMapWidth}
-                        setMapHeight={setMapHeight}
                     />
                 </MapContainer>
             }
