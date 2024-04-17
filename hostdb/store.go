@@ -841,10 +841,13 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 	rows.Close()
 
 	rows, err = s.tx.Query(`
-		SELECT id, public_key, ran_at, success, latency, error, settings, price_table
-		FROM hdb_scans_` + s.network + `
-		WHERE modified > fetched
-		ORDER BY id ASC
+		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.settings, s.price_table
+		FROM hdb_scans_` + s.network + ` s
+		JOIN hdb_hosts_` + s.network + ` h
+		ON s.public_key = h.public_key
+		WHERE s.modified > s.fetched
+		AND h.modified <= h.fetched
+		ORDER BY s.id ASC
 		LIMIT 1000
 	`)
 	if err != nil {
@@ -894,10 +897,13 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 	rows.Close()
 
 	rows, err = s.tx.Query(`
-		SELECT id, public_key, ran_at, success, upload_speed, download_speed, ttfb, error
-		FROM hdb_benchmarks_` + s.network + `
-		WHERE modified > fetched
-		ORDER BY id ASC
+		SELECT b.id, b.public_key, b.ran_at, b.success, b.upload_speed, b.download_speed, b.ttfb, b.error
+		FROM hdb_benchmarks_` + s.network + ` b
+		JOIN hdb_hosts_` + s.network + ` h
+		ON b.public_key = h.public_key
+		WHERE b.modified > b.fetched
+		AND h.modified <= h.fetched
+		ORDER BY b.id ASC
 		LIMIT 1000
 	`)
 	if err != nil {
@@ -1036,7 +1042,8 @@ func (s *hostDBStore) getHostsForScan() {
 			continue
 		}
 		t := host.LastBenchmark.Timestamp
-		if t.IsZero() || time.Since(t) >= s.calculateBenchmarkInterval(host) {
+		if (t.IsZero() || time.Since(t) >= s.calculateBenchmarkInterval(host)) &&
+			(len(host.ScanHistory) > 0 && host.ScanHistory[len(host.ScanHistory)-1].Success) {
 			s.hdb.queueScan(host)
 		}
 	}
