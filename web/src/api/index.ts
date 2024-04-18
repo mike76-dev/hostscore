@@ -8,7 +8,11 @@ import {
 } from './types'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
-const locations = ['eu', 'us', 'ap']
+const locations = [
+    { short: 'europe', long: 'Europe' },
+    { short: 'east-us', long: 'East USA' },
+    { short: 'asia', long: 'Asia' }
+]
 const excludedPaths = ['/about', '/faq', '/status']
 
 export const useLocations = () => (locations)

@@ -48,7 +48,7 @@ export const HostsTable = (props: HostsTableProps) => {
 		let online = false
 		if (host.interactions) {
 			locations.forEach(location => {
-				let int = host.interactions[location]
+				let int = host.interactions[location.short]
 				if (!int || !int.scanHistory) return
 				if (int.scanHistory.length > 0 && int.scanHistory[0].success === true &&
 					((int.scanHistory.length > 1 && int.scanHistory[1].success === true) ||

@@ -7,8 +7,7 @@ import {
     PriceChange,
     getHost,
     getPriceChanges,
-    stripePrefix,
-    useLocations
+    stripePrefix
 } from '../../api'
 import {
     Button,
@@ -27,7 +26,6 @@ type HostDetailsProps = {
 }
 
 export const HostDetails = (props: HostDetailsProps) => {
-    const locations = useLocations()
     const navigate = useNavigate()
 	const { publicKey } = useParams()
 	const [host, setHost] = useState<Host>()
@@ -36,8 +34,7 @@ export const HostDetails = (props: HostDetailsProps) => {
 	const network = (window.location.pathname.toLowerCase().indexOf('zen') >= 0 ? 'zen' : 'mainnet')
 	const [loadingHost, setLoadingHost] = useState(false)
     const [loadingPriceChanges, setLoadingPriceChanges] = useState(false)
-    const nodes = ['global'].concat(locations)
-    const [node, setNode] = useState(nodes[0])
+    const [node, setNode] = useState('global')
 	useEffect(() => {
 		let h = hosts.find(h => stripePrefix(h.publicKey) === publicKey)
 		if (h) setHost(h)
@@ -61,7 +58,7 @@ export const HostDetails = (props: HostDetailsProps) => {
             }
             setLoadingPriceChanges(false)
         })
-    }, [network, publicKey, locations.length])
+    }, [network, publicKey])
 	return (
 		<div className={'host-details-container' + (props.darkMode ? ' host-details-dark' : '')}>
 			{loadingHost || loadingPriceChanges ?
@@ -74,7 +71,6 @@ export const HostDetails = (props: HostDetailsProps) => {
                     <div className="host-details-subcontainer">
                         <NodeSelector
                             darkMode={props.darkMode}
-                            nodes={nodes}
                             node={node}
                             setNode={setNode}
                         />

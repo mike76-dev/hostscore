@@ -1,14 +1,15 @@
-import { ChangeEvent } from 'react'
 import './NodeSelector.css'
+import { ChangeEvent } from 'react'
+import { useLocations } from '../../api'
 
 type NodeSelectorProps = {
     darkMode: boolean,
-    nodes: string[],
     node: string,
     setNode: (node: string) => any,
 }
 
 export const NodeSelector = (props: NodeSelectorProps) => {
+    const locations = useLocations()
     const onChange = (e: ChangeEvent<HTMLSelectElement>): any => {
         props.setNode(e.target.value)
     }
@@ -21,11 +22,12 @@ export const NodeSelector = (props: NodeSelectorProps) => {
                     tabIndex={1}
                     onChange={onChange}
                 >
-                    {props.nodes.map((n, i) => (
+                    <option key="global" value="global">Global</option>
+                    {locations.map(location => (
                         <option
-                            key={n}
-                            value={n}
-                        >{i === 0 ? 'Global' : n.toUpperCase()}</option>
+                            key={location.short}
+                            value={location.short}
+                        >{location.long}</option>
                     ))}
                 </select>
             </label>

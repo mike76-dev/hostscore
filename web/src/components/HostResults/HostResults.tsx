@@ -44,7 +44,7 @@ export const HostResults = (props: HostResultsProps) => {
 		if (props.node === 'global') {
 			locations.forEach(location => {
 				res.push({
-					node: location,
+					node: location.short,
 					scanCount: 0,
 					latency: 0,
 					benchmarkCount: 0,
@@ -67,9 +67,9 @@ export const HostResults = (props: HostResultsProps) => {
 			})
 		}
         locations.forEach(location => {
-            if (!props.host.interactions || (props.node !== 'global' && props.node !== location)) return
-            const interactions = props.host.interactions[location]
-            const index = res.findIndex(r => r.node === location)
+            if (!props.host.interactions || (props.node !== 'global' && props.node !== location.short)) return
+            const interactions = props.host.interactions[location.short]
+            const index = res.findIndex(r => r.node === location.short)
             if (index < 0) return
             interactions.scanHistory?.forEach(scan => {
                 if (scan.success) {
@@ -115,7 +115,9 @@ export const HostResults = (props: HostResultsProps) => {
 					<tr>
 						<th></th>
 						{results.map(res => (
-							<th key={'header-' + res.node}>{res.node.toUpperCase()}</th>
+							<th key={'header-' + res.node}>
+                                {locations.find(loc => res.node === loc.short)?.long || ''}
+                            </th>
 						))}
 					</tr>
 				</thead>
@@ -123,19 +125,25 @@ export const HostResults = (props: HostResultsProps) => {
 					<tr>
 						<td>Latency</td>
 						{results.map(res => (
-							<td key={'latency-' + res.node}>{res.scanCount > 0 ? res.latency.toFixed(0) + ' ms' : 'N/A'}</td>
+							<td key={'latency-' + res.node}>
+                                {res.scanCount > 0 ? res.latency.toFixed(0) + ' ms' : 'N/A'}
+                            </td>
 						))}
 					</tr>
 					<tr>
 						<td>Upload Speed</td>
 						{results.map(res => (
-							<td key={'upload-' + res.node}>{res.benchmarkCount > 0 ? convertSize(res.upload) + '/s' : 'N/A'}</td>
+							<td key={'upload-' + res.node}>
+                                {res.benchmarkCount > 0 ? convertSize(res.upload) + '/s' : 'N/A'}
+                            </td>
 						))}
 					</tr>
 					<tr>
 						<td>Download Speed</td>
 						{results.map(res => (
-							<td key={'download-' + res.node}>{res.benchmarkCount > 0 ? convertSize(res.download) + '/s' : 'N/A'}</td>
+							<td key={'download-' + res.node}>
+                                {res.benchmarkCount > 0 ? convertSize(res.download) + '/s' : 'N/A'}
+                            </td>
 						))}
 					</tr>
 					<tr>
@@ -146,7 +154,9 @@ export const HostResults = (props: HostResultsProps) => {
                             </Tooltip>
                         </td>
 						{results.map(res => (
-							<td key={'ttfb-' + res.node}>{res.benchmarkCount > 0 ? res.ttfb.toFixed(2) + ' s' : 'N/A'}</td>
+							<td key={'ttfb-' + res.node}>
+                                {res.benchmarkCount > 0 ? res.ttfb.toFixed(2) + ' s' : 'N/A'}
+                            </td>
 						))}
 					</tr>
 				</tbody>
@@ -156,7 +166,9 @@ export const HostResults = (props: HostResultsProps) => {
 					<thead>
 						<tr>
 							{results.map(res => (
-								<th key={'benchmark-header-' + res.node}>{res.node.toUpperCase()}</th>
+								<th key={'benchmark-header-' + res.node}>
+                                    {locations.find(loc => res.node === loc.short)?.long || ''}
+                                </th>
 							))}
 						</tr>
 					</thead>
