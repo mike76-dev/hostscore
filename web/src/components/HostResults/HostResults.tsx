@@ -71,13 +71,13 @@ export const HostResults = (props: HostResultsProps) => {
             const interactions = props.host.interactions[location]
             const index = res.findIndex(r => r.node === location)
             if (index < 0) return
-            interactions.scanHistory.forEach(scan => {
+            interactions.scanHistory?.forEach(scan => {
                 if (scan.success) {
                     res[index].latency += scan.latency
                     res[index].scanCount++
                 }
             })
-            interactions.benchmarkHistory.forEach(benchmark => {
+            interactions.benchmarkHistory?.forEach(benchmark => {
 				if (benchmark.success) {
 					res[index].upload += benchmark.uploadSpeed
 					res[index].download += benchmark.downloadSpeed
