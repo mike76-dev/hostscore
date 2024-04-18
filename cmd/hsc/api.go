@@ -51,8 +51,8 @@ type onlineHostsResponse struct {
 
 type scansResponse struct {
 	APIResponse
-	PublicKey types.PublicKey      `json:"publicKey"`
-	Scans     []hostdb.ScanHistory `json:"scans"`
+	PublicKey types.PublicKey `json:"publicKey"`
+	Scans     []scanHistory   `json:"scans"`
 }
 
 type benchmarksResponse struct {
@@ -122,6 +122,16 @@ type portalScan struct {
 	Success   bool          `json:"success"`
 	Latency   time.Duration `json:"latency"`
 	Error     string        `json:"error"`
+}
+
+type scanHistory struct {
+	Timestamp time.Time       `json:"timestamp"`
+	Success   bool            `json:"success"`
+	Latency   time.Duration   `json:"latency"`
+	Error     string          `json:"error"`
+	PublicKey types.PublicKey `json:"publicKey"`
+	Network   string          `json:"network"`
+	Node      string          `json:"node"`
 }
 
 type nodeInteractions struct {

@@ -69,8 +69,6 @@ CREATE TABLE scans (
 	success      BOOL NOT NULL,
 	latency      DOUBLE NOT NULL,
 	error        TEXT NOT NULL,
-	settings     BLOB,
-	price_table  BLOB,
 	PRIMARY KEY (id),
     FOREIGN KEY (public_key) REFERENCES hosts(public_key),
     INDEX idx_scans (network, node, public_key, ran_at)

@@ -146,11 +146,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			ran_at,
 			success,
 			latency,
-			error,
-			settings,
-			price_table
+			error
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -274,17 +272,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 
 	for _, scan := range updates.Scans {
-		var settings, pt bytes.Buffer
-		e := types.NewEncoder(&settings)
-		if (scan.Settings != rhpv2.HostSettings{}) {
-			utils.EncodeSettings(&scan.Settings, e)
-			e.Flush()
-		}
-		e = types.NewEncoder(&pt)
-		if (scan.PriceTable != rhpv3.HostPriceTable{}) {
-			utils.EncodePriceTable(&scan.PriceTable, e)
-			e.Flush()
-		}
 		_, err := scanStmt.Exec(
 			scan.Network,
 			node,
@@ -293,8 +280,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			scan.Success,
 			scan.Latency.Milliseconds(),
 			scan.Error,
-			settings.Bytes(),
-			pt.Bytes(),
 		)
 		if err != nil {
 			tx.Rollback()
@@ -994,7 +979,7 @@ func (api *portalAPI) saveLocation(pk types.PublicKey, network string, info exte
 }
 
 // getScans returns the scan history according to the criteria provided.
-func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []hostdb.ScanHistory, err error) {
+func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []scanHistory, err error) {
 	if to.IsZero() {
 		to = time.Now()
 	}
@@ -1003,7 +988,7 @@ func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time
 	}
 
 	scanStmt, err := api.db.Prepare(`
-		SELECT ran_at, success, latency, error, settings, price_table
+		SELECT ran_at, success, latency, error
 		FROM scans
 		WHERE network = ?
 		AND node = ?
@@ -1038,37 +1023,18 @@ func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time
 			var success bool
 			var latency float64
 			var msg string
-			var settings, pt []byte
-			if err := rows.Scan(&ra, &success, &latency, &msg, &settings, &pt); err != nil {
+			if err := rows.Scan(&ra, &success, &latency, &msg); err != nil {
 				rows.Close()
 				return nil, utils.AddContext(err, "couldn't decode scan history")
 			}
-			scan := hostdb.ScanHistory{
-				HostScan: hostdb.HostScan{
-					Timestamp: time.Unix(ra, 0),
-					Success:   success,
-					Latency:   time.Duration(latency) * time.Millisecond,
-					Error:     msg,
-				},
+			scan := scanHistory{
+				Timestamp: time.Unix(ra, 0),
+				Success:   success,
+				Latency:   time.Duration(latency) * time.Millisecond,
+				Error:     msg,
 				PublicKey: pk,
 				Network:   network,
 				Node:      node,
-			}
-			if len(settings) > 0 {
-				d := types.NewBufDecoder(settings)
-				utils.DecodeSettings(&scan.Settings, d)
-				if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
-					rows.Close()
-					return nil, utils.AddContext(err, "couldn't decode host settings")
-				}
-			}
-			if len(pt) > 0 {
-				d := types.NewBufDecoder(pt)
-				utils.DecodePriceTable(&scan.PriceTable, d)
-				if err := d.Err(); err != nil {
-					rows.Close()
-					return nil, utils.AddContext(err, "couldn't decode host price table")
-				}
 			}
 			scans = append(scans, scan)
 		}
@@ -1456,7 +1422,7 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 	defer scanStmt.Close()
 
 	for _, host := range hosts {
-		for node, int := range host.Interactions {
+		for node, interactions := range host.Interactions {
 			rows, err := scanStmt.Query(network, node, host.PublicKey[:])
 			if err != nil {
 				return utils.AddContext(err, "couldn't query scan history")
@@ -1477,10 +1443,10 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 					Latency:   time.Duration(latency) * time.Millisecond,
 					Error:     msg,
 				}
-				int.ScanHistory = append(int.ScanHistory, scan)
+				interactions.ScanHistory = append(interactions.ScanHistory, scan)
 			}
 			rows.Close()
-			host.Interactions[node] = int
+			host.Interactions[node] = interactions
 		}
 	}
 
@@ -1509,7 +1475,7 @@ func (api *portalAPI) loadBenchmarks(hosts map[types.PublicKey]*portalHost, netw
 	defer benchmarkStmt.Close()
 
 	for _, host := range hosts {
-		for node, int := range host.Interactions {
+		for node, interactions := range host.Interactions {
 			rows, err := benchmarkStmt.Query(network, node, host.PublicKey[:])
 			if err != nil {
 				return utils.AddContext(err, "couldn't query benchmarks")
@@ -1532,10 +1498,10 @@ func (api *portalAPI) loadBenchmarks(hosts map[types.PublicKey]*portalHost, netw
 					TTFB:          time.Duration(ttfb) * time.Millisecond,
 					Error:         msg,
 				}
-				int.BenchmarkHistory = append(int.BenchmarkHistory, benchmark)
+				interactions.BenchmarkHistory = append(interactions.BenchmarkHistory, benchmark)
 			}
 			rows.Close()
-			host.Interactions[node] = int
+			host.Interactions[node] = interactions
 		}
 	}
 

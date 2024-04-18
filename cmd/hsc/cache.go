@@ -35,7 +35,7 @@ type cachedHosts struct {
 }
 
 type cachedScans struct {
-	scans      []hostdb.ScanHistory
+	scans      []scanHistory
 	network    string
 	publicKey  types.PublicKey
 	from       time.Time
@@ -194,7 +194,7 @@ func (rc *responseCache) putHosts(network string, all bool, offset, limit int, q
 	}
 }
 
-func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []hostdb.ScanHistory, ok bool) {
+func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []scanHistory, ok bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	for _, cs := range rc.scans {
@@ -213,7 +213,7 @@ func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to t
 	return
 }
 
-func (rc *responseCache) putScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool, scans []hostdb.ScanHistory) {
+func (rc *responseCache) putScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool, scans []scanHistory) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.scans = append(rc.scans, cachedScans{
