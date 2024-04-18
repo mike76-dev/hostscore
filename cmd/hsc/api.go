@@ -215,7 +215,6 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 	}
 
 	go api.requestUpdates()
-	go api.pruneOldRecords()
 	go api.updateAverages()
 
 	return api, nil
@@ -424,30 +423,6 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		}
 		api.cache.putHosts(network, all, int(offset), int(limit), query, country, sortBy, asc, hosts, more, total)
 	}
-
-	// Prefetch the scans and the benchmarks.
-	go func() {
-		for _, h := range hosts {
-			go func(h portalHost) {
-				_, ok := api.cache.getScans(network, h.PublicKey, time.Unix(0, 0), time.Now(), 48*len(api.clients), true)
-				if !ok {
-					s, err := api.getScans(network, h.PublicKey, time.Unix(0, 0), time.Now(), 48*len(api.clients), true)
-					if err != nil {
-						return
-					}
-					api.cache.putScans(network, h.PublicKey, time.Unix(0, 0), time.Now(), 48*len(api.clients), true, s)
-				}
-				_, ok = api.cache.getBenchmarks(network, h.PublicKey, time.Unix(0, 0), time.Now(), 12*len(api.clients), false)
-				if !ok {
-					b, err := api.getBenchmarks(network, h.PublicKey, time.Unix(0, 0), time.Now(), 12*len(api.clients), false)
-					if err != nil {
-						return
-					}
-					api.cache.putBenchmarks(network, h.PublicKey, time.Unix(0, 0), time.Now(), 12*len(api.clients), false, b)
-				}
-			}(h)
-		}
-	}()
 
 	// Prefetch the next bunch of hosts.
 	if more {

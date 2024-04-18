@@ -21,14 +21,18 @@ var (
 )
 
 // calculateScore calculates the total host's score.
-func calculateScore(host hostdb.HostDBEntry, scans []portalScan, benchmarks []hostdb.HostBenchmark) scoreBreakdown {
+func calculateScore(host portalHost, node string, scans []portalScan, benchmarks []hostdb.HostBenchmark) scoreBreakdown {
 	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
+	interactions, ok := host.Interactions[node]
+	if !ok {
+		return scoreBreakdown{}
+	}
 	sb := scoreBreakdown{
 		PricesScore:       priceAdjustmentScore(hostPeriodCost),
 		StorageScore:      storageRemainingScore(host.Settings),
 		CollateralScore:   collateralScore(host.PriceTable),
-		InteractionsScore: interactionScore(host.Interactions.HistoricSuccesses, host.Interactions.HistoricFailures),
-		UptimeScore:       uptimeScore(host.Uptime, host.Downtime, scans),
+		InteractionsScore: interactionScore(interactions.HistoricSuccesses, interactions.HistoricFailures),
+		UptimeScore:       uptimeScore(interactions.Uptime, interactions.Downtime, scans),
 		AgeScore:          ageScore(host.FirstSeen),
 		VersionScore:      versionScore(host.Settings),
 		LatencyScore:      latencyScore(scans),

@@ -232,24 +232,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	defer updateScoreStmt.Close()
 
 	for _, host := range updates.Hosts {
-		api.mu.RLock()
-		var oldHost *portalHost
-		var exists bool
-		if host.Network == "mainnet" {
-			oldHost, exists = api.hosts[host.PublicKey]
-		} else if host.Network == "zen" {
-			oldHost, exists = api.hostsZen[host.PublicKey]
-		}
-		api.mu.RUnlock()
-		var oldScans []portalScan
-		var oldBenchmarks []hostdb.HostBenchmark
-		if exists {
-			interactions, ok := oldHost.Interactions[node]
-			if ok {
-				oldScans = interactions.ScanHistory
-				oldBenchmarks = interactions.BenchmarkHistory
-			}
-		}
 		var settings, pt bytes.Buffer
 		e := types.NewEncoder(&settings)
 		if (host.Settings != rhpv2.HostSettings{}) {
@@ -288,36 +270,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		if err != nil {
 			tx.Rollback()
 			return utils.AddContext(err, "couldn't update host record")
-		}
-		sb := calculateScore(host, oldScans, oldBenchmarks)
-		_, err = interactionsStmt.Exec(
-			host.Network,
-			node,
-			host.PublicKey[:],
-			int64(host.Uptime.Seconds()),
-			int64(host.Downtime.Seconds()),
-			host.LastSeen.Unix(),
-			host.ActiveHosts,
-			sb.PricesScore,
-			sb.StorageScore,
-			sb.CollateralScore,
-			sb.InteractionsScore,
-			sb.UptimeScore,
-			sb.AgeScore,
-			sb.VersionScore,
-			sb.LatencyScore,
-			sb.BenchmarksScore,
-			sb.ContractsScore,
-			sb.TotalScore,
-			host.Interactions.HistoricSuccesses,
-			host.Interactions.HistoricFailures,
-			host.Interactions.RecentSuccesses,
-			host.Interactions.RecentFailures,
-			host.Interactions.LastUpdate,
-		)
-		if err != nil {
-			tx.Rollback()
-			return utils.AddContext(err, "couldn't update host interactions")
 		}
 	}
 
@@ -409,48 +361,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				dpb.Bytes(),
 			)
 			if err != nil {
-				api.log.Error("couldn't update price change", zap.String("network", h.Network), zap.Stringer("host", h.PublicKey), zap.Error(err))
+				tx.Rollback()
+				api.mu.Unlock()
+				return utils.AddContext(err, "couldn't update price change")
 			}
 		}
-
-		var newScans []portalScan
-		for _, scan := range updates.Scans {
-			if scan.Network == h.Network && scan.PublicKey == h.PublicKey {
-				newScans = append(newScans, portalScan{
-					Timestamp: scan.Timestamp,
-					Latency:   scan.Latency,
-					Success:   scan.Success,
-					Error:     scan.Error,
-				})
-			}
-		}
-		slices.SortFunc(newScans, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
-		var newBenchmarks []hostdb.HostBenchmark
-		for _, benchmark := range updates.Benchmarks {
-			if benchmark.Network == h.Network && benchmark.PublicKey == h.PublicKey {
-				newBenchmarks = append(newBenchmarks, benchmark.HostBenchmark)
-			}
-		}
-		slices.SortFunc(newBenchmarks, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
 
 		if exists {
-			var scans []portalScan
-			var benchmarks []hostdb.HostBenchmark
-			ints, ok := host.Interactions[node]
-			if ok {
-				scans = ints.ScanHistory
-				benchmarks = ints.BenchmarkHistory
-			}
-			scans = append(newScans, scans...)
-			slices.SortFunc(scans, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
-			if len(scans) > 48 {
-				scans = scans[:48]
-			}
-			benchmarks = append(newBenchmarks, benchmarks...)
-			slices.SortFunc(benchmarks, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
-			if len(benchmarks) > 12 {
-				benchmarks = benchmarks[:12]
-			}
 			host.NetAddress = h.NetAddress
 			host.Blocked = h.Blocked
 			host.IPNets = h.IPNets
@@ -458,13 +375,10 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.Settings = h.Settings
 			host.PriceTable = h.PriceTable
 			interactions := nodeInteractions{
-				Uptime:           h.Uptime,
-				Downtime:         h.Downtime,
-				ScanHistory:      scans,
-				BenchmarkHistory: benchmarks,
-				LastSeen:         h.LastSeen,
-				ActiveHosts:      h.ActiveHosts,
-				Score:            calculateScore(h, scans, benchmarks),
+				Uptime:      h.Uptime,
+				Downtime:    h.Downtime,
+				LastSeen:    h.LastSeen,
+				ActiveHosts: h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -489,13 +403,10 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				PriceTable:   h.PriceTable,
 			}
 			host.Interactions[node] = nodeInteractions{
-				Uptime:           h.Uptime,
-				Downtime:         h.Downtime,
-				ScanHistory:      newScans,
-				BenchmarkHistory: newBenchmarks,
-				LastSeen:         h.LastSeen,
-				ActiveHosts:      h.ActiveHosts,
-				Score:            calculateScore(h, newScans, newBenchmarks),
+				Uptime:      h.Uptime,
+				Downtime:    h.Downtime,
+				LastSeen:    h.LastSeen,
+				ActiveHosts: h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
 					HistoricSuccesses: h.Interactions.HistoricSuccesses,
 					HistoricFailures:  h.Interactions.HistoricFailures,
@@ -536,12 +447,122 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			h.PublicKey[:],
 		)
 		if err != nil {
-			api.log.Error("couldn't update score", zap.String("network", h.Network), zap.Stringer("hsot", h.PublicKey), zap.Error(err))
+			tx.Rollback()
+			api.mu.Unlock()
+			return utils.AddContext(err, "couldn't update score")
 		}
 		if h.Network == "mainnet" {
 			api.hosts[h.PublicKey] = host
 		} else if h.Network == "zen" {
 			api.hostsZen[h.PublicKey] = host
+		}
+	}
+
+	toUpdate := make(map[string]map[types.PublicKey]struct{})
+	toUpdate["mainnet"] = make(map[types.PublicKey]struct{})
+	toUpdate["zen"] = make(map[types.PublicKey]struct{})
+
+	newScans := make(map[string]map[types.PublicKey][]portalScan)
+	newScans["mainnet"] = make(map[types.PublicKey][]portalScan)
+	newScans["zen"] = make(map[types.PublicKey][]portalScan)
+	for _, scan := range updates.Scans {
+		toUpdate[scan.Network][scan.PublicKey] = struct{}{}
+		newScans[scan.Network][scan.PublicKey] = append(newScans[scan.Network][scan.PublicKey], portalScan{
+			Timestamp: scan.Timestamp,
+			Latency:   scan.Latency,
+			Success:   scan.Success,
+			Error:     scan.Error,
+		})
+	}
+
+	newBenchmarks := make(map[string]map[types.PublicKey][]hostdb.HostBenchmark)
+	newBenchmarks["mainnet"] = make(map[types.PublicKey][]hostdb.HostBenchmark)
+	newBenchmarks["zen"] = make(map[types.PublicKey][]hostdb.HostBenchmark)
+	for _, benchmark := range updates.Benchmarks {
+		toUpdate[benchmark.Network][benchmark.PublicKey] = struct{}{}
+		newBenchmarks[benchmark.Network][benchmark.PublicKey] = append(newBenchmarks[benchmark.Network][benchmark.PublicKey], benchmark.HostBenchmark)
+	}
+
+	for network, keys := range toUpdate {
+		for pk := range keys {
+			var host *portalHost
+			var exists bool
+			if network == "mainnet" {
+				host, exists = api.hosts[pk]
+			} else {
+				host, exists = api.hostsZen[pk]
+			}
+			if !exists {
+				api.log.Error("orphaned scan or benchmark found", zap.String("network", network), zap.Stringer("host", pk))
+				continue
+			}
+
+			interactions := host.Interactions[node]
+			interactions.ScanHistory = append(interactions.ScanHistory, newScans[network][pk]...)
+			slices.SortFunc(interactions.ScanHistory, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
+			if len(interactions.ScanHistory) > 48 {
+				interactions.ScanHistory = interactions.ScanHistory[:48]
+			}
+			interactions.BenchmarkHistory = append(interactions.BenchmarkHistory, newBenchmarks[network][pk]...)
+			slices.SortFunc(interactions.BenchmarkHistory, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
+			if len(interactions.BenchmarkHistory) > 12 {
+				interactions.BenchmarkHistory = interactions.BenchmarkHistory[:12]
+			}
+			interactions.Score = calculateScore(*host, node, interactions.ScanHistory, interactions.BenchmarkHistory)
+			host.Interactions[node] = interactions
+
+			_, err = interactionsStmt.Exec(
+				network,
+				node,
+				pk[:],
+				int64(interactions.Uptime.Seconds()),
+				int64(interactions.Downtime.Seconds()),
+				interactions.LastSeen.Unix(),
+				interactions.ActiveHosts,
+				interactions.Score.PricesScore,
+				interactions.Score.StorageScore,
+				interactions.Score.CollateralScore,
+				interactions.Score.InteractionsScore,
+				interactions.Score.UptimeScore,
+				interactions.Score.AgeScore,
+				interactions.Score.VersionScore,
+				interactions.Score.LatencyScore,
+				interactions.Score.BenchmarksScore,
+				interactions.Score.ContractsScore,
+				interactions.Score.TotalScore,
+				interactions.HistoricSuccesses,
+				interactions.HistoricFailures,
+				interactions.RecentSuccesses,
+				interactions.RecentFailures,
+				interactions.LastUpdate,
+			)
+			if err != nil {
+				tx.Rollback()
+				api.mu.Unlock()
+				return utils.AddContext(err, "couldn't update host interactions")
+			}
+
+			host.Score = calculateGlobalScore(host)
+			_, err := updateScoreStmt.Exec(
+				host.Score.PricesScore,
+				host.Score.StorageScore,
+				host.Score.CollateralScore,
+				host.Score.InteractionsScore,
+				host.Score.UptimeScore,
+				host.Score.AgeScore,
+				host.Score.VersionScore,
+				host.Score.LatencyScore,
+				host.Score.BenchmarksScore,
+				host.Score.ContractsScore,
+				host.Score.TotalScore,
+				network,
+				pk[:],
+			)
+			if err != nil {
+				tx.Rollback()
+				api.mu.Unlock()
+				return utils.AddContext(err, "couldn't update score")
+			}
 		}
 	}
 
@@ -1579,33 +1600,6 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs [
 	}
 
 	return
-}
-
-// pruneOldRecords periodically cleans the database from old scan and benchmarks.
-func (api *portalAPI) pruneOldRecords() {
-	for {
-		select {
-		case <-api.stopChan:
-			return
-		case <-time.After(24 * time.Hour):
-		}
-
-		_, err := api.db.Exec(`
-			DELETE FROM scans
-			WHERE ran_at < ?
-		`, time.Now().AddDate(0, 0, -14).Unix())
-		if err != nil {
-			api.log.Error("couldn't delete old scans", zap.Error(err))
-		}
-
-		_, err = api.db.Exec(`
-			DELETE FROM benchmarks
-			WHERE ran_at < ?
-		`, time.Now().AddDate(0, 0, -56).Unix())
-		if err != nil {
-			api.log.Error("couldn't delete old benchmarks", zap.Error(err))
-		}
-	}
 }
 
 // calculateAverages calculates the averages for the given network.
