@@ -122,15 +122,14 @@ type HostDB struct {
 	tg siasync.ThreadGroup
 	mu sync.Mutex
 
-	benchmarking         bool
-	initialScanLatencies []time.Duration
-	scanList             []*HostDBEntry
-	benchmarkList        []*HostDBEntry
-	scanMap              map[types.PublicKey]bool
-	scanThreads          int
-	benchmarkThreads     int
-	priceLimits          hostDBPriceLimits
-	blockedDomains       *blockedDomains
+	benchmarking     bool
+	scanList         []*HostDBEntry
+	benchmarkList    []*HostDBEntry
+	scanMap          map[types.PublicKey]bool
+	scanThreads      int
+	benchmarkThreads int
+	priceLimits      hostDBPriceLimits
+	blockedDomains   *blockedDomains
 }
 
 // RecentUpdates returns a list of the most recent updates since the last retrieval.

@@ -3,7 +3,6 @@ package hostdb
 import (
 	"context"
 	"math"
-	"sort"
 	"strings"
 	"time"
 
@@ -77,20 +76,8 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	var errMsg string
 	var start time.Time
 	err = func() error {
-		timeout := 10 * time.Second
-		if len(hdb.initialScanLatencies) > minScans {
-			hdb.log.Error("initialScanLatencies too large", zap.Int("limit", minScans))
-		}
-		if len(hdb.initialScanLatencies) == minScans {
-			timeout = hdb.initialScanLatencies[len(hdb.initialScanLatencies)/2]
-			timeout *= 5
-			if timeout > 10*time.Second {
-				timeout = 10 * time.Second
-			}
-		}
-
 		// Create a context and set up its cancelling.
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		connCloseChan := make(chan struct{})
 		go func() {
 			select {
@@ -152,17 +139,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	}
 	if err != nil {
 		hdb.log.Error("couldn't update scan history", zap.Error(err))
-	}
-
-	// Add the scan to the initialScanLatencies if it was successful.
-	if success && len(hdb.initialScanLatencies) < 25 {
-		hdb.initialScanLatencies = append(hdb.initialScanLatencies, latency)
-		// If the slice has reached its maximum size we sort it.
-		if len(hdb.initialScanLatencies) == 25 {
-			sort.Slice(hdb.initialScanLatencies, func(i, j int) bool {
-				return hdb.initialScanLatencies[i] < hdb.initialScanLatencies[j]
-			})
-		}
 	}
 
 	// Delete the host from scanMap.
