@@ -374,18 +374,17 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.LastIPChange = h.LastIPChange
 			host.Settings = h.Settings
 			host.PriceTable = h.PriceTable
-			interactions := nodeInteractions{
-				Uptime:      h.Uptime,
-				Downtime:    h.Downtime,
-				LastSeen:    h.LastSeen,
-				ActiveHosts: h.ActiveHosts,
-				HostInteractions: hostdb.HostInteractions{
-					HistoricSuccesses: h.Interactions.HistoricSuccesses,
-					HistoricFailures:  h.Interactions.HistoricFailures,
-					RecentSuccesses:   h.Interactions.RecentSuccesses,
-					RecentFailures:    h.Interactions.RecentFailures,
-					LastUpdate:        h.Interactions.LastUpdate,
-				},
+			interactions := host.Interactions[node]
+			interactions.Uptime = h.Uptime
+			interactions.Downtime = h.Downtime
+			interactions.LastSeen = h.LastSeen
+			interactions.ActiveHosts = h.ActiveHosts
+			interactions.HostInteractions = hostdb.HostInteractions{
+				HistoricSuccesses: h.Interactions.HistoricSuccesses,
+				HistoricFailures:  h.Interactions.HistoricFailures,
+				RecentSuccesses:   h.Interactions.RecentSuccesses,
+				RecentFailures:    h.Interactions.RecentFailures,
+				LastUpdate:        h.Interactions.LastUpdate,
 			}
 			host.Interactions[node] = interactions
 		} else {
