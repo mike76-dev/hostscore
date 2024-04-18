@@ -10,11 +10,11 @@ This guide will assume that you use Ubuntu Server 22.04 LTS. If you run any othe
 
 ## Downloading Binaries
 
-Log into your server and download the binaries. This guide assumes that you will use the version `0.1.0` for an x86 CPU:
+Log into your server and download the binaries. This guide assumes that you will use the version `1.1.1` for an x86 CPU:
 ```
 mkdir ~/hostscore
 cd ~/hostscore
-wget -q https://github.com/mike76-dev/hostscore/releases/download/v0.1.0/hostscore_linux_amd64.zip
+wget -q https://github.com/mike76-dev/hostscore/releases/download/v1.1.1-hsd/hostscore_linux_amd64.zip
 unzip hostscore_linux_amd64.zip
 rm hostscore_linux_amd64.zip
 ```
@@ -75,9 +75,9 @@ These commands will install and start MySQL, but will not prompt you to set a pa
 ```
 $ sudo mysql
 ```
-Then run the following `ALTER USER` command to change the root user’s authentication method to one that uses a password. The following example changes the authentication method to `mysql_native_password`:
+Then run the following `ALTER USER` command to change the root user’s authentication method to one that uses a password. The following example changes the authentication method to `cached_sha2_password`:
 ```
-mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
+mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH cached_sha2_password BY 'password';
 ```
 After making this change, exit the MySQL prompt:
 ```
@@ -145,7 +145,7 @@ mysql> CREATE DATABASE hostscore;
 ```
 Then create a user for this database. This guide will be using `hsuser` as the user name. Take a note of this name and be sure to change password to a strong password of your choice:
 ```
-mysql> CREATE USER 'hsuser'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
+mysql> CREATE USER 'hsuser'@'localhost' IDENTIFIED WITH cached_sha2_password BY 'password';
 ```
 Now grant this user access to the database:
 ```
@@ -256,23 +256,23 @@ $ journalctl -u hsd -f
 If everything went well, you should see the following output:
 ```
 Output:
-Mar 03 12:37:29 server systemd[1]: Started hsd.
-Mar 03 12:37:29 server hsd[1945]: Using HSD_CONFIG_DIR environment variable to load config.
-Mar 03 12:37:29 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
-Mar 03 12:37:29 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
-Mar 03 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
-Mar 03 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
-Mar 03 12:37:29 server hsd[1945]: hsd v0.1.0
-Mar 03 12:37:29 server hsd[1945]: Git Revision 047f00c
-Mar 03 12:37:29 server hsd[1945]: Loading...
-Mar 03 12:37:29 server hsd[1945]: Connecting to the SQL database...
-Mar 03 12:37:29 server hsd[1945]: Connecting to Mainnet...
-Mar 03 12:37:29 server hsd[1945]: Connecting to Zen...
-Mar 03 12:37:29 server hsd[1945]: Loading wallet...
-Mar 03 12:37:29 server hsd[1945]: Loading host database...
-Mar 03 12:37:30 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
-Mar 03 12:37:30 server hsd[1945]: p2p Zen: Listening on [::]:9881
-Mar 03 12:37:30 server hsd[1945]: api: Listening on [::]:9980
+Apr 18 12:37:29 server systemd[1]: Started hsd.
+Apr 18 12:37:29 server hsd[1945]: Using HSD_CONFIG_DIR environment variable to load config.
+Apr 18 12:37:29 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
+Apr 18 12:37:29 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
+Apr 18 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
+Apr 18 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
+Apr 18 12:37:29 server hsd[1945]: hsd v1.1.1
+Apr 18 12:37:29 server hsd[1945]: Git Revision 047f00c
+Apr 18 12:37:29 server hsd[1945]: Loading...
+Apr 18 12:37:29 server hsd[1945]: Connecting to the SQL database...
+Apr 18 12:37:29 server hsd[1945]: Connecting to Mainnet...
+Apr 18 12:37:29 server hsd[1945]: Connecting to Zen...
+Apr 18 12:37:29 server hsd[1945]: Loading wallet...
+Apr 18 12:37:29 server hsd[1945]: Loading host database...
+Apr 18 12:37:30 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
+Apr 18 12:37:30 server hsd[1945]: p2p Zen: Listening on [::]:9881
+Apr 18 12:37:30 server hsd[1945]: api: Listening on [::]:9980
 ```
 The daemon will now be syncing to the blockchain. You can monitor the progress with the following command:
 ```
@@ -292,8 +292,8 @@ Once the node is synced, the output will change:
 Output:
 {
 	"network": "Mainnet",
-	"height": 459803,
-	"id": "bid:0000000000000000a8240e67be4cab57db6a9b546524920ce1d8d22cd84ac9cd",
+	"height": 466428,
+	"id": "bid:00000000000000000d826c4eaa3212ef0f92ed837b22b8115ea6c7c40d80648c",
 	"synced": true
 }
 ```
