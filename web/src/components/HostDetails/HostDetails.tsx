@@ -84,16 +84,18 @@ export const HostDetails = (props: HostDetailsProps) => {
                             network={network}
                             host={host}
                         />
+                    </div>
+                    <div className="host-details-subcontainer">
                         <HostPrices
                             darkMode={props.darkMode}
                             data={priceChanges}
                         />
+                        <HostResults
+                            darkMode={props.darkMode}
+                            host={host}
+                            node={node}
+                        />
                     </div>
-                    <HostResults
-                        darkMode={props.darkMode}
-                        host={host}
-                        node={node}
-                    />
                 </>
 			:
 				<div className="host-not-found">Host Not Found</div>

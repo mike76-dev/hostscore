@@ -20,6 +20,7 @@
 .host-details-subcontainer {
     display: flex;
     flex-direction: column;
+    width: 50%;
 }
 
 .host-details-container .button-container {
@@ -38,6 +39,10 @@
 	.host-details-container {
 		flex-direction: column;
 	}
+
+    .host-details-subcontainer {
+        width: inherit;
+    }
 
     .host-details-loader {
         left: 40vw;
