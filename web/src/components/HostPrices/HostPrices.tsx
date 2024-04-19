@@ -118,13 +118,13 @@ const PriceChart = (props: PriceChartProps) => {
         const { minValue, numPoints, interval } = scaling(data, props.maxTimestamp, props.scale)
         let datasets: Dataset[] = []
         let labels: string[] = []
-        let remainingStorage: number[] = []
+        let usedStorage: number[] = []
         let totalStorage: number[] = []
         let uploadPrice: number[] = []
         let downloadPrice: number[] = []
         let storagePrice: number[] = []
         let collateral: number[] = []
-        let rs = 0
+        let us = 0
         let ts = 0
         let up = 0
         let dp = 0
@@ -133,7 +133,7 @@ const PriceChart = (props: PriceChartProps) => {
         let start = 0
         for (let i = 0; i < props.data.length; i++) {
             if (minValue.getTime() < (new Date(props.data[i].timestamp)).getTime()) break
-            rs = props.data[i].remainingStorage / 1e12
+            us = (props.data[i].totalStorage - props.data[i].remainingStorage) / 1e12
             ts = props.data[i].totalStorage / 1e12
             up = convertPriceRaw(props.data[i].uploadPrice)
             dp = convertPriceRaw(props.data[i].downloadPrice)
@@ -141,7 +141,7 @@ const PriceChart = (props: PriceChartProps) => {
             col = convertPriceRaw(props.data[i].collateral) * 144 * 30
             start = i
         }
-        remainingStorage.push(rs)
+        usedStorage.push(us)
         totalStorage.push(ts)
         uploadPrice.push(up)
         downloadPrice.push(dp)
@@ -152,7 +152,7 @@ const PriceChart = (props: PriceChartProps) => {
             minValue.setTime(minValue.getTime() + interval)
             for (let j = start; j < props.data.length; j++) {
                 if (minValue.getTime() < (new Date(props.data[j].timestamp)).getTime()) break
-                rs = props.data[j].remainingStorage / 1e12
+                us = (props.data[j].totalStorage - props.data[j].remainingStorage) / 1e12
                 ts = props.data[j].totalStorage / 1e12
                 up = convertPriceRaw(props.data[j].uploadPrice)
                 dp = convertPriceRaw(props.data[j].downloadPrice)
@@ -160,7 +160,7 @@ const PriceChart = (props: PriceChartProps) => {
                 col = convertPriceRaw(props.data[j].collateral) * 144 * 30
                 start = j
             }
-            remainingStorage.push(rs)
+            usedStorage.push(us)
             totalStorage.push(ts)
             uploadPrice.push(up)
             downloadPrice.push(dp)
@@ -181,8 +181,8 @@ const PriceChart = (props: PriceChartProps) => {
             order: 2
         })
         datasets.push({
-            data: remainingStorage,
-            label: 'Remaining Storage',
+            data: usedStorage,
+            label: 'Used Storage',
             yAxisID: 'y1',
             borderColor: 'rgba(0, 255, 255, 0.25)',
             backgroundColor: 'rgba(0, 255, 255, 0.25)',
