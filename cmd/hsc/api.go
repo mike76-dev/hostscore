@@ -61,20 +61,21 @@ type benchmarksResponse struct {
 	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
 }
 
+type networkStatus struct {
+	Height  uint64 `json:"height"`
+	Balance string `json:"balance"`
+}
+
 type nodeStatus struct {
-	Location   string `json:"location"`
-	Status     bool   `json:"status"`
-	Version    string `json:"version"`
-	Height     uint64 `json:"heightMainnet"`
-	HeightZen  uint64 `json:"heightZen"`
-	Balance    string `json:"balanceMainnet"`
-	BalanceZen string `json:"balanceZen"`
+	Online   bool                     `json:"online"`
+	Version  string                   `json:"version"`
+	Networks map[string]networkStatus `json:"networks"`
 }
 
 type statusResponse struct {
 	APIResponse
-	Version string       `json:"version"`
-	Nodes   []nodeStatus `json:"nodes"`
+	Nodes   map[string]nodeStatus `json:"nodes"`
+	Version string                `json:"version"`
 }
 
 type priceChange struct {
@@ -204,6 +205,7 @@ type portalAPI struct {
 	stopChan    chan struct{}
 	averages    networkAverages
 	averagesZen networkAverages
+	nodes       map[string]nodeStatus
 }
 
 func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *responseCache) (*portalAPI, error) {
@@ -217,6 +219,7 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		hosts:    map[types.PublicKey]*portalHost{},
 		hostsZen: map[types.PublicKey]*portalHost{},
 		stopChan: make(chan struct{}),
+		nodes:    make(map[string]nodeStatus),
 	}
 
 	err := api.load()
@@ -224,6 +227,7 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		return nil, err
 	}
 
+	go api.doRequestStatus()
 	go api.requestUpdates()
 	go api.updateAverages()
 
@@ -256,6 +260,67 @@ func (api *portalAPI) requestUpdates() {
 				timeout = 5 * time.Second
 			}
 		}
+	}
+}
+
+func (api *portalAPI) requestStatus() {
+	nodes := make(map[string]nodeStatus)
+	var mu sync.Mutex
+	for n, c := range api.clients {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		var status client.NodeStatusResponse
+		var err error
+		done := make(chan struct{})
+		go func() {
+			status, err = c.NodeStatus()
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			if err != nil {
+				api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
+				mu.Lock()
+				nodes[n] = nodeStatus{Online: false}
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				nodes[n] = nodeStatus{
+					Online:   true,
+					Version:  status.Version,
+					Networks: make(map[string]networkStatus),
+				}
+				nodes[n].Networks["mainnet"] = networkStatus{
+					Height:  status.Height,
+					Balance: balanceStatus(status.Balance.Siacoins),
+				}
+				nodes[n].Networks["zen"] = networkStatus{
+					Height:  status.HeightZen,
+					Balance: balanceStatus(status.BalanceZen.Siacoins),
+				}
+				mu.Unlock()
+			}
+		case <-ctx.Done():
+			api.log.Error("NodeStatus call timed out", zap.String("node", n))
+			mu.Lock()
+			nodes[n] = nodeStatus{Online: false}
+			mu.Unlock()
+		}
+	}
+	api.nodes = nodes
+}
+
+func (api *portalAPI) doRequestStatus() {
+	api.requestStatus()
+	for {
+		select {
+		case <-api.stopChan:
+			return
+		case <-time.After(5 * time.Minute):
+		}
+		api.requestStatus()
 	}
 }
 
@@ -296,8 +361,8 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.changesHandler(w, req, ps)
 	})
-	router.GET("/status", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.statusHandler(w, req, ps)
+	router.GET("/service/status", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.serviceStatusHandler(w, req, ps)
 	})
 	router.GET("/averages", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.averagesHandler(w, req, ps)
@@ -642,52 +707,11 @@ func balanceStatus(balance types.Currency) string {
 	return "ok"
 }
 
-func (api *portalAPI) statusHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
-	var nodes []nodeStatus
-	for n, c := range api.clients {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		var status client.NodeStatusResponse
-		var err error
-		done := make(chan struct{})
-		go func() {
-			status, err = c.NodeStatus()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			if err != nil {
-				api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
-				nodes = append(nodes, nodeStatus{
-					Location: n,
-					Status:   false,
-				})
-			} else {
-				nodes = append(nodes, nodeStatus{
-					Location:   n,
-					Status:     true,
-					Version:    status.Version,
-					Height:     status.Height,
-					HeightZen:  status.HeightZen,
-					Balance:    balanceStatus(status.Balance.Siacoins),
-					BalanceZen: balanceStatus(status.BalanceZen.Siacoins),
-				})
-			}
-		case <-ctx.Done():
-			api.log.Error("NodeStatus call timed out", zap.String("node", n))
-			nodes = append(nodes, nodeStatus{
-				Location: n,
-				Status:   false,
-			})
-		}
-	}
-
+func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	writeJSON(w, statusResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		Version:     build.ClientVersion,
-		Nodes:       nodes,
+		Nodes:       api.nodes,
 	})
 }
 

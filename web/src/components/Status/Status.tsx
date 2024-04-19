@@ -3,16 +3,17 @@ import { useState, useEffect, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button, Loader } from '../'
 import Back from '../../assets/back.png'
-import { NodeStatus, getStatus } from '../../api'
+import { NodeStatus, getStatus, useLocations } from '../../api'
 import { NetworkContext } from '../../contexts'
 
 type StatusProps = { darkMode: boolean }
 
 export const Status = (props: StatusProps) => {
 	const navigate = useNavigate()
+    const locations = useLocations()
     const { network } = useContext(NetworkContext)
 	const [version, setVersion] = useState('')
-	const [nodes, setNodes] = useState<NodeStatus[]>([])
+	const [nodes, setNodes] = useState<{ [node: string]: NodeStatus }>()
 	const [time, setTime] = useState(new Date())
     const [loading, setLoading] = useState(false)
 	useEffect((): any => {
@@ -57,37 +58,41 @@ export const Status = (props: StatusProps) => {
 			    		<tbody>
 				    		<tr>
 					    		<th colSpan={2}>Node:</th>
-						    	{nodes && nodes.map(n => (
-							    	<th key={'header-' + n.location}>{n.location.toUpperCase()}</th>
+						    	{nodes && locations.map(location => (
+							    	<th key={'header-' + location.short}>{location.long}</th>
     							))}
 	    					</tr>
 		    				<tr>
 			    				<th colSpan={2}>Online:</th>
-				    			{nodes && nodes.map(n => (
-					    			<td key={'online-' + n.location}>
-						    			<div className={'status' + (n.status === true ? ' status-good' : ' status-bad')}></div>
+				    			{nodes && locations.map(location => (
+					    			<td key={'online-' + location.short}>
+						    			<div className={'status' + (nodes[location.short].online === true ? ' status-good' : ' status-bad')}></div>
 							    	</td>
     							))}
 	    					</tr>
 		    				<tr>
 			    				<th colSpan={2}>Version:</th>
-				    			{nodes && nodes.map(n => (
-                                    <td key={'version-' + n.location}>{n.status === true ? n.version : ''}</td>
+				    			{nodes && locations.map(location => (
+                                    <td key={'version-' + location.short}>
+                                        {nodes[location.short].online === true ? nodes[location.short].version : ''}
+                                    </td>
 						    	))}
     						</tr>
 	    					<tr>
 		    					<th rowSpan={2}>Mainnet:</th>
 			    				<td>Height</td>
-				    			{nodes && nodes.map(n => (
-					    			<td key={'height-mainnet-' + n.location}>{n.status === true ? n.heightMainnet : ''}</td>
+				    			{nodes && locations.map(location => (
+					    			<td key={'height-mainnet-' + location.short}>
+                                        {nodes[location.short].online === true ? nodes[location.short].networks['mainnet'].height : ''}
+                                    </td>
 						    	))}
     						</tr>
 	    					<tr>
 		    					<td>Balance</td>
-			    				{nodes && nodes.map(n => (
-    				    			<td key={'balance-mainnet-' + n.location}>
-                                        {n.status === true &&
-	    				    				<div className={'status status-' + getStyle(n.balanceMainnet)}></div>
+			    				{nodes && locations.map(location => (
+    				    			<td key={'balance-mainnet-' + location.short}>
+                                        {nodes[location.short].online === true &&
+	    				    				<div className={'status status-' + getStyle(nodes[location.short].networks['mainnet'].balance)}></div>
                                         }
 		    				    	</td>
 							    ))}
@@ -95,24 +100,26 @@ export const Status = (props: StatusProps) => {
 	    					<tr>
 		    					<th rowSpan={2}>Zen:</th>
 			    				<td>Height</td>
-				    			{nodes && nodes.map(n => (
-					    			<td key={'height-zen-' + n.location}>{n.status === true ? n.heightZen : ''}</td>
+				    			{nodes && locations.map(location => (
+					    			<td key={'height-zen-' + location.short}>
+                                        {nodes[location.short].online === true ? nodes[location.short].networks['zen'].height : ''}
+                                    </td>
 						    	))}
     						</tr>
 	    					<tr>
 		    					<td>Balance</td>
-			    				{nodes && nodes.map(n => (
-    				    			<td key={'balance-zen-' + n.location}>
-                                        {n.status === true &&
-	    				    				<div className={'status status-' + getStyle(n.balanceZen)}></div>
+			    				{nodes && locations.map(location => (
+    				    			<td key={'balance-zen-' + location.short}>
+                                        {nodes[location.short].online === true &&
+	    				    				<div className={'status status-' + getStyle(nodes[location.short].networks['zen'].balance)}></div>
                                         }
 		    				    	</td>
 							    ))}
     						</tr>
-	    					<tr><td colSpan={nodes.length + 2}></td></tr>
+	    					<tr><td colSpan={locations.length + 2}></td></tr>
 		    				<tr>
 			    				<th colSpan={2}>Portal Version:</th>
-				    			<td colSpan={nodes.length}>{version}</td>
+				    			<td colSpan={locations.length}>{version}</td>
 					    	</tr>
     					</tbody>
 	    			</table>

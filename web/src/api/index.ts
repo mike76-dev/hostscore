@@ -61,8 +61,13 @@ export const getHost = async (
 }
 
 export const getStatus = async ():
-	Promise<{ status: string, message: string, version: string, nodes: NodeStatus[] }> => {
-	const url = '/status'
+	Promise<{
+        status: string,
+        message: string,
+        nodes: { [node: string]: NodeStatus },
+        version: string
+    }> => {
+	const url = '/service/status'
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))

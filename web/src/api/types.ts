@@ -136,14 +136,15 @@ export type Host = {
     timezone: string
 }
 
+export type NetworkStatus = {
+    height: number,
+    balance: string
+}
+
 export type NodeStatus = {
-    location: string,
-    status: boolean,
+    online: boolean,
     version: string,
-    heightMainnet: number,
-    heightZen: number,
-    balanceMainnet: string,
-    balanceZen: string
+    networks: { [network: string]: NetworkStatus },
 }
 
 export type PriceChange = {
