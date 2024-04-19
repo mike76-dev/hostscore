@@ -61,15 +61,10 @@ export const getHost = async (
 }
 
 export const getStatus = async ():
-	Promise<{
-        status: string,
-        message: string,
-        nodes: { [node: string]: NodeStatus },
-        version: string
-    }> => {
+	Promise<{ nodes: { [node: string]: NodeStatus }, version: string }> => {
 	const url = '/service/status'
 	return instance.get(url)
-	.then(response => response.data)
+	.then(response => { console.log(response); return response.data})
 	.catch(error => console.log(error))
 }
 
@@ -99,11 +94,14 @@ export const getAverages = async (network: string):
 	.catch(error => console.log(error))
 }
 
-export const getCountries = async (network: string):
-	Promise<{ status: string, message: string, countries: string[] }> => {
-	const url = '/countries?network=' + network
+export const getCountries = async (network: string, all: boolean):
+	Promise<{ countries: string[] }> => {
+	const url = '/network/countries?network=' + network + (all ? '' : '&all=false')
 	return instance.get(url)
-	.then(response => response.data)
+	.then(response => {
+        if (response.status === 200) return response.data
+        else console.log(response.statusText)
+    })
 	.catch(error => console.log(error))
 }
 

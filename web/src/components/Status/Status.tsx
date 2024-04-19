@@ -26,7 +26,7 @@ export const Status = (props: StatusProps) => {
         setLoading(true)
 		getStatus()
 		.then(data => {
-			if (data && data.status === 'ok') {
+			if (data) {
 				setVersion(data.version)
 				setNodes(data.nodes)
 			} else {

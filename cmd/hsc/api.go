@@ -73,7 +73,6 @@ type nodeStatus struct {
 }
 
 type statusResponse struct {
-	APIResponse
 	Nodes   map[string]nodeStatus `json:"nodes"`
 	Version string                `json:"version"`
 }
@@ -100,7 +99,6 @@ type averagesResponse struct {
 }
 
 type countriesResponse struct {
-	APIResponse
 	Countries []string `json:"countries"`
 }
 
@@ -192,20 +190,18 @@ const (
 )
 
 type portalAPI struct {
-	router      httprouter.Router
-	store       *jsonStore
-	db          *sql.DB
-	token       string
-	log         *zap.Logger
-	clients     map[string]*client.Client
-	mu          sync.RWMutex
-	cache       *responseCache
-	hosts       map[types.PublicKey]*portalHost
-	hostsZen    map[types.PublicKey]*portalHost
-	stopChan    chan struct{}
-	averages    networkAverages
-	averagesZen networkAverages
-	nodes       map[string]nodeStatus
+	router   httprouter.Router
+	store    *jsonStore
+	db       *sql.DB
+	token    string
+	log      *zap.Logger
+	clients  map[string]*client.Client
+	mu       sync.RWMutex
+	cache    *responseCache
+	hosts    map[string]map[types.PublicKey]*portalHost
+	stopChan chan struct{}
+	averages map[string]networkAverages
+	nodes    map[string]nodeStatus
 }
 
 func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *responseCache) (*portalAPI, error) {
@@ -216,11 +212,14 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		log:      logger,
 		clients:  make(map[string]*client.Client),
 		cache:    cache,
-		hosts:    map[types.PublicKey]*portalHost{},
-		hostsZen: map[types.PublicKey]*portalHost{},
+		hosts:    make(map[string]map[types.PublicKey]*portalHost),
 		stopChan: make(chan struct{}),
+		averages: make(map[string]networkAverages),
 		nodes:    make(map[string]nodeStatus),
 	}
+
+	api.hosts["mainnet"] = make(map[types.PublicKey]*portalHost)
+	api.hosts["zen"] = make(map[types.PublicKey]*portalHost)
 
 	err := api.load()
 	if err != nil {
@@ -361,14 +360,15 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.changesHandler(w, req, ps)
 	})
+	router.GET("/network/countries", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.networkCountriesHandler(w, req, ps)
+	})
+
 	router.GET("/service/status", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.serviceStatusHandler(w, req, ps)
 	})
 	router.GET("/averages", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.averagesHandler(w, req, ps)
-	})
-	router.GET("/countries", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.countriesHandler(w, req, ps)
 	})
 
 	api.mu.Lock()
@@ -709,9 +709,8 @@ func balanceStatus(balance types.Currency) string {
 
 func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
 	writeJSON(w, statusResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		Version:     build.ClientVersion,
-		Nodes:       api.nodes,
+		Version: build.ClientVersion,
+		Nodes:   api.nodes,
 	})
 }
 
@@ -724,19 +723,18 @@ func (api *portalAPI) onlineHostsHandler(w http.ResponseWriter, req *http.Reques
 		})
 		return
 	}
+	if network != "mainnet" && network != "zen" {
+		writeJSON(w, APIResponse{
+			Status:  "error",
+			Message: "wrong network",
+		})
+		return
+	}
 	var count int
 	api.mu.RLock()
-	if network == "mainnet" {
-		for _, host := range api.hosts {
-			if api.isOnline(*host) {
-				count++
-			}
-		}
-	} else if network == "zen" {
-		for _, host := range api.hostsZen {
-			if api.isOnline(*host) {
-				count++
-			}
+	for _, host := range api.hosts[network] {
+		if api.isOnline(*host) {
+			count++
 		}
 	}
 	api.mu.RUnlock()
@@ -804,45 +802,42 @@ func (api *portalAPI) averagesHandler(w http.ResponseWriter, req *http.Request, 
 		})
 		return
 	}
-	var averages networkAverages
-	if network == "mainnet" {
-		averages = api.averages
-	} else {
-		averages = api.averagesZen
-	}
+
+	averages := api.averages[network]
+
 	writeJSON(w, averagesResponse{
 		APIResponse: APIResponse{Status: "ok"},
 		Averages:    averages,
 	})
 }
 
-func (api *portalAPI) countriesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
+		network = "mainnet"
+	} else {
+		if network != "mainnet" && network != "zen" {
+			writeError(w, "wrong network", http.StatusBadRequest)
+			return
+		}
+	}
+	allHosts := strings.ToLower(req.FormValue("all"))
+	var all bool
+	if allHosts == "" || allHosts == "true" {
+		all = true
+	} else if allHosts == "false" {
+		all = false
+	} else {
+		writeError(w, "wrong all parameter", http.StatusBadRequest)
 		return
 	}
-	if network != "mainnet" && network != "zen" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "wrong network",
-		})
-		return
-	}
-	countries, err := api.getCountries(network)
+	countries, err := api.getCountries(network, all)
 	if err != nil {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "internal error",
-		})
+		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, countriesResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		Countries:   countries,
+		Countries: countries,
 	})
 }
 
@@ -851,5 +846,14 @@ func writeJSON(w http.ResponseWriter, obj interface{}) {
 	err := json.NewEncoder(w).Encode(obj)
 	if _, isJsonErr := err.(*json.SyntaxError); isJsonErr {
 		log.Println("ERROR: failed to encode API response:", err)
+	}
+}
+
+func writeError(w http.ResponseWriter, message string, code int) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	err := json.NewEncoder(w).Encode(message)
+	if _, isJsonErr := err.(*json.SyntaxError); isJsonErr {
+		log.Println("ERROR: failed to encode API error response:", err)
 	}
 }

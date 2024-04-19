@@ -116,13 +116,15 @@ export const Hosts = (props: HostsProps) => {
             }
             setLoadingAverages(false)
         })
-        getCountries(network)
+    }, [network, time, setAverages, setLoadingAverages])
+    useEffect(() => {
+        getCountries(network, !onlineOnly)
         .then(data => {
-            if (data && data.status === 'ok' && data.countries) {
+            if (data && data.countries) {
                 setCountries(data.countries)
             }
         })
-    }, [network, time, setAverages, setLoadingAverages, setCountries])
+    }, [network, time, onlineOnly, setCountries])
     return (
         <div className="hosts-container">
             <div className="hosts-subcontainer">

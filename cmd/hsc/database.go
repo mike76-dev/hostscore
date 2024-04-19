@@ -309,10 +309,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	for _, h := range updates.Hosts {
 		var host *portalHost
 		var exists bool
-		if h.Network == "mainnet" {
-			host, exists = api.hosts[h.PublicKey]
-		} else {
-			host, exists = api.hostsZen[h.PublicKey]
+		hosts, ok := api.hosts[h.Network]
+		if ok {
+			host, exists = hosts[h.PublicKey]
 		}
 		var count int
 		if err := priceChangeCountStmt.QueryRow(h.PublicKey[:]).Scan(&count); err != nil {
@@ -435,11 +434,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			api.mu.Unlock()
 			return utils.AddContext(err, "couldn't update score")
 		}
-		if h.Network == "mainnet" {
-			api.hosts[h.PublicKey] = host
-		} else if h.Network == "zen" {
-			api.hostsZen[h.PublicKey] = host
-		}
+		api.hosts[h.Network][h.PublicKey] = host
 	}
 
 	toUpdate := make(map[string]map[types.PublicKey]struct{})
@@ -469,13 +464,8 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 
 	for network, keys := range toUpdate {
 		for pk := range keys {
-			var host *portalHost
-			var exists bool
-			if network == "mainnet" {
-				host, exists = api.hosts[pk]
-			} else {
-				host, exists = api.hostsZen[pk]
-			}
+			hosts := api.hosts[network]
+			host, exists := hosts[pk]
 			if !exists {
 				api.log.Error("orphaned scan or benchmark found", zap.String("network", network), zap.Stringer("host", pk))
 				continue
@@ -551,10 +541,10 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 
 	var hosts, hostsZen []portalHost
-	for _, host := range api.hosts {
+	for _, host := range api.hosts["mainnet"] {
 		hosts = append(hosts, *host)
 	}
-	for _, host := range api.hostsZen {
+	for _, host := range api.hosts["zen"] {
 		hostsZen = append(hostsZen, *host)
 	}
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
@@ -592,10 +582,10 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		}
 	})
 	for i := range hosts {
-		api.hosts[hosts[i].PublicKey].Rank = i + 1
+		api.hosts["mainnet"][hosts[i].PublicKey].Rank = i + 1
 	}
 	for i := range hostsZen {
-		api.hostsZen[hostsZen[i].PublicKey].Rank = i + 1
+		api.hosts["zen"][hostsZen[i].PublicKey].Rank = i + 1
 	}
 	api.mu.Unlock()
 
@@ -643,14 +633,9 @@ func pricesChanged(os, ns rhpv2.HostSettings) bool {
 
 // getHost retrieves the information about a specific host.
 func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHost, err error) {
-	var h *portalHost
-	var exists bool
 	api.mu.RLock()
-	if network == "mainnet" {
-		h, exists = api.hosts[pk]
-	} else if network == "zen" {
-		h, exists = api.hostsZen[pk]
-	}
+	hosts := api.hosts[network]
+	h, exists := hosts[pk]
 	api.mu.RUnlock()
 	if !exists {
 		return portalHost{}, errors.New("host not found")
@@ -710,13 +695,9 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		rows.Close()
 
 		api.mu.RLock()
+		allHosts := api.hosts[network]
 		for _, key := range keys {
-			var host *portalHost
-			if network == "mainnet" {
-				host = api.hosts[key]
-			} else if network == "zen" {
-				host = api.hostsZen[key]
-			}
+			host := allHosts[key]
 			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
 				hosts = append(hosts, *host)
 			}
@@ -724,17 +705,10 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		api.mu.RUnlock()
 	} else {
 		api.mu.RLock()
-		if network == "mainnet" {
-			for _, host := range api.hosts {
-				if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
-					hosts = append(hosts, *host)
-				}
-			}
-		} else if network == "zen" {
-			for _, host := range api.hostsZen {
-				if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
-					hosts = append(hosts, *host)
-				}
+		allHosts := api.hosts[network]
+		for _, host := range allHosts {
+			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+				hosts = append(hosts, *host)
 			}
 		}
 		api.mu.RUnlock()
@@ -1229,19 +1203,15 @@ func (api *portalAPI) load() error {
 			}
 		}
 
-		if network == "mainnet" {
-			api.hosts[host.PublicKey] = host
-		} else if network == "zen" {
-			api.hostsZen[host.PublicKey] = host
-		}
+		api.hosts[network][host.PublicKey] = host
 	}
 	rows.Close()
 
 	var hosts, hostsZen []portalHost
-	for _, host := range api.hosts {
+	for _, host := range api.hosts["mainnet"] {
 		hosts = append(hosts, *host)
 	}
-	for _, host := range api.hostsZen {
+	for _, host := range api.hosts["zen"] {
 		hostsZen = append(hostsZen, *host)
 	}
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
@@ -1279,24 +1249,24 @@ func (api *portalAPI) load() error {
 		}
 	})
 	for i := range hosts {
-		api.hosts[hosts[i].PublicKey].Rank = i + 1
+		api.hosts["mainnet"][hosts[i].PublicKey].Rank = i + 1
 	}
 	for i := range hostsZen {
-		api.hostsZen[hostsZen[i].PublicKey].Rank = i + 1
+		api.hosts["zen"][hostsZen[i].PublicKey].Rank = i + 1
 	}
 
-	if err := api.loadInteractions(api.hosts, "mainnet"); err != nil {
+	if err := api.loadInteractions("mainnet"); err != nil {
 		return utils.AddContext(err, "couldn't load mainnet interactions")
 	}
 
-	if err := api.loadInteractions(api.hostsZen, "zen"); err != nil {
+	if err := api.loadInteractions("zen"); err != nil {
 		return utils.AddContext(err, "couldn't load zen interactions")
 	}
 
 	return nil
 }
 
-func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, network string) error {
+func (api *portalAPI) loadInteractions(network string) error {
 	intStmt, err := api.db.Prepare(`
 		SELECT
 			node,
@@ -1329,6 +1299,7 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 	}
 	defer intStmt.Close()
 
+	hosts := api.hosts[network]
 	for _, host := range hosts {
 		rows, err := intStmt.Query(network, host.PublicKey[:])
 		if err != nil {
@@ -1399,10 +1370,10 @@ func (api *portalAPI) loadInteractions(hosts map[types.PublicKey]*portalHost, ne
 		rows.Close()
 	}
 
-	return utils.ComposeErrors(api.loadScans(hosts, network), api.loadBenchmarks(hosts, network))
+	return utils.ComposeErrors(api.loadScans(network), api.loadBenchmarks(network))
 }
 
-func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network string) error {
+func (api *portalAPI) loadScans(network string) error {
 	scanStmt, err := api.db.Prepare(`
 		SELECT
 			ran_at,
@@ -1421,6 +1392,7 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 	}
 	defer scanStmt.Close()
 
+	hosts := api.hosts[network]
 	for _, host := range hosts {
 		for node, interactions := range host.Interactions {
 			rows, err := scanStmt.Query(network, node, host.PublicKey[:])
@@ -1453,7 +1425,7 @@ func (api *portalAPI) loadScans(hosts map[types.PublicKey]*portalHost, network s
 	return nil
 }
 
-func (api *portalAPI) loadBenchmarks(hosts map[types.PublicKey]*portalHost, network string) error {
+func (api *portalAPI) loadBenchmarks(network string) error {
 	benchmarkStmt, err := api.db.Prepare(`
 		SELECT
 			ran_at,
@@ -1474,6 +1446,7 @@ func (api *portalAPI) loadBenchmarks(hosts map[types.PublicKey]*portalHost, netw
 	}
 	defer benchmarkStmt.Close()
 
+	hosts := api.hosts[network]
 	for _, host := range hosts {
 		for node, interactions := range host.Interactions {
 			rows, err := benchmarkStmt.Query(network, node, host.PublicKey[:])
@@ -1571,12 +1544,12 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs [
 func (api *portalAPI) calculateAverages() {
 	api.mu.RLock()
 	var hosts, hostsZen []portalHost
-	for _, host := range api.hosts {
+	for _, host := range api.hosts["mainnet"] {
 		if api.isOnline(*host) {
 			hosts = append(hosts, *host)
 		}
 	}
-	for _, host := range api.hostsZen {
+	for _, host := range api.hosts["zen"] {
 		if api.isOnline(*host) {
 			hostsZen = append(hostsZen, *host)
 		}
@@ -1590,8 +1563,8 @@ func (api *portalAPI) calculateAverages() {
 		return a.Rank - b.Rank
 	})
 
-	api.averages = calculateTiers(hosts)
-	api.averagesZen = calculateTiers(hostsZen)
+	api.averages["mainnet"] = calculateTiers(hosts)
+	api.averages["zen"] = calculateTiers(hostsZen)
 }
 
 func calculateTiers(sortedHosts []portalHost) networkAverages {
@@ -1657,26 +1630,61 @@ func (api *portalAPI) updateAverages() {
 
 // getCountries returns the list of countries the hosts in the given
 // network reside in.
-func (api *portalAPI) getCountries(network string) (countries []string, err error) {
-	rows, err := api.db.Query(`
-		SELECT DISTINCT country
-		FROM locations
-		WHERE country <> ''
-		AND network = ?
-		ORDER BY country ASC
-	`, network)
-	if err != nil {
-		return nil, utils.AddContext(err, "couldn't query countries")
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var c string
-		if err := rows.Scan(&c); err != nil {
-			return nil, utils.AddContext(err, "couldn't decode country")
+func (api *portalAPI) getCountries(network string, all bool) (countries []string, _ error) {
+	if all {
+		rows, err := api.db.Query(`
+			SELECT DISTINCT country
+			FROM locations
+			WHERE country <> ''
+			AND network = ?
+			ORDER BY country ASC
+		`, network)
+		if err != nil {
+			return nil, utils.AddContext(err, "couldn't query countries")
 		}
+
+		for rows.Next() {
+			var c string
+			if err := rows.Scan(&c); err != nil {
+				rows.Close()
+				return nil, utils.AddContext(err, "couldn't decode country")
+			}
+			countries = append(countries, c)
+		}
+
+		rows.Close()
+		return countries, nil
+	}
+
+	stmt, err := api.db.Prepare(`
+		SELECT country
+		FROM locations
+		WHERE network = ?
+		AND public_key = ?
+	`)
+	if err != nil {
+		return nil, utils.AddContext(err, "couldn't prepare statement")
+	}
+	defer stmt.Close()
+
+	api.mu.RLock()
+	allCountries := make(map[string]struct{})
+	hosts := api.hosts[network]
+	for pk, host := range hosts {
+		if !api.isOnline(*host) {
+			continue
+		}
+		var c string
+		if err := stmt.QueryRow(network, pk[:]).Scan(&c); err != nil {
+			continue
+		}
+		allCountries[c] = struct{}{}
+	}
+	api.mu.RUnlock()
+
+	for c := range allCountries {
 		countries = append(countries, c)
 	}
 
-	return
+	return countries, nil
 }
