@@ -48,18 +48,18 @@
     padding-left: 1rem;
 }
 
-.averages-tooltip .tooltip-text {
+.host-info-tooltip .tooltip-text {
     left: 1.5rem;
     top: 0;
     right: unset;
     white-space: nowrap;
 }
 
-.averages-tooltip-row {
+.host-info-tooltip-row {
     display: flex;
     flex-direction: row;
 }
 
-.averages-tooltip-row span:first-child {
+.host-info-tooltip-row span:first-child {
     margin-right: 0.5rem;
 }

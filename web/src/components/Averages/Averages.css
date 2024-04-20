@@ -33,12 +33,19 @@
 }
 
 .averages-tooltip .tooltip-text {
-    min-width: 10rem;
+    min-width: 7rem;
+    left: 1.5rem;
+    top: 0;
+    right: unset;
 }
 
 @media screen and (max-width: 1000px) {
     .averages-container {
         margin-left: 0;
         margin-top: 1rem;
+    }
+
+    .averages-tooltip .tooltip-text {
+        min-width: 10rem;
     }
 }
