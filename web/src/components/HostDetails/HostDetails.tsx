@@ -50,11 +50,14 @@ export const HostDetails = (props: HostDetailsProps) => {
 		}
 	}, [network, hosts, publicKey])
     useEffect(() => {
+        if (!publicKey) return
         setLoadingPriceChanges(true)
-        getPriceChanges(network, publicKey || '')
+        let from = new Date()
+        from.setFullYear(from.getFullYear() - 1)
+        getPriceChanges(network, publicKey, from)
         .then(data => {
-            if (data && data.status === 'ok' && data.priceChanges) {
-                setPriceChanges(data.priceChanges)
+            if (data && data.changes) {
+                setPriceChanges(data.changes)
             }
             setLoadingPriceChanges(false)
         })

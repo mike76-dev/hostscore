@@ -63,9 +63,15 @@ export const getHost = async (
 
 export const getPriceChanges = async (
 	network: string,
-	publicKey: string
-): Promise<{ status: string, message: string, priceChanges: PriceChange[] }> => {
-	const url = '/changes?network=' + network + '&host=' + publicKey
+	host: string,
+    from?: Date,
+    to?: Date,
+    limit?: number
+): Promise<{ changes: PriceChange[] }> => {
+	const url = '/hosts/changes?network=' + network + '&host=' + host +
+        (from ? '&from=' + from.toISOString().replace('+', '%2B') : '') +
+        (to ? '&to=' + to.toISOString().replace('+', '%2B') : '') +
+        (limit ? '&limit=' + limit : '')
 	return instance.get(url)
 	.then(response => response.data)
 	.catch(error => console.log(error))
@@ -108,7 +114,7 @@ export const getStatus = async ():
 	Promise<{ nodes: { [node: string]: NodeStatus }, version: string }> => {
 	const url = '/service/status'
 	return instance.get(url)
-	.then(response => { console.log(response); return response.data})
+	.then(response => response.data)
 	.catch(error => console.log(error))
 }
 

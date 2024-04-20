@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -92,9 +93,7 @@ type priceChange struct {
 }
 
 type priceChangeResponse struct {
-	APIResponse
-	PublicKey    types.PublicKey `json:"publicKey"`
-	PriceChanges []priceChange   `json:"priceChanges"`
+	PriceChanges []priceChange `json:"changes"`
 }
 
 type averagesResponse struct {
@@ -351,8 +350,8 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/benchmarks", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.benchmarksHandler(w, req, ps)
 	})
-	router.GET("/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.changesHandler(w, req, ps)
+	router.GET("/hosts/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.hostsChangesHandler(w, req, ps)
 	})
 
 	router.GET("/network/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
@@ -735,44 +734,63 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 	})
 }
 
-func (api *portalAPI) changesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
+		network = "mainnet"
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
 	host := req.FormValue("host")
 	if host == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "host not provided",
-		})
+		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "invalid public key",
-		})
+		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
-	pcs, err := api.getPriceChanges(network, pk)
+	var from, to time.Time
+	f := req.FormValue("from")
+	if f != "" {
+		from, err = time.Parse(time.RFC3339, f)
+		if err != nil {
+			writeError(w, "invalid timestamp", http.StatusBadRequest)
+			return
+		}
+	}
+	t := req.FormValue("to")
+	if t != "" {
+		to, err = time.Parse(time.RFC3339, t)
+		if err != nil {
+			writeError(w, "invalid timestamp", http.StatusBadRequest)
+			return
+		}
+	}
+	limit := int64(-1)
+	lim := req.FormValue("limit")
+	if lim != "" {
+		limit, err = strconv.ParseInt(lim, 10, 64)
+		if err != nil {
+			writeError(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+	}
+	pcs, err := api.getPriceChanges(network, pk, from, to, limit)
+	if err != nil && errors.Is(err, errHostNotFound) {
+		writeError(w, "host not found", http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		api.log.Error("couldn't get price changes", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "internal error",
-		})
+		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, priceChangeResponse{
-		APIResponse:  APIResponse{Status: "ok"},
-		PublicKey:    pk,
 		PriceChanges: pcs,
 	})
 }

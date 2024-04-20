@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -18,6 +19,9 @@ import (
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
 )
+
+// errHostNotFound is returned when the specified host couldn't be found.
+var errHostNotFound = errors.New("host not found")
 
 // insertUpdates updates the database with new records.
 func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) error {
@@ -1482,7 +1486,28 @@ func (api *portalAPI) loadBenchmarks(network string) error {
 }
 
 // getPriceChanges retrieves the historic price changes of the given host.
-func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs []priceChange, err error) {
+func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey, from, to time.Time, limit int64) (pcs []priceChange, err error) {
+	f := int64(0)
+	t := time.Now().Unix()
+	if from.Unix() != (time.Time{}).Unix() {
+		f = from.Unix()
+	}
+	if to.Unix() != (time.Time{}).Unix() {
+		t = to.Unix()
+	}
+	if limit < 0 {
+		limit = math.MaxInt64
+	}
+
+	api.mu.RLock()
+	hosts := api.hosts[network]
+	_, ok := hosts[pk]
+	api.mu.RUnlock()
+
+	if !ok {
+		return nil, errHostNotFound
+	}
+
 	rows, err := api.db.Query(`
 		SELECT
 			changed_at,
@@ -1496,8 +1521,10 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs [
 		WHERE network = ?
 		AND public_key = ?
 		AND changed_at >= ?
-		ORDER BY changed_at ASC
-	`, network, pk[:], time.Now().AddDate(-1, 0, 0))
+		AND changed_at <= ?
+		ORDER BY changed_at DESC
+		LIMIT ?
+	`, network, pk[:], f, t, limit)
 	if err != nil {
 		return nil, utils.AddContext(err, "couldn't query price changes")
 	}
@@ -1536,6 +1563,9 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs [
 
 		pcs = append(pcs, pc)
 	}
+
+	// Sort in ascending order.
+	slices.Reverse(pcs)
 
 	return
 }
