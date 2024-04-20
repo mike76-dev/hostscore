@@ -4,7 +4,8 @@ import {
 	NodeStatus,
 	PriceChange,
     HostSortType,
-    NetworkAverages
+    NetworkAverages,
+    HostCount
 } from './types'
 
 const apiBaseURL = process.env.REACT_APP_API_ENDPOINT
@@ -60,14 +61,6 @@ export const getHost = async (
 	.catch(error => console.log(error))
 }
 
-export const getOnlineHosts = async (network: string):
-	Promise<{ status: string, message: string, onlineHosts: number }> => {
-	const url = '/hosts/online?network=' + network
-	return instance.get(url)
-	.then(response => response.data)
-	.catch(error => console.log(error))
-}
-
 export const getPriceChanges = async (
 	network: string,
 	publicKey: string
@@ -75,6 +68,17 @@ export const getPriceChanges = async (
 	const url = '/changes?network=' + network + '&host=' + publicKey
 	return instance.get(url)
 	.then(response => response.data)
+	.catch(error => console.log(error))
+}
+
+export const getNetworkHosts = async (network: string):
+	Promise<{ hosts: HostCount }> => {
+	const url = '/network/hosts?network=' + network
+	return instance.get(url)
+	.then(response => {
+        if (response.status === 200) return response.data
+        else console.log(response.statusText)
+    })
 	.catch(error => console.log(error))
 }
 

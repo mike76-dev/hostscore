@@ -44,9 +44,13 @@ type hostsResponse struct {
 	Total int          `json:"total"`
 }
 
-type onlineHostsResponse struct {
-	APIResponse
-	OnlineHosts int `json:"onlineHosts"`
+type hostCount struct {
+	Total  int `json:"total"`
+	Online int `json:"online"`
+}
+
+type networkHostsResponse struct {
+	Hosts hostCount `json:"hosts"`
 }
 
 type scansResponse struct {
@@ -341,9 +345,6 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHandler(w, req, ps)
 	})
-	router.GET("/hosts/online", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.onlineHostsHandler(w, req, ps)
-	})
 	router.GET("/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.scansHandler(w, req, ps)
 	})
@@ -352,6 +353,10 @@ func (api *portalAPI) buildHTTPRoutes() {
 	})
 	router.GET("/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.changesHandler(w, req, ps)
+	})
+
+	router.GET("/network/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.networkHostsHandler(w, req, ps)
 	})
 	router.GET("/network/averages", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.networkAveragesHandler(w, req, ps)
@@ -707,33 +712,26 @@ func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, _ *http.Reques
 	})
 }
 
-func (api *portalAPI) onlineHostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
-		return
+		network = "mainnet"
 	}
 	if network != "mainnet" && network != "zen" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "wrong network",
-		})
+		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
-	var count int
+	var hosts hostCount
 	api.mu.RLock()
+	hosts.Total = len(api.hosts[network])
 	for _, host := range api.hosts[network] {
 		if api.isOnline(*host) {
-			count++
+			hosts.Online++
 		}
 	}
 	api.mu.RUnlock()
-	writeJSON(w, onlineHostsResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		OnlineHosts: count,
+	writeJSON(w, networkHostsResponse{
+		Hosts: hosts,
 	})
 }
 

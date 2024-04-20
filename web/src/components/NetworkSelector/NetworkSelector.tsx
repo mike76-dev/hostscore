@@ -1,7 +1,7 @@
 import './NetworkSelector.css'
 import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useExcludedPaths, getOnlineHosts } from '../../api'
+import { useExcludedPaths, getNetworkHosts } from '../../api'
 
 type NetworkSelectorProps = {
     darkMode: boolean,
@@ -33,9 +33,9 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	}, [props.network])
     useEffect(() => {
         if (network === '') return
-        getOnlineHosts(network)
+        getNetworkHosts(network)
         .then(data => {
-            if (data && data.status === 'ok') setOnlineHosts(data.onlineHosts)
+            if (data) setOnlineHosts(data.hosts.online)
         })
     }, [network, time])
 	return (

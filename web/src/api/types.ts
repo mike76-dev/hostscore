@@ -147,6 +147,11 @@ export type NodeStatus = {
     networks: { [network: string]: NetworkStatus },
 }
 
+export type HostCount = {
+    total: number,
+    online: number
+}
+
 export type PriceChange = {
     timestamp: string,
     remainingStorage: number,
