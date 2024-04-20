@@ -1542,7 +1542,9 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey) (pcs [
 
 // calculateAverages calculates the averages for the given network.
 func (api *portalAPI) calculateAverages() {
-	api.mu.RLock()
+	api.mu.Lock()
+	defer api.mu.Unlock()
+
 	var hosts, hostsZen []portalHost
 	for _, host := range api.hosts["mainnet"] {
 		if api.isOnline(*host) {
@@ -1554,7 +1556,6 @@ func (api *portalAPI) calculateAverages() {
 			hostsZen = append(hostsZen, *host)
 		}
 	}
-	api.mu.RUnlock()
 
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		return a.Rank - b.Rank
@@ -1567,9 +1568,9 @@ func (api *portalAPI) calculateAverages() {
 	api.averages["zen"] = calculateTiers(hostsZen)
 }
 
-func calculateTiers(sortedHosts []portalHost) networkAverages {
-	calculateTier := func(hostSlice []portalHost) averagePrices {
-		var tier averagePrices
+func calculateTiers(sortedHosts []portalHost) map[string]networkAverages {
+	calculateTier := func(hostSlice []portalHost) networkAverages {
+		var tier networkAverages
 		var count int
 		for _, host := range hostSlice {
 			tier.StoragePrice = tier.StoragePrice.Add(host.Settings.StoragePrice)
@@ -1585,7 +1586,7 @@ func calculateTiers(sortedHosts []portalHost) networkAverages {
 			tier.UploadPrice = tier.UploadPrice.Div64(uint64(count))
 			tier.DownloadPrice = tier.DownloadPrice.Div64(uint64(count))
 			tier.ContractDuration /= uint64(count)
-			tier.OK = true
+			tier.Available = true
 		}
 		return tier
 	}
@@ -1607,11 +1608,12 @@ func calculateTiers(sortedHosts []portalHost) networkAverages {
 		tier3Hosts = sortedHosts[100:]
 	}
 
-	return networkAverages{
-		Tier1: calculateTier(tier1Hosts),
-		Tier2: calculateTier(tier2Hosts),
-		Tier3: calculateTier(tier3Hosts),
-	}
+	result := make(map[string]networkAverages)
+	result["tier1"] = calculateTier(tier1Hosts)
+	result["tier2"] = calculateTier(tier2Hosts)
+	result["tier3"] = calculateTier(tier3Hosts)
+
+	return result
 }
 
 // updateAverages makes periodical calculation of the network averages.

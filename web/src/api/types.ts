@@ -162,17 +162,11 @@ export type HostSortType = {
     order: 'asc' | 'desc'
 }
 
-export type AveragePrices = {
+export type NetworkAverages = {
     storagePrice: string,
     collateral: string,
     uploadPrice: string,
     downloadPrice: string,
     contractDuration: number,
-    ok: boolean
-}
-
-export type NetworkAverages = {
-    tier1: AveragePrices,
-    tier2: AveragePrices,
-    tier3: AveragePrices
+    available: boolean
 }

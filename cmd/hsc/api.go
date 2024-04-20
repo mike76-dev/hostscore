@@ -94,8 +94,7 @@ type priceChangeResponse struct {
 }
 
 type averagesResponse struct {
-	APIResponse
-	Averages networkAverages `json:"averages"`
+	Averages map[string]networkAverages `json:"averages"`
 }
 
 type countriesResponse struct {
@@ -161,19 +160,13 @@ type portalHost struct {
 	external.IPInfo
 }
 
-type averagePrices struct {
+type networkAverages struct {
 	StoragePrice     types.Currency `json:"storagePrice"`
 	Collateral       types.Currency `json:"collateral"`
 	UploadPrice      types.Currency `json:"uploadPrice"`
 	DownloadPrice    types.Currency `json:"downloadPrice"`
 	ContractDuration uint64         `json:"contractDuration"`
-	OK               bool           `json:"ok"`
-}
-
-type networkAverages struct {
-	Tier1 averagePrices `json:"tier1"`
-	Tier2 averagePrices `json:"tier2"`
-	Tier3 averagePrices `json:"tier3"`
+	Available        bool           `json:"available"`
 }
 
 type sortType int
@@ -200,7 +193,7 @@ type portalAPI struct {
 	cache    *responseCache
 	hosts    map[string]map[types.PublicKey]*portalHost
 	stopChan chan struct{}
-	averages map[string]networkAverages
+	averages map[string]map[string]networkAverages
 	nodes    map[string]nodeStatus
 }
 
@@ -214,7 +207,7 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		cache:    cache,
 		hosts:    make(map[string]map[types.PublicKey]*portalHost),
 		stopChan: make(chan struct{}),
-		averages: make(map[string]networkAverages),
+		averages: make(map[string]map[string]networkAverages),
 		nodes:    make(map[string]nodeStatus),
 	}
 
@@ -360,15 +353,15 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.changesHandler(w, req, ps)
 	})
+	router.GET("/network/averages", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.networkAveragesHandler(w, req, ps)
+	})
 	router.GET("/network/countries", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.networkCountriesHandler(w, req, ps)
 	})
 
 	router.GET("/service/status", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.serviceStatusHandler(w, req, ps)
-	})
-	router.GET("/averages", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.averagesHandler(w, req, ps)
 	})
 
 	api.mu.Lock()
@@ -786,28 +779,17 @@ func (api *portalAPI) changesHandler(w http.ResponseWriter, req *http.Request, _
 	})
 }
 
-func (api *portalAPI) averagesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
-		return
+		network = "mainnet"
 	}
 	if network != "mainnet" && network != "zen" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "wrong network",
-		})
+		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
-
-	averages := api.averages[network]
-
 	writeJSON(w, averagesResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		Averages:    averages,
+		Averages: api.averages[network],
 	})
 }
 
@@ -815,11 +797,10 @@ func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.R
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
-	} else {
-		if network != "mainnet" && network != "zen" {
-			writeError(w, "wrong network", http.StatusBadRequest)
-			return
-		}
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
+		return
 	}
 	allHosts := strings.ToLower(req.FormValue("all"))
 	var all bool

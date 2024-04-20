@@ -8,7 +8,7 @@ import {
 
 type AveragesProps = {
     darkMode: boolean,
-    averages: NetworkAverages
+    averages: { [tier: string]: NetworkAverages }
 }
 
 const AveragesTooltip = () => (
@@ -28,78 +28,78 @@ export const Averages = (props: AveragesProps) => {
             </div>
             <table>
                 <tbody>
-                    {props.averages.tier1.ok === true &&
+                    {props.averages['tier1'] && props.averages['tier1'].available === true &&
                         <>
                             <tr><th colSpan={2}>1st Tier (Top 10)</th></tr>
                             <tr>
                                 <td>Storage Price</td>
-                                <td>{toSia(props.averages.tier1.storagePrice, true) + '/TB/month'}</td>
+                                <td>{toSia(props.averages['tier1'].storagePrice, true) + '/TB/month'}</td>
                             </tr>
                             <tr>
                                 <td>Collateral</td>
-                                <td>{toSia(props.averages.tier1.collateral, true) + '/TB/month'}</td>
+                                <td>{toSia(props.averages['tier1'].collateral, true) + '/TB/month'}</td>
                             </tr>
                             <tr>
                                 <td>Upload Price</td>
-                                <td>{toSia(props.averages.tier1.uploadPrice, false) + '/TB'}</td>
+                                <td>{toSia(props.averages['tier1'].uploadPrice, false) + '/TB'}</td>
                             </tr>
                             <tr>
                                 <td>Download Price</td>
-                                <td>{toSia(props.averages.tier1.downloadPrice, false) + '/TB'}</td>
+                                <td>{toSia(props.averages['tier1'].downloadPrice, false) + '/TB'}</td>
                             </tr>
                             <tr>
                                 <td>Contract Duration</td>
-                                <td>{blocksToTime(props.averages.tier1.contractDuration)}</td>
+                                <td>{blocksToTime(props.averages['tier1'].contractDuration)}</td>
                             </tr>
                         </>
                     }
-                    {props.averages.tier2.ok === true &&
+                    {props.averages['tier2'] && props.averages['tier2'].available === true &&
                         <>
                             <tr><th colSpan={2}>2nd Tier (Top 100 Minus Tier 1)</th></tr>
                             <tr>
                                 <td>Storage Price</td>
-                                <td>{toSia(props.averages.tier2.storagePrice, true) + '/TB/month'}</td>
+                                <td>{toSia(props.averages['tier2'].storagePrice, true) + '/TB/month'}</td>
                             </tr>
                             <tr>
                                 <td>Collateral</td>
-                                <td>{toSia(props.averages.tier2.collateral, true) + '/TB/month'}</td>
+                                <td>{toSia(props.averages['tier2'].collateral, true) + '/TB/month'}</td>
                             </tr>
                             <tr>
                                 <td>Upload Price</td>
-                                <td>{toSia(props.averages.tier2.uploadPrice, false) + '/TB'}</td>
+                                <td>{toSia(props.averages['tier2'].uploadPrice, false) + '/TB'}</td>
                             </tr>
                             <tr>
                                 <td>Download Price</td>
-                                <td>{toSia(props.averages.tier2.downloadPrice, false) + '/TB'}</td>
+                                <td>{toSia(props.averages['tier2'].downloadPrice, false) + '/TB'}</td>
                             </tr>
                             <tr>
                                 <td>Contract Duration</td>
-                                <td>{blocksToTime(props.averages.tier2.contractDuration)}</td>
+                                <td>{blocksToTime(props.averages['tier2'].contractDuration)}</td>
                             </tr>
                         </>
                     }
-                    {props.averages.tier3.ok === true &&
+                    {props.averages['tier3'] && props.averages['tier3'].available === true &&
                         <>
                             <tr><th colSpan={2}>3rd Tier (The Rest)</th></tr>
                             <tr>
                                 <td>Storage Price</td>
-                                <td>{toSia(props.averages.tier3.storagePrice, true) + '/TB/month'}</td>
+                                <td>{toSia(props.averages['tier3'].storagePrice, true) + '/TB/month'}</td>
                             </tr>
                             <tr>
                                 <td>Collateral</td>
-                                <td>{toSia(props.averages.tier3.collateral, true) + '/TB/month'}</td>
+                                <td>{toSia(props.averages['tier3'].collateral, true) + '/TB/month'}</td>
                             </tr>
                             <tr>
                                 <td>Upload Price</td>
-                                <td>{toSia(props.averages.tier3.uploadPrice, false) + '/TB'}</td>
+                                <td>{toSia(props.averages['tier3'].uploadPrice, false) + '/TB'}</td>
                             </tr>
                             <tr>
                                 <td>Download Price</td>
-                                <td>{toSia(props.averages.tier3.downloadPrice, false) + '/TB'}</td>
+                                <td>{toSia(props.averages['tier3'].downloadPrice, false) + '/TB'}</td>
                             </tr>
                             <tr>
                                 <td>Contract Duration</td>
-                                <td>{blocksToTime(props.averages.tier3.contractDuration)}</td>
+                                <td>{blocksToTime(props.averages['tier3'].contractDuration)}</td>
                             </tr>
                         </>
                     }

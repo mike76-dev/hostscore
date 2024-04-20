@@ -111,7 +111,7 @@ export const Hosts = (props: HostsProps) => {
         setLoadingAverages(true)
         getAverages(network)
         .then(data => {
-            if (data && data.status === 'ok' && data.averages) {
+            if (data && data.averages) {
                 setAverages(data.averages)
             }
             setLoadingAverages(false)

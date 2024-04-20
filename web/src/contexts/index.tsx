@@ -1,11 +1,11 @@
 import { createContext } from 'react'
-import { Host, HostSortType, NetworkAverages, AveragePrices } from '../api'
+import { Host, HostSortType, NetworkAverages } from '../api'
 
 type NetworkContextType = {
 	network: string,
 	switchNetwork: (network: string) => void,
-    averages: NetworkAverages,
-    setAverages: (averages: NetworkAverages) => void
+    averages: { [tier: string]: NetworkAverages },
+    setAverages: (averages: { [tier: string]: NetworkAverages }) => void
 }
 
 type HostContextType = {
@@ -27,26 +27,11 @@ type HostContextType = {
     setCountry: (country: string) => void,
 }
 
-const zeroPrices: AveragePrices = {
-    storagePrice: '',
-    collateral: '',
-    uploadPrice: '',
-    downloadPrice: '',
-    contractDuration: 0,
-    ok: false
-}
-
-export const zeroAverages: NetworkAverages = {
-    tier1: zeroPrices,
-    tier2: zeroPrices,
-    tier3: zeroPrices
-}
-
 export const NetworkContext = createContext<NetworkContextType>({
 	network: '',
 	switchNetwork: (network: string) => null,
-    averages: zeroAverages,
-    setAverages: (averages: NetworkAverages) => null
+    averages: {},
+    setAverages: (averages: { [tier: string]: NetworkAverages }) => null
 })
 
 export const HostContext = createContext<HostContextType>({

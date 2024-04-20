@@ -20,14 +20,14 @@ import {
     HostSortType,
     NetworkAverages
 } from './api'
-import { NetworkContext, HostContext, zeroAverages } from './contexts'
+import { NetworkContext, HostContext } from './contexts'
 
 const App = () => {
 	let data = window.localStorage.getItem('darkMode')
 	let mode = data ? JSON.parse(data) : false
 	const [darkMode, toggleDarkMode] = useState(mode)
 	const [network, switchNetwork] = useState('')
-    const [averages, setAverages] = useState<NetworkAverages>(zeroAverages)
+    const [averages, setAverages] = useState<{ [tier: string]: NetworkAverages }>({})
 	const [hosts, setHosts] = useState<Host[]>([])
     const [offset, changeOffset] = useState(0)
     const [limit, changeLimit] = useState(10)

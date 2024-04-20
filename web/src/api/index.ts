@@ -60,14 +60,6 @@ export const getHost = async (
 	.catch(error => console.log(error))
 }
 
-export const getStatus = async ():
-	Promise<{ nodes: { [node: string]: NodeStatus }, version: string }> => {
-	const url = '/service/status'
-	return instance.get(url)
-	.then(response => { console.log(response); return response.data})
-	.catch(error => console.log(error))
-}
-
 export const getOnlineHosts = async (network: string):
 	Promise<{ status: string, message: string, onlineHosts: number }> => {
 	const url = '/hosts/online?network=' + network
@@ -87,10 +79,13 @@ export const getPriceChanges = async (
 }
 
 export const getAverages = async (network: string):
-	Promise<{ status: string, message: string, averages: NetworkAverages }> => {
-	const url = '/averages?network=' + network
+	Promise<{ averages: { [tier: string]: NetworkAverages }}> => {
+	const url = '/network/averages?network=' + network
 	return instance.get(url)
-	.then(response => response.data)
+	.then(response => {
+        if (response.status === 200) return response.data
+        else console.log(response.statusText)
+    })
 	.catch(error => console.log(error))
 }
 
@@ -102,6 +97,14 @@ export const getCountries = async (network: string, all: boolean):
         if (response.status === 200) return response.data
         else console.log(response.statusText)
     })
+	.catch(error => console.log(error))
+}
+
+export const getStatus = async ():
+	Promise<{ nodes: { [node: string]: NodeStatus }, version: string }> => {
+	const url = '/service/status'
+	return instance.get(url)
+	.then(response => { console.log(response); return response.data})
 	.catch(error => console.log(error))
 }
 
