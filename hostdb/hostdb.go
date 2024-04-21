@@ -194,11 +194,13 @@ func syncStore(store *hostDBStore, cm *chain.Manager, index types.ChainIndex) er
 	for index != cm.Tip() {
 		_, caus, err := cm.UpdatesSince(index, 1000)
 		if err != nil {
-			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
-		} else if err := store.updateChainState(caus, caus[len(caus)-1].State.Index == cm.Tip()); err != nil {
+			return fmt.Errorf("failed to subscribe to chain manager: height %d, error %w", cm.Tip().Height, err)
+		} else if err := store.updateChainState(caus, len(caus) > 0 && caus[len(caus)-1].State.Index == cm.Tip()); err != nil {
 			return fmt.Errorf("failed to update chain state: %w", err)
 		}
-		index = caus[len(caus)-1].State.Index
+		if len(caus) > 0 {
+			index = caus[len(caus)-1].State.Index
+		}
 	}
 	return nil
 }

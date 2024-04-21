@@ -128,10 +128,12 @@ func syncStore(store *DBStore, cm *chain.Manager, index types.ChainIndex) error 
 		crus, caus, err := cm.UpdatesSince(index, 1000)
 		if err != nil {
 			return fmt.Errorf("failed to subscribe to chain manager: %w", err)
-		} else if err := store.updateChainState(crus, caus, caus[len(caus)-1].State.Index == cm.Tip()); err != nil {
+		} else if err := store.updateChainState(crus, caus, len(caus) > 0 && caus[len(caus)-1].State.Index == cm.Tip()); err != nil {
 			return fmt.Errorf("failed to update chain state: %w", err)
 		}
-		index = caus[len(caus)-1].State.Index
+		if len(caus) > 0 {
+			index = caus[len(caus)-1].State.Index
+		}
 	}
 	return nil
 }
