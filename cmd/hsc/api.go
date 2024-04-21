@@ -55,9 +55,7 @@ type networkHostsResponse struct {
 }
 
 type scansResponse struct {
-	APIResponse
-	PublicKey types.PublicKey `json:"publicKey"`
-	Scans     []scanHistory   `json:"scans"`
+	Scans []scanHistory `json:"scans"`
 }
 
 type benchmarksResponse struct {
@@ -344,8 +342,8 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHandler(w, req, ps)
 	})
-	router.GET("/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.scansHandler(w, req, ps)
+	router.GET("/hosts/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.hostsScansHandler(w, req, ps)
 	})
 	router.GET("/benchmarks", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.benchmarksHandler(w, req, ps)
@@ -518,30 +516,33 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	})
 }
 
-func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
+		network = "mainnet"
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
+		return
+	}
+	node := strings.ToLower(req.FormValue("node"))
+	if node == "" {
+		node = "global"
+	}
+	_, ok := api.clients[node]
+	if node != "global" && !ok {
+		writeError(w, "wrong node", http.StatusBadRequest)
 		return
 	}
 	host := req.FormValue("host")
 	if host == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "host not provided",
-		})
+		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "invalid public key",
-		})
+		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
 	var from, to time.Time
@@ -550,10 +551,7 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	if f != "" {
 		from, err = time.Parse(time.RFC3339, f)
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid timestamp",
-			})
+			writeError(w, "invalid timestamp", http.StatusBadRequest)
 			return
 		}
 	}
@@ -561,48 +559,36 @@ func (api *portalAPI) scansHandler(w http.ResponseWriter, req *http.Request, _ h
 	if t != "" {
 		to, err = time.Parse(time.RFC3339, t)
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid timestamp",
-			})
+			writeError(w, "invalid timestamp", http.StatusBadRequest)
 			return
 		}
 	}
-	var number int64
-	num := req.FormValue("number")
-	if num != "" {
-		number, err = strconv.ParseInt(num, 10, 64)
+	all := true
+	allScans := strings.ToLower(req.FormValue("all"))
+	if allScans == "false" {
+		all = false
+	}
+	limit := int64(-1)
+	lim := req.FormValue("limit")
+	if lim != "" {
+		limit, err = strconv.ParseInt(lim, 10, 64)
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid number",
-			})
+			writeError(w, "invalid limit", http.StatusBadRequest)
 			return
 		}
 	}
-	var successful bool
-	success := strings.ToLower(req.FormValue("success"))
-	if success == "true" {
-		successful = true
+	scans, err := api.getScans(network, node, pk, all, from, to, limit)
+	if err != nil && errors.Is(err, errHostNotFound) {
+		writeError(w, "host not found", http.StatusBadRequest)
+		return
 	}
-	scans, ok := api.cache.getScans(network, pk, from, to, int(number), successful)
-	if !ok {
-		s, err := api.getScans(network, pk, from, to, int(number), successful)
-		if err != nil {
-			api.log.Error("couldn't get scan history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "internal error",
-			})
-			return
-		}
-		scans = s
-		api.cache.putScans(network, pk, from, to, int(number), successful, s)
+	if err != nil {
+		api.log.Error("couldn't get scan history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
+		writeError(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 	writeJSON(w, scansResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		PublicKey:   pk,
-		Scans:       scans,
+		Scans: scans,
 	})
 }
 

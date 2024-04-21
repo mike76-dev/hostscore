@@ -957,66 +957,72 @@ func (api *portalAPI) saveLocation(pk types.PublicKey, network string, info exte
 }
 
 // getScans returns the scan history according to the criteria provided.
-func (api *portalAPI) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []scanHistory, err error) {
-	if to.IsZero() {
-		to = time.Now()
+func (api *portalAPI) getScans(network string, node string, pk types.PublicKey, all bool, from, to time.Time, limit int64) (scans []scanHistory, err error) {
+	f := int64(0)
+	t := time.Now().Unix()
+	if from.Unix() != (time.Time{}).Unix() {
+		f = from.Unix()
 	}
-	if num < 0 {
-		num = 0
+	if to.Unix() != (time.Time{}).Unix() {
+		t = to.Unix()
+	}
+	if limit < 0 {
+		limit = math.MaxInt64
 	}
 
-	scanStmt, err := api.db.Prepare(`
-		SELECT ran_at, success, latency, error
+	api.mu.RLock()
+	hosts := api.hosts[network]
+	_, ok := hosts[pk]
+	api.mu.RUnlock()
+
+	if !ok {
+		return nil, errHostNotFound
+	}
+
+	rows, err := api.db.Query(`
+		SELECT node, ran_at, success, latency, error
 		FROM scans
 		WHERE network = ?
-		AND node = ?
+		AND (? OR node = ?)
 		AND public_key = ?
-		AND ran_at > ?
-		AND ran_at < ?
+		AND ran_at >= ?
+		AND ran_at <= ?
 		AND (? OR success = TRUE)
 		ORDER BY ran_at DESC
 		LIMIT ?
-	`)
+	`,
+		network,
+		node == "global",
+		node,
+		pk[:],
+		f,
+		t,
+		all,
+		limit,
+	)
 	if err != nil {
-		return nil, utils.AddContext(err, "couldn't prepare scan statement")
+		return nil, utils.AddContext(err, "couldn't query scan history")
 	}
-	defer scanStmt.Close()
+	defer rows.Close()
 
-	for node := range api.clients {
-		rows, err := scanStmt.Query(
-			network,
-			node,
-			pk[:],
-			from.Unix(),
-			to.Unix(),
-			!successful,
-			num,
-		)
-		if err != nil {
-			return nil, utils.AddContext(err, "couldn't query scan history")
+	for rows.Next() {
+		var ra int64
+		var success bool
+		var latency float64
+		var n, msg string
+		if err := rows.Scan(&n, &ra, &success, &latency, &msg); err != nil {
+			return nil, utils.AddContext(err, "couldn't decode scan history")
 		}
-
-		for rows.Next() {
-			var ra int64
-			var success bool
-			var latency float64
-			var msg string
-			if err := rows.Scan(&ra, &success, &latency, &msg); err != nil {
-				rows.Close()
-				return nil, utils.AddContext(err, "couldn't decode scan history")
-			}
-			scan := scanHistory{
-				Timestamp: time.Unix(ra, 0),
-				Success:   success,
-				Latency:   time.Duration(latency) * time.Millisecond,
-				Error:     msg,
-				PublicKey: pk,
-				Network:   network,
-				Node:      node,
-			}
-			scans = append(scans, scan)
+		scan := scanHistory{
+			Timestamp: time.Unix(ra, 0),
+			Success:   success,
+			Latency:   time.Duration(latency) * time.Millisecond,
+			Error:     msg,
+			PublicKey: pk,
+			Network:   network,
+			Node:      n,
 		}
-		rows.Close()
+		scans = append(scans, scan)
 	}
 
 	return

@@ -11,11 +11,9 @@ import (
 
 const (
 	hostsExpireThreshold      = 10 * time.Minute
-	scansExpireThreshold      = 30 * time.Minute
 	benchmarksExpireThreshold = 30 * time.Minute
 
 	hostsRequestsLimit      = 100
-	scansRequestsLimit      = 1000
 	benchmarksRequestsLimit = 1000
 )
 
@@ -34,17 +32,6 @@ type cachedHosts struct {
 	modified time.Time
 }
 
-type cachedScans struct {
-	scans      []scanHistory
-	network    string
-	publicKey  types.PublicKey
-	from       time.Time
-	to         time.Time
-	number     int
-	successful bool
-	modified   time.Time
-}
-
 type cachedBenchmarks struct {
 	benchmarks []hostdb.BenchmarkHistory
 	network    string
@@ -58,7 +45,6 @@ type cachedBenchmarks struct {
 
 type responseCache struct {
 	hosts      []cachedHosts
-	scans      []cachedScans
 	benchmarks []cachedBenchmarks
 	mu         sync.Mutex
 	stopChan   chan struct{}
@@ -85,7 +71,7 @@ func (rc *responseCache) prune() {
 		}
 		rc.mu.Lock()
 		var wg sync.WaitGroup
-		wg.Add(3)
+		wg.Add(2)
 		go func() {
 			i := 0
 			for {
@@ -94,20 +80,6 @@ func (rc *responseCache) prune() {
 				}
 				if time.Since(rc.hosts[i].modified) > hostsExpireThreshold {
 					rc.hosts = append(rc.hosts[:i], rc.hosts[i+1:]...)
-				} else {
-					i++
-				}
-			}
-			wg.Done()
-		}()
-		go func() {
-			i := 0
-			for {
-				if i >= len(rc.scans) {
-					break
-				}
-				if time.Since(rc.scans[i].modified) > scansExpireThreshold {
-					rc.scans = append(rc.scans[:i], rc.scans[i+1:]...)
 				} else {
 					i++
 				}
@@ -191,43 +163,6 @@ func (rc *responseCache) putHosts(network string, all bool, offset, limit int, q
 	})
 	if len(rc.hosts) > hostsRequestsLimit {
 		rc.hosts = rc.hosts[1:]
-	}
-}
-
-func (rc *responseCache) getScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (scans []scanHistory, ok bool) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	for _, cs := range rc.scans {
-		if cs.network == network &&
-			cs.publicKey == pk &&
-			cs.number == num &&
-			cs.successful == successful &&
-			math.Abs(from.Sub(cs.from).Seconds()) < float64(scansExpireThreshold) &&
-			math.Abs(to.Sub(cs.to).Seconds()) < float64(scansExpireThreshold) &&
-			time.Since(cs.modified) < scansExpireThreshold {
-			scans = cs.scans
-			ok = true
-			return
-		}
-	}
-	return
-}
-
-func (rc *responseCache) putScans(network string, pk types.PublicKey, from, to time.Time, num int, successful bool, scans []scanHistory) {
-	rc.mu.Lock()
-	defer rc.mu.Unlock()
-	rc.scans = append(rc.scans, cachedScans{
-		scans:      scans,
-		network:    network,
-		publicKey:  pk,
-		from:       from,
-		to:         to,
-		number:     num,
-		successful: successful,
-		modified:   time.Now(),
-	})
-	if len(rc.scans) > scansRequestsLimit {
-		rc.scans = rc.scans[1:]
 	}
 }
 
