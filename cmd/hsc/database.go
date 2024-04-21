@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"slices"
 	"strings"
@@ -957,7 +956,7 @@ func (api *portalAPI) saveLocation(pk types.PublicKey, network string, info exte
 }
 
 // getScans returns the scan history according to the criteria provided.
-func (api *portalAPI) getScans(network string, node string, pk types.PublicKey, all bool, from, to time.Time, limit int64) (scans []scanHistory, err error) {
+func (api *portalAPI) getScans(network, node string, pk types.PublicKey, all bool, from, to time.Time, limit int64) (scans []scanHistory, err error) {
 	f := int64(0)
 	t := time.Now().Unix()
 	if from.Unix() != (time.Time{}).Unix() {
@@ -1029,70 +1028,76 @@ func (api *portalAPI) getScans(network string, node string, pk types.PublicKey, 
 }
 
 // getBenchmarks returns the benchmark history according to the criteria provided.
-func (api *portalAPI) getBenchmarks(network string, pk types.PublicKey, from, to time.Time, num int, successful bool) (benchmarks []hostdb.BenchmarkHistory, err error) {
-	if to.IsZero() {
-		to = time.Now()
+func (api *portalAPI) getBenchmarks(network, node string, pk types.PublicKey, all bool, from, to time.Time, limit int64) (benchmarks []hostdb.BenchmarkHistory, err error) {
+	f := int64(0)
+	t := time.Now().Unix()
+	if from.Unix() != (time.Time{}).Unix() {
+		f = from.Unix()
 	}
-	if num < 0 {
-		num = 0
+	if to.Unix() != (time.Time{}).Unix() {
+		t = to.Unix()
+	}
+	if limit < 0 {
+		limit = math.MaxInt64
 	}
 
-	benchmarkStmt, err := api.db.Prepare(`
-		SELECT ran_at, success, upload_speed, download_speed, ttfb, error
+	api.mu.RLock()
+	hosts := api.hosts[network]
+	_, ok := hosts[pk]
+	api.mu.RUnlock()
+
+	if !ok {
+		return nil, errHostNotFound
+	}
+
+	rows, err := api.db.Query(`
+		SELECT node, ran_at, success, upload_speed, download_speed, ttfb, error
 		FROM benchmarks
 		WHERE network = ?
-		AND node = ?
+		AND (? OR node = ?)
 		AND public_key = ?
-		AND ran_at > ?
-		AND ran_at < ?
+		AND ran_at >= ?
+		AND ran_at <= ?
 		AND (? OR success = TRUE)
 		ORDER BY ran_at DESC
 		LIMIT ?
-	`)
+	`,
+		network,
+		node == "global",
+		node,
+		pk[:],
+		f,
+		t,
+		all,
+		limit,
+	)
 	if err != nil {
-		return nil, utils.AddContext(err, "couldn't prepare benchmark statement")
+		return nil, utils.AddContext(err, "couldn't query benchmark history")
 	}
-	defer benchmarkStmt.Close()
+	defer rows.Close()
 
-	for node := range api.clients {
-		rows, err := benchmarkStmt.Query(
-			network,
-			node,
-			pk[:],
-			from.Unix(),
-			to.Unix(),
-			!successful,
-			num,
-		)
-		if err != nil {
+	for rows.Next() {
+		var ra int64
+		var success bool
+		var ul, dl, ttfb float64
+		var n, msg string
+		if err := rows.Scan(&n, &ra, &success, &ul, &dl, &ttfb, &msg); err != nil {
 			return nil, utils.AddContext(err, "couldn't query benchmark history")
 		}
-
-		for rows.Next() {
-			var ra int64
-			var success bool
-			var ul, dl, ttfb float64
-			var msg string
-			if err := rows.Scan(&ra, &success, &ul, &dl, &ttfb, &msg); err != nil {
-				rows.Close()
-				return nil, utils.AddContext(err, "couldn't query benchmark history")
-			}
-			benchmark := hostdb.BenchmarkHistory{
-				HostBenchmark: hostdb.HostBenchmark{
-					Timestamp:     time.Unix(ra, 0),
-					Success:       success,
-					UploadSpeed:   ul,
-					DownloadSpeed: dl,
-					TTFB:          time.Duration(ttfb) * time.Millisecond,
-					Error:         msg,
-				},
-				PublicKey: pk,
-				Network:   network,
-				Node:      node,
-			}
-			benchmarks = append(benchmarks, benchmark)
+		benchmark := hostdb.BenchmarkHistory{
+			HostBenchmark: hostdb.HostBenchmark{
+				Timestamp:     time.Unix(ra, 0),
+				Success:       success,
+				UploadSpeed:   ul,
+				DownloadSpeed: dl,
+				TTFB:          time.Duration(ttfb) * time.Millisecond,
+				Error:         msg,
+			},
+			PublicKey: pk,
+			Network:   network,
+			Node:      n,
 		}
-		rows.Close()
+		benchmarks = append(benchmarks, benchmark)
 	}
 
 	return
@@ -1199,7 +1204,7 @@ func (api *portalAPI) load() error {
 		if len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
 			utils.DecodeSettings(&host.Settings, d)
-			if err := d.Err(); err != nil && !errors.Is(err, io.EOF) {
+			if err := d.Err(); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode host settings")
 			}

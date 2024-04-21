@@ -59,8 +59,6 @@ type scansResponse struct {
 }
 
 type benchmarksResponse struct {
-	APIResponse
-	PublicKey  types.PublicKey           `json:"publicKey"`
 	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
 }
 
@@ -345,8 +343,8 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/hosts/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsScansHandler(w, req, ps)
 	})
-	router.GET("/benchmarks", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.benchmarksHandler(w, req, ps)
+	router.GET("/hosts/benchmarks", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.hostsBenchmarksHandler(w, req, ps)
 	})
 	router.GET("/hosts/changes", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsChangesHandler(w, req, ps)
@@ -592,30 +590,33 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 	})
 }
 
-func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
+		network = "mainnet"
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
+		return
+	}
+	node := strings.ToLower(req.FormValue("node"))
+	if node == "" {
+		node = "global"
+	}
+	_, ok := api.clients[node]
+	if node != "global" && !ok {
+		writeError(w, "wrong node", http.StatusBadRequest)
 		return
 	}
 	host := req.FormValue("host")
 	if host == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "host not provided",
-		})
+		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "invalid public key",
-		})
+		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
 	var from, to time.Time
@@ -624,10 +625,7 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	if f != "" {
 		from, err = time.Parse(time.RFC3339, f)
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid timestamp",
-			})
+			writeError(w, "invalid timestamp", http.StatusBadRequest)
 			return
 		}
 	}
@@ -635,48 +633,36 @@ func (api *portalAPI) benchmarksHandler(w http.ResponseWriter, req *http.Request
 	if t != "" {
 		to, err = time.Parse(time.RFC3339, t)
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid timestamp",
-			})
+			writeError(w, "invalid timestamp", http.StatusBadRequest)
 			return
 		}
 	}
-	var number int64
-	num := req.FormValue("number")
-	if num != "" {
-		number, err = strconv.ParseInt(num, 10, 64)
+	all := true
+	allBenchmarks := strings.ToLower(req.FormValue("all"))
+	if allBenchmarks == "false" {
+		all = false
+	}
+	limit := int64(-1)
+	lim := req.FormValue("limit")
+	if lim != "" {
+		limit, err = strconv.ParseInt(lim, 10, 64)
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid number",
-			})
+			writeError(w, "invalid limit", http.StatusBadRequest)
 			return
 		}
 	}
-	var successful bool
-	success := strings.ToLower(req.FormValue("success"))
-	if success == "true" {
-		successful = true
+	benchmarks, err := api.getBenchmarks(network, node, pk, all, from, to, limit)
+	if err != nil && errors.Is(err, errHostNotFound) {
+		writeError(w, "host not found", http.StatusBadRequest)
+		return
 	}
-	benchmarks, ok := api.cache.getBenchmarks(network, pk, from, to, int(number), successful)
-	if !ok {
-		b, err := api.getBenchmarks(network, pk, from, to, int(number), successful)
-		if err != nil {
-			api.log.Error("couldn't get benchmark history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "internal error",
-			})
-			return
-		}
-		benchmarks = b
-		api.cache.putBenchmarks(network, pk, from, to, int(number), successful, b)
+	if err != nil {
+		api.log.Error("couldn't get benchmark history", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
+		writeError(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 	writeJSON(w, benchmarksResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		PublicKey:   pk,
-		Benchmarks:  benchmarks,
+		Benchmarks: benchmarks,
 	})
 }
 
