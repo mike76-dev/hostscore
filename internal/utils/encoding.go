@@ -60,15 +60,8 @@ func DecodeSettings(hs *rhpv2.HostSettings, d *types.Decoder) {
 	(*types.V1Currency)(&hs.MaxEphemeralAccountBalance).DecodeFrom(d)
 	hs.RevisionNumber = d.ReadUint64()
 	hs.Version = d.ReadString()
-	// COMPAT
-	one := d.ReadString()
-	two := d.ReadString()
-	if d.Err() == nil {
-		hs.Release = one
-		hs.SiaMuxPort = two
-	} else {
-		hs.SiaMuxPort = one
-	}
+	hs.Release = d.ReadString()
+	hs.SiaMuxPort = d.ReadString()
 }
 
 // EncodePriceTable encodes the host's price table.
