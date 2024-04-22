@@ -28,17 +28,11 @@ var (
 	zeroBalanceThreshold = types.Siacoins(10)
 )
 
-type APIResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
-}
-
 type hostResponse struct {
 	Host portalHost `json:"host"`
 }
 
 type hostsResponse struct {
-	APIResponse
 	Hosts []portalHost `json:"hosts"`
 	More  bool         `json:"more"`
 	Total int          `json:"total"`
@@ -407,10 +401,10 @@ func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request,
 func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
+		network = "mainnet"
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
 	query := strings.ToLower(req.FormValue("query"))
@@ -423,29 +417,30 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	offset, limit := int64(0), int64(-1)
 	var err error
 	off := req.FormValue("offset")
-	if off != "" {
-		offset, err = strconv.ParseInt(off, 10, 64)
-		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid offset",
-			})
-			return
-		}
+	if off == "" {
+		writeError(w, "offset not provided", http.StatusBadRequest)
+		return
+	}
+	offset, err = strconv.ParseInt(off, 10, 64)
+	if err != nil {
+		writeError(w, "invalid offset", http.StatusBadRequest)
+		return
 	}
 	lim := req.FormValue("limit")
-	if lim != "" {
-		limit, err = strconv.ParseInt(lim, 10, 64)
-		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "invalid limit",
-			})
-			return
-		}
+	if off == "" {
+		writeError(w, "limit not provided", http.StatusBadRequest)
+		return
+	}
+	limit, err = strconv.ParseInt(lim, 10, 64)
+	if err != nil {
+		writeError(w, "invalid limit", http.StatusBadRequest)
+		return
 	}
 	var sortBy sortType
-	sb := req.FormValue("sort")
+	sb := strings.ToLower(req.FormValue("sort"))
+	if sb == "" {
+		sb = "rank"
+	}
 	switch sb {
 	case "id":
 		sortBy = sortByID
@@ -462,10 +457,18 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	case "download":
 		sortBy = sortByDownloadPrice
 	default:
-		sortBy = sortByID
+		writeError(w, "invalid sorting type", http.StatusBadRequest)
+		return
 	}
 	order := strings.ToLower(req.FormValue("order"))
+	if order == "" {
+		order = "asc"
+	}
 	asc := true
+	if order != "asc" && order != "desc" {
+		writeError(w, "invalid sorting order", http.StatusBadRequest)
+		return
+	}
 	if order == "desc" {
 		asc = false
 	}
@@ -475,10 +478,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		hosts, more, total, err = api.getHosts(network, all, int(offset), int(limit), query, country, sortBy, asc)
 		if err != nil {
 			api.log.Error("couldn't get hosts", zap.Error(err))
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "internal error",
-			})
+			writeError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 		api.cache.putHosts(network, all, int(offset), int(limit), query, country, sortBy, asc, hosts, more, total)
@@ -499,10 +499,9 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	}
 
 	writeJSON(w, hostsResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		Hosts:       hosts,
-		More:        more,
-		Total:       total,
+		Hosts: hosts,
+		More:  more,
+		Total: total,
 	})
 }
 

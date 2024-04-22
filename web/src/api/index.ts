@@ -36,7 +36,7 @@ export const getHosts = async (
     country: string,
     sorting: HostSortType,
     cancelToken: CancelToken
-): Promise<{ status: string, message: string, hosts?: Host[], more: boolean, total: number }> => {
+): Promise<{ hosts?: Host[], more: boolean, total: number }> => {
 	const url = '/hosts?network=' + network +
 		'&all=' + (all ? 'true' : 'false') +
 		'&offset=' + offset + '&limit=' + limit +
@@ -45,7 +45,10 @@ export const getHosts = async (
         '&sort=' + sorting.sortBy +
         '&order=' + sorting.order
     return instance.get(url, { cancelToken })
-	.then(response => response.data)
+	.then(response => {
+        if (response.status === 200) return response.data
+        else console.log(response.statusText)
+    })
     .catch(error => {
         if (!axios.isCancel(error)) console.log(error)
     })

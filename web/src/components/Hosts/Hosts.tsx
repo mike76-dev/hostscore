@@ -79,7 +79,7 @@ export const Hosts = (props: HostsProps) => {
         const cancelTokenSource = axios.CancelToken.source()
         getHosts(network, false, 0, -1, query, country, { sortBy: 'rank', order: 'asc' }, cancelTokenSource.token)
         .then(data => {
-            if (data && data.status === 'ok' && data.hosts) {
+            if (data && data.hosts) {
                 setMapHosts(data.hosts)
             }
         })
@@ -92,7 +92,7 @@ export const Hosts = (props: HostsProps) => {
         const cancelTokenSource = axios.CancelToken.source()
         getHosts(network, !onlineOnly, offset, limit, query, country, sorting, cancelTokenSource.token)
         .then(data => {
-            if (data && data.status === 'ok' && data.hosts) {
+            if (data && data.hosts) {
                 setHostsLocal(data.hosts)
                 setTotal(data.total)
                 setHosts(data.hosts)
