@@ -42,7 +42,7 @@ export const HostDetails = (props: HostDetailsProps) => {
 			setLoadingHost(true)
 			getHost(network, publicKey || '')
 			.then(data => {
-				if (data && data.status === 'ok' && data.host) {
+				if (data && data.host) {
 					setHost(data.host)
 				}
 				setLoadingHost(false)

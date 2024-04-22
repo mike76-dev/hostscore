@@ -641,7 +641,7 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 	h, exists := hosts[pk]
 	api.mu.RUnlock()
 	if !exists {
-		return portalHost{}, errors.New("host not found")
+		return portalHost{}, errHostNotFound
 	}
 
 	host = *h

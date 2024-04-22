@@ -54,10 +54,13 @@ export const getHosts = async (
 export const getHost = async (
 	network: string,
 	publicKey: string
-): Promise<{ status: string, message: string, host?: Host }> => {
-	const url = '/host?network=' + network + '&host=' + publicKey
+): Promise<{ host?: Host }> => {
+	const url = '/hosts/host?network=' + network + '&host=' + publicKey
 	return instance.get(url)
-	.then(response => response.data)
+	.then(response => {
+        if (response.status === 200) return response.data
+        else console.log(response.statusText)
+    })
 	.catch(error => console.log(error))
 }
 

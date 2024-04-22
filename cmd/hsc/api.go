@@ -34,7 +34,6 @@ type APIResponse struct {
 }
 
 type hostResponse struct {
-	APIResponse
 	Host portalHost `json:"host"`
 }
 
@@ -334,11 +333,11 @@ func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (api *portalAPI) buildHTTPRoutes() {
 	router := httprouter.New()
 
-	router.GET("/host", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
-		api.hostHandler(w, req, ps)
-	})
 	router.GET("/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHandler(w, req, ps)
+	})
+	router.GET("/hosts/host", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.hostsHostHandler(w, req, ps)
 	})
 	router.GET("/hosts/scans", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsScansHandler(w, req, ps)
@@ -369,47 +368,40 @@ func (api *portalAPI) buildHTTPRoutes() {
 	api.mu.Unlock()
 }
 
-func (api *portalAPI) hostHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "network not provided",
-		})
+		network = "mainnet"
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
 	h := req.FormValue("host")
 	if h == "" {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "host not provided",
-		})
+		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(h))
 	if err != nil {
-		writeJSON(w, APIResponse{
-			Status:  "error",
-			Message: "invalid public key",
-		})
+		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
 	host, ok := api.cache.getHost(network, pk)
 	if !ok {
 		host, err = api.getHost(network, pk)
+		if err != nil && errors.Is(err, errHostNotFound) {
+			writeError(w, "host not found", http.StatusBadRequest)
+			return
+		}
 		if err != nil {
-			writeJSON(w, APIResponse{
-				Status:  "error",
-				Message: "host not found",
-			})
+			api.log.Error("couldn't get host", zap.String("network", network), zap.Stringer("host", pk), zap.Error(err))
+			writeError(w, "internal error", http.StatusInternalServerError)
 			return
 		}
 	}
-	writeJSON(w, hostResponse{
-		APIResponse: APIResponse{Status: "ok"},
-		Host:        host,
-	})
+	writeJSON(w, hostResponse{Host: host})
 }
 
 func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -585,9 +577,7 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, scansResponse{
-		Scans: scans,
-	})
+	writeJSON(w, scansResponse{Scans: scans})
 }
 
 func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -661,9 +651,7 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, benchmarksResponse{
-		Benchmarks: benchmarks,
-	})
+	writeJSON(w, benchmarksResponse{Benchmarks: benchmarks})
 }
 
 func balanceStatus(balance types.Currency) string {
@@ -701,9 +689,7 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 		}
 	}
 	api.mu.RUnlock()
-	writeJSON(w, networkHostsResponse{
-		Hosts: hosts,
-	})
+	writeJSON(w, networkHostsResponse{Hosts: hosts})
 }
 
 func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -762,9 +748,7 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, priceChangeResponse{
-		PriceChanges: pcs,
-	})
+	writeJSON(w, priceChangeResponse{PriceChanges: pcs})
 }
 
 func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -776,9 +760,7 @@ func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Re
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, averagesResponse{
-		Averages: api.averages[network],
-	})
+	writeJSON(w, averagesResponse{Averages: api.averages[network]})
 }
 
 func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -805,9 +787,7 @@ func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.R
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, countriesResponse{
-		Countries: countries,
-	})
+	writeJSON(w, countriesResponse{Countries: countries})
 }
 
 func writeJSON(w http.ResponseWriter, obj interface{}) {
