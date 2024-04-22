@@ -38,6 +38,10 @@ type hostsResponse struct {
 	Total int          `json:"total"`
 }
 
+type keysResponse struct {
+	Keys []types.PublicKey `json:"keys"`
+}
+
 type hostCount struct {
 	Total  int `json:"total"`
 	Online int `json:"online"`
@@ -330,6 +334,9 @@ func (api *portalAPI) buildHTTPRoutes() {
 	router.GET("/hosts", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHandler(w, req, ps)
 	})
+	router.GET("/hosts/keys", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+		api.hostsKeysHandler(w, req, ps)
+	})
 	router.GET("/hosts/host", func(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
 		api.hostsHostHandler(w, req, ps)
 	})
@@ -503,6 +510,171 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		More:  more,
 		Total: total,
 	})
+}
+
+func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	err := req.ParseForm()
+	if err != nil {
+		writeError(w, "unable to parse request", http.StatusBadRequest)
+		return
+	}
+	network := strings.ToLower(req.FormValue("network"))
+	if network == "" {
+		network = "mainnet"
+	}
+	if network != "mainnet" && network != "zen" {
+		writeError(w, "wrong network", http.StatusBadRequest)
+		return
+	}
+	node := strings.ToLower(req.FormValue("node"))
+	if node == "" {
+		node = "global"
+	}
+	_, ok := api.clients[node]
+	if node != "global" && !ok {
+		writeError(w, "wrong node", http.StatusBadRequest)
+		return
+	}
+	msp := req.FormValue("maxStoragePrice")
+	mup := req.FormValue("maxUploadPrice")
+	mdp := req.FormValue("maxDownloadPrice")
+	mcp := req.FormValue("maxContractPrice")
+	mbrp := req.FormValue("maxBaseRPCPrice")
+	msap := req.FormValue("maxSectorAccessPrice")
+	var maxStoragePrice, maxUploadPrice, maxDownloadPrice types.Currency
+	var maxContractPrice, maxBasePrice, maxSectorPrice types.Currency
+	if msp == "" {
+		maxStoragePrice = types.MaxCurrency
+	} else {
+		maxStoragePrice, err = types.ParseCurrency(msp)
+		if err != nil {
+			writeError(w, "invalid max storage price", http.StatusBadRequest)
+			return
+		}
+	}
+	if mup == "" {
+		maxUploadPrice = types.MaxCurrency
+	} else {
+		maxUploadPrice, err = types.ParseCurrency(mup)
+		if err != nil {
+			writeError(w, "invalid max upload price", http.StatusBadRequest)
+			return
+		}
+	}
+	if mdp == "" {
+		maxDownloadPrice = types.MaxCurrency
+	} else {
+		maxDownloadPrice, err = types.ParseCurrency(mdp)
+		if err != nil {
+			writeError(w, "invalid max download price", http.StatusBadRequest)
+			return
+		}
+	}
+	if mcp == "" {
+		maxContractPrice = types.MaxCurrency
+	} else {
+		maxContractPrice, err = types.ParseCurrency(mcp)
+		if err != nil {
+			writeError(w, "invalid max contract price", http.StatusBadRequest)
+			return
+		}
+	}
+	if mbrp == "" {
+		maxBasePrice = types.MaxCurrency
+	} else {
+		maxBasePrice, err = types.ParseCurrency(mbrp)
+		if err != nil {
+			writeError(w, "invalid max base RPC price", http.StatusBadRequest)
+			return
+		}
+	}
+	if msap == "" {
+		maxSectorPrice = types.MaxCurrency
+	} else {
+		maxSectorPrice, err = types.ParseCurrency(msap)
+		if err != nil {
+			writeError(w, "invalid max sector access price", http.StatusBadRequest)
+			return
+		}
+	}
+	md := req.FormValue("minContractDuration")
+	var minDuration int64
+	if md != "" {
+		minDuration, err = strconv.ParseInt(md, 10, 64)
+		if err != nil {
+			writeError(w, "invalid min contract duration", http.StatusBadRequest)
+			return
+		}
+	}
+	ms := req.FormValue("minAvailableStorage")
+	var minStorage int64
+	if ms != "" {
+		minStorage, err = strconv.ParseInt(ms, 10, 64)
+		if err != nil {
+			writeError(w, "invalid min available storage", http.StatusBadRequest)
+			return
+		}
+	}
+	minVersion := req.FormValue("minVersion")
+	ml := req.FormValue("maxLatency")
+	mus := req.FormValue("minUploadSpeed")
+	mds := req.FormValue("minDownloadSpeed")
+	var maxLatency, minUploadSpeed, minDownloadSpeed int64
+	if ml != "" {
+		maxLatency, err = strconv.ParseInt(ml, 10, 64)
+		if err != nil {
+			writeError(w, "invalid max latency", http.StatusBadRequest)
+			return
+		}
+	}
+	if mus != "" {
+		minUploadSpeed, err = strconv.ParseInt(mus, 10, 64)
+		if err != nil {
+			writeError(w, "invalid min upload speed", http.StatusBadRequest)
+			return
+		}
+	}
+	if mds != "" {
+		minDownloadSpeed, err = strconv.ParseInt(mds, 10, 64)
+		if err != nil {
+			writeError(w, "invalid min download speed", http.StatusBadRequest)
+			return
+		}
+	}
+	countries := req.Form["country"]
+	limit := int64(-1)
+	lim := req.FormValue("limit")
+	if lim != "" {
+		limit, err = strconv.ParseInt(lim, 10, 64)
+		if err != nil {
+			writeError(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+	}
+	keys, err := api.getHostKeys(
+		network,
+		node,
+		maxStoragePrice,
+		maxUploadPrice,
+		maxDownloadPrice,
+		maxContractPrice,
+		uint64(minDuration),
+		maxBasePrice,
+		maxSectorPrice,
+		uint64(minStorage),
+		minVersion,
+		time.Duration(maxLatency),
+		float64(minUploadSpeed),
+		float64(minDownloadSpeed),
+		countries,
+		int(limit),
+	)
+	if err != nil {
+		api.log.Error("couldn't get host keys", zap.Error(err))
+		writeError(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, keysResponse{Keys: keys})
 }
 
 func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {

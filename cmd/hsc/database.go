@@ -12,6 +12,7 @@ import (
 
 	"github.com/mike76-dev/hostscore/external"
 	"github.com/mike76-dev/hostscore/hostdb"
+	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/internal/utils"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
@@ -1730,4 +1731,172 @@ func (api *portalAPI) getCountries(network string, all bool) (countries []string
 	}
 
 	return countries, nil
+}
+
+// getHostKeys returns a list of host public keys according to certain criteria.
+func (api *portalAPI) getHostKeys(
+	network string,
+	node string,
+	maxStoragePrice types.Currency,
+	maxUploadPrice types.Currency,
+	maxDownloadPrice types.Currency,
+	maxContractPrice types.Currency,
+	minContractDuration uint64,
+	maxBaseRPCPrice types.Currency,
+	maxSectorAccessPrice types.Currency,
+	minAvailableStorage uint64,
+	minVersion string,
+	maxLatency time.Duration,
+	minUploadSpeed float64,
+	minDownloadSpeed float64,
+	countries []string,
+	limit int,
+) (keys []types.PublicKey, err error) {
+	stmt, err := api.db.Prepare(`
+		SELECT country
+		FROM locations
+		WHERE network = ?
+		AND public_key = ?
+	`)
+	if err != nil {
+		return nil, utils.AddContext(err, "couldn't prepare statement")
+	}
+	defer stmt.Close()
+
+	allCountries := make(map[string]struct{})
+	for _, c := range countries {
+		allCountries[strings.ToLower(c)] = struct{}{}
+	}
+
+	hosts := api.hosts[network]
+	var selectedHosts []portalHost
+
+outer:
+	for _, host := range hosts {
+		if !api.isOnline(*host) {
+			continue
+		}
+
+		if !host.Settings.AcceptingContracts {
+			continue
+		}
+
+		if host.Settings.StoragePrice.Cmp(maxStoragePrice) > 0 {
+			continue
+		}
+
+		if host.Settings.UploadBandwidthPrice.Cmp(maxUploadPrice) > 0 {
+			continue
+		}
+
+		if host.Settings.DownloadBandwidthPrice.Cmp(maxDownloadPrice) > 0 {
+			continue
+		}
+
+		if host.Settings.ContractPrice.Cmp(maxContractPrice) > 0 {
+			continue
+		}
+
+		if host.Settings.MaxDuration < minContractDuration {
+			continue
+		}
+
+		if host.Settings.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
+			continue
+		}
+
+		if host.Settings.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
+			continue
+		}
+
+		if host.Settings.RemainingStorage < minAvailableStorage {
+			continue
+		}
+
+		if minVersion != "" && build.VersionCmp(host.Settings.Version, minVersion) < 0 {
+			continue
+		}
+
+		if maxLatency > 0 || minUploadSpeed > 0 || minDownloadSpeed > 0 {
+			if node == "global" {
+				for _, interactions := range host.Interactions {
+					lat, ul, dl := getSpeeds(interactions)
+					if maxLatency > 0 && lat > maxLatency {
+						continue outer
+					}
+					if minUploadSpeed > 0 && ul < minUploadSpeed {
+						continue outer
+					}
+					if minDownloadSpeed > 0 && dl < minDownloadSpeed {
+						continue outer
+					}
+				}
+			} else {
+				interactions := host.Interactions[node]
+				lat, ul, dl := getSpeeds(interactions)
+				if maxLatency > 0 && lat > maxLatency {
+					continue
+				}
+				if minUploadSpeed > 0 && ul < minUploadSpeed {
+					continue
+				}
+				if minDownloadSpeed > 0 && dl < minDownloadSpeed {
+					continue
+				}
+			}
+		}
+
+		if len(countries) > 0 {
+			var c string
+			if err := stmt.QueryRow(network, host.PublicKey[:]).Scan(&c); err != nil {
+				return nil, utils.AddContext(err, "couldn't retrieve country")
+			}
+			if _, ok := allCountries[strings.ToLower(c)]; !ok {
+				continue
+			}
+		}
+
+		selectedHosts = append(selectedHosts, *host)
+	}
+
+	slices.SortStableFunc(selectedHosts, func(a, b portalHost) int { return a.Rank - b.Rank })
+
+	if limit < 0 || limit > len(selectedHosts) {
+		limit = len(selectedHosts)
+	}
+
+	for _, sh := range selectedHosts[:limit] {
+		keys = append(keys, sh.PublicKey)
+	}
+
+	return
+}
+
+func getSpeeds(interactions nodeInteractions) (lat time.Duration, ul, dl float64) {
+	var scans, benchmarks int
+	for _, scan := range interactions.ScanHistory {
+		if scan.Success {
+			lat += scan.Latency
+			scans++
+		}
+	}
+
+	for _, benchmark := range interactions.BenchmarkHistory {
+		if benchmark.Success {
+			ul += benchmark.UploadSpeed
+			dl += benchmark.DownloadSpeed
+			benchmarks++
+		}
+	}
+
+	if scans > 0 {
+		lat /= time.Duration(scans)
+	}
+
+	if benchmarks > 0 {
+		ul /= float64(benchmarks)
+		dl /= float64(benchmarks)
+	}
+
+	return
 }
