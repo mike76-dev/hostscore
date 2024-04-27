@@ -553,7 +553,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
 			if aIsOnline && !bIsOnline {
 				return -1
 			}
@@ -570,7 +570,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	})
 	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
 			if aIsOnline && !bIsOnline {
 				return -1
 			}
@@ -605,7 +605,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 }
 
 // isOnline returns true if the host is considered online by at least one node.
-func (api *portalAPI) isOnline(host portalHost) bool {
+func isOnline(host portalHost) bool {
 	for _, interactions := range host.Interactions {
 		history := interactions.ScanHistory
 		if len(history) > 1 && history[0].Success && history[1].Success {
@@ -702,7 +702,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		allHosts := api.hosts[network]
 		for _, key := range keys {
 			host := allHosts[key]
-			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+			if (all || isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
 				hosts = append(hosts, *host)
 			}
 		}
@@ -711,7 +711,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		api.mu.RLock()
 		allHosts := api.hosts[network]
 		for _, host := range allHosts {
-			if (all || api.isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+			if (all || isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
 				hosts = append(hosts, *host)
 			}
 		}
@@ -1232,7 +1232,7 @@ func (api *portalAPI) load() error {
 	}
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
 			if aIsOnline && !bIsOnline {
 				return -1
 			}
@@ -1249,7 +1249,7 @@ func (api *portalAPI) load() error {
 	})
 	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
 		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := api.isOnline(a), api.isOnline(b)
+			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
 			if aIsOnline && !bIsOnline {
 				return -1
 			}
@@ -1584,20 +1584,19 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey, from, 
 
 // calculateAverages calculates the averages for the given network.
 func (api *portalAPI) calculateAverages() {
-	api.mu.Lock()
-	defer api.mu.Unlock()
-
 	var hosts, hostsZen []portalHost
+	api.mu.RLock()
 	for _, host := range api.hosts["mainnet"] {
-		if api.isOnline(*host) {
+		if isOnline(*host) {
 			hosts = append(hosts, *host)
 		}
 	}
 	for _, host := range api.hosts["zen"] {
-		if api.isOnline(*host) {
+		if isOnline(*host) {
 			hostsZen = append(hostsZen, *host)
 		}
 	}
+	api.mu.RUnlock()
 
 	slices.SortStableFunc(hosts, func(a, b portalHost) int {
 		return a.Rank - b.Rank
@@ -1606,8 +1605,10 @@ func (api *portalAPI) calculateAverages() {
 		return a.Rank - b.Rank
 	})
 
+	api.mu.Lock()
 	api.averages["mainnet"] = calculateTiers(hosts)
 	api.averages["zen"] = calculateTiers(hostsZen)
+	api.mu.Unlock()
 }
 
 func calculateTiers(sortedHosts []portalHost) map[string]networkAverages {
@@ -1715,7 +1716,7 @@ func (api *portalAPI) getCountries(network string, all bool) (countries []string
 	allCountries := make(map[string]struct{})
 	hosts := api.hosts[network]
 	for pk, host := range hosts {
-		if !api.isOnline(*host) {
+		if !isOnline(*host) {
 			continue
 		}
 		var c string
@@ -1768,12 +1769,13 @@ func (api *portalAPI) getHostKeys(
 		allCountries[strings.ToLower(c)] = struct{}{}
 	}
 
+	api.mu.RLock()
 	hosts := api.hosts[network]
 	var selectedHosts []portalHost
 
 outer:
 	for _, host := range hosts {
-		if !api.isOnline(*host) {
+		if !isOnline(*host) {
 			continue
 		}
 
@@ -1849,6 +1851,7 @@ outer:
 		if len(countries) > 0 {
 			var c string
 			if err := stmt.QueryRow(network, host.PublicKey[:]).Scan(&c); err != nil {
+				api.mu.RUnlock()
 				return nil, utils.AddContext(err, "couldn't retrieve country")
 			}
 			if _, ok := allCountries[strings.ToLower(c)]; !ok {
@@ -1858,6 +1861,7 @@ outer:
 
 		selectedHosts = append(selectedHosts, *host)
 	}
+	api.mu.RUnlock()
 
 	slices.SortStableFunc(selectedHosts, func(a, b portalHost) int { return a.Rank - b.Rank })
 

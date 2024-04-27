@@ -855,7 +855,7 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 	api.mu.RLock()
 	hosts.Total = len(api.hosts[network])
 	for _, host := range api.hosts[network] {
-		if api.isOnline(*host) {
+		if isOnline(*host) {
 			hosts.Online++
 		}
 	}
