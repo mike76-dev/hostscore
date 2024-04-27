@@ -8,7 +8,7 @@
 .hosts-subcontainer {
     display: flex;
     flex-direction: column;
-    width: 70%;
+    flex-grow: 1;
 }
 
 .hosts-table-div {
