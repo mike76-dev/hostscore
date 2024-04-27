@@ -1,13 +1,15 @@
 import './FAQ.css'
-import { useState, useContext } from 'react'
+import { useContext } from 'react'
+import { useParams } from 'react-router'
 import { useNavigate } from 'react-router-dom'
 import { Button, FAQItem } from '../'
 import Back from '../../assets/back.png'
 import { NetworkContext } from '../../contexts'
 
-type Topic = {
+export type Topic = {
     question: string,
     answer?: React.ReactNode,
+    link: string,
     subtopics?: Topic[]
 }
 
@@ -32,6 +34,7 @@ const topics: Topic[] = [
                 The higher the score, the lower the rank.
             </p>
         </>,
+        link: 'how-is-the-score-calculated',
         subtopics: [
             {
                 question: 'Prices',
@@ -58,7 +61,8 @@ const topics: Topic[] = [
                         conditions, HostScore assumes storing 1 TiB of data for one month
                         for the price of 1 KS.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-prices'
             },
             {
                 question: 'Remaining Storage',
@@ -80,7 +84,8 @@ const topics: Topic[] = [
                         host is the fraction of the data we expect raised to the storage
                         penalty exponentiation.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-remaining-storage'
             },
             {
                 question: 'Collateral',
@@ -94,7 +99,8 @@ const topics: Topic[] = [
                         the lower limit is 1.5x the storage price, and the upper limit is
                         6x the storage price. Beyond that, there is no effect on the score.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-collateral'
             },
             {
                 question: 'Interactions',
@@ -114,7 +120,8 @@ const topics: Topic[] = [
                         However, with 10 failed interactions out of 10, the score will be 0.04,
                         and with 100 failed interactions out of 100, it will drop to 4e-7.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-interactions'
             },
             {
                 question: 'Uptime',
@@ -132,7 +139,8 @@ const topics: Topic[] = [
                         95% uptime will receive a score of 0.6, while 90% uptime will bring
                         the score down to 0.12.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-uptime'
             },
             {
                 question: 'Age',
@@ -146,7 +154,8 @@ const topics: Topic[] = [
                         improves to 0.08. After one month, it becomes 0.33. After 128 days,
                         the penalty goes away completely.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-age'
             },
             {
                 question: 'Version',
@@ -165,7 +174,8 @@ const topics: Topic[] = [
                         In the future, the scoring algorithm will probably be modified
                         to differentiate between the releases of <code>hostd</code>.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-version'
             },
             {
                 question: 'Accepting Contracts',
@@ -175,7 +185,8 @@ const topics: Topic[] = [
                         new contracts, it receives a score of 1. Otherwise, the score is
                         zero.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-accepting-contracts'
             },
             {
                 question: 'Latency',
@@ -189,7 +200,8 @@ const topics: Topic[] = [
                         limit is the latencies of 1 second and greater, and the upper
                         limit is the latencies of 10 milliseconds or less.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-latency'
             },
             {
                 question: 'Benchmarks',
@@ -205,7 +217,8 @@ const topics: Topic[] = [
                         50 MB/s (for uploads) and 100 MB/s (for downloads). The resulting
                         score is the product of both components.
                     </p>
-                </>
+                </>,
+                link: 'how-is-the-score-calculated-benchmarks'
             }
         ]
     },
@@ -238,7 +251,8 @@ const topics: Topic[] = [
                 makes sure that the hosts that have been offline for too long are not
                 benchmarked at all.
             </p>
-        </>
+        </>,
+        link: 'how-often-are-the-benchmarks-run'
     },
     {
         question: `Why are my host's latencies and speeds not changing over time?`,
@@ -248,7 +262,8 @@ const topics: Topic[] = [
                 over a relatively large number of scans (48) and benchmarks (12).
                 So, they may indeed seem static if the host's performance is consistent.
             </p>
-        </>
+        </>,
+        link: 'why-are-latencies-and-speeds-not-changing'
     },
     {
         question: 'Do the average prices include the 3x redundancy?',
@@ -257,13 +272,15 @@ const topics: Topic[] = [
                 The network average prices are shown from the hosts' perspective.
                 They don't include any redundancy.
             </p>
-        </>
+        </>,
+        link: 'do-the-average-prices-include-redundancy'
     },
     {
         question: `I have a question but it's not listed here. What shall I do?`,
         answer: <>
             <p>Please let me know, and I will consider listing your question here.</p>
-        </>
+        </>,
+        link: 'i-have-a-question-not-listed-here'
     }
 ]
 
@@ -272,10 +289,15 @@ type FAQProps = { darkMode: boolean }
 export const FAQ = (props: FAQProps) => {
     const navigate = useNavigate()
     const { network } = useContext(NetworkContext)
-    const [expandedItem, setExpandedItem] = useState(0)
-    const expandItem = (parent: number, child: number) => {
-        if (child !== 0) setExpandedItem(child)
-        else setExpandedItem(parent)
+    const { link } = useParams()
+    const expandItem = (link: string) => {
+        navigate('/faq/' + link)
+    }
+    const isExpanded = (topic: Topic, link: string) => {
+        if (link === '') return false
+        if (topic.link && topic.link === link) return true
+        if (topic.subtopics && topic.subtopics.find(st => st.link && st.link === link)) return true
+        return false
     }
     return (
         <div className={'faq-container' + (props.darkMode ? ' faq-container-dark' : '')}>
@@ -284,9 +306,9 @@ export const FAQ = (props: FAQProps) => {
                 <FAQItem
                     key={'faq-' + index}
                     parent={0}
-                    index={index + 1}
                     title={topic.question}
-                    expanded={expandedItem === index + 1 || (expandedItem > 100 && Math.floor(expandedItem / 100) - 1 === index)}
+                    link={topic.link}
+                    expanded={isExpanded(topic, link || '')}
                     expandItem={expandItem}
                 >
                     {topic.answer}
@@ -294,9 +316,9 @@ export const FAQ = (props: FAQProps) => {
                         <FAQItem
                             key={`faq-` + index + '-' + i}
                             parent={index + 1}
-                            index={100 * (index + 1) + i + 1}
                             title={subtopic.question}
-                            expanded={expandedItem > 100 && Math.floor(expandedItem / 100) - 1 === index && expandedItem % 100 - 1 === i}
+                            link={subtopic.link}
+                            expanded={isExpanded(subtopic, link || '')}
                             expandItem={expandItem}
                         >
                             {subtopic.answer}

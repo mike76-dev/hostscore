@@ -157,6 +157,21 @@ const App = () => {
 					),
 				},
                 {
+					path: 'faq/:link',
+					element: (
+						<>
+							<Header
+								darkMode={darkMode}
+								toggleDarkMode={toggleDarkMode}
+							/>
+							<Content darkMode={darkMode}>
+								<FAQ darkMode={darkMode}/>
+							</Content>
+							<Footer darkMode={darkMode}/>
+						</>
+					),
+				},
+                {
 					path: 'status',
 					element: (
 						<>
