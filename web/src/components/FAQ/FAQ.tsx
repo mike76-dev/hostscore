@@ -290,8 +290,11 @@ export const FAQ = (props: FAQProps) => {
     const navigate = useNavigate()
     const { network } = useContext(NetworkContext)
     const { link } = useParams()
-    const expandItem = (link: string) => {
-        navigate('/faq/' + link)
+    const expandItem = (lnk: string) => {
+        navigate('/faq/' + lnk)
+    }
+    const collapseItem = (parent: number) => {
+        navigate(parent === 0 ? '/faq' : '/faq/' + topics[parent - 1].link)
     }
     const isExpanded = (topic: Topic, link: string) => {
         if (link === '') return false
@@ -310,6 +313,7 @@ export const FAQ = (props: FAQProps) => {
                     link={topic.link}
                     expanded={isExpanded(topic, link || '')}
                     expandItem={expandItem}
+                    collapseItem={collapseItem}
                 >
                     {topic.answer}
                     {topic.subtopics && topic.subtopics.map((subtopic, i) => (
@@ -320,6 +324,7 @@ export const FAQ = (props: FAQProps) => {
                             link={subtopic.link}
                             expanded={isExpanded(subtopic, link || '')}
                             expandItem={expandItem}
+                            collapseItem={collapseItem}
                         >
                             {subtopic.answer}
                         </FAQItem>

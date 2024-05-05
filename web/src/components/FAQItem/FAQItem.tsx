@@ -6,6 +6,7 @@ type FAQItemProps = {
     link: string
     expanded: boolean,
     expandItem: (link: string) => void,
+    collapseItem: (parent: number) => void,
     children: React.ReactNode
 }
 
@@ -14,7 +15,10 @@ export const FAQItem = (props: FAQItemProps) => {
         <div className={props.parent > 0 ? ' faq-item-subcontainer' : 'faq-item-container'}>
             <div
                 className={'faq-item-title' + (props.expanded ? ' faq-item-title-expanded' : '')}
-                onClick={() => {props.expandItem(props.link)}}
+                onClick={() => {
+                    if (props.expanded) props.collapseItem(props.parent)
+                    else props.expandItem(props.link)
+                }}
             >{props.title}</div>
             {props.expanded &&
                 <div className={props.parent > 0 ? '' : 'faq-item-contents'}>{props.children}</div>
