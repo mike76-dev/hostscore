@@ -5,8 +5,15 @@
 	justify-content: center;
 	flex-grow: 1;
 	padding: 1rem;
+    overflow-x: auto;
 }
 
 .content-dark-mode {
 	background-color: var(--backgroundDark);
+}
+
+@media screen and (max-width: 1000px) {
+    .content {
+        overflow-x: inherit;
+    }
 }

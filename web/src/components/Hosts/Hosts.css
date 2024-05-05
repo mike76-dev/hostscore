@@ -19,7 +19,7 @@
 
 .hosts-averages-div {
     position: relative;
-    min-width: 20rem;
+    padding-right: 1rem;
 }
 
 .hosts-row {
@@ -59,6 +59,10 @@
 
     .hosts-subcontainer {
         width: 100%;
+    }
+
+    .hosts-averages-div {
+        padding-right: 0;
     }
 
     .hosts-row {
