@@ -191,6 +191,7 @@ type portalAPI struct {
 	stopChan chan struct{}
 	averages map[string]map[string]networkAverages
 	nodes    map[string]nodeStatus
+	rl       *ratelimiter
 }
 
 func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *responseCache) (*portalAPI, error) {
@@ -209,6 +210,8 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 
 	api.hosts["mainnet"] = make(map[types.PublicKey]*portalHost)
 	api.hosts["zen"] = make(map[types.PublicKey]*portalHost)
+
+	api.rl = newRatelimiter(api.stopChan)
 
 	err := api.load()
 	if err != nil {
@@ -370,6 +373,10 @@ func (api *portalAPI) buildHTTPRoutes() {
 }
 
 func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -406,6 +413,10 @@ func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request,
 }
 
 func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -513,6 +524,10 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 }
 
 func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	err := req.ParseForm()
 	if err != nil {
 		writeError(w, "unable to parse request", http.StatusBadRequest)
@@ -678,6 +693,10 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 }
 
 func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -752,6 +771,10 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 }
 
 func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -835,7 +858,11 @@ func balanceStatus(balance types.Currency) string {
 	return "ok"
 }
 
-func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	writeJSON(w, statusResponse{
 		Version: build.ClientVersion,
 		Nodes:   api.nodes,
@@ -843,6 +870,10 @@ func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, _ *http.Reques
 }
 
 func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -864,6 +895,10 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 }
 
 func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -923,6 +958,10 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 }
 
 func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
@@ -935,6 +974,10 @@ func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Re
 }
 
 func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	if api.rl.limitExceeded(getRemoteHost(req)) {
+		writeError(w, "too many requests", http.StatusTooManyRequests)
+		return
+	}
 	network := strings.ToLower(req.FormValue("network"))
 	if network == "" {
 		network = "mainnet"
