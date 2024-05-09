@@ -256,8 +256,14 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 
 	// Subscribe in a goroutine to prevent blocking.
 	go func() {
+		for hdb.cm.Tip().Height <= tip.Height {
+			time.Sleep(5 * time.Second)
+		}
 		if err := syncStore(hdb.s, hdb.cm, tip); err != nil {
-			l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
+			index, _ := hdb.cm.BestIndex(tip.Height - 1)
+			if err := syncStore(hdb.s, hdb.cm, index); err != nil {
+				l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
+			}
 		}
 
 		reorgChan := make(chan types.ChainIndex, 1)
@@ -277,8 +283,14 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 	}()
 
 	go func() {
+		for hdb.cmZen.Tip().Height <= tipZen.Height {
+			time.Sleep(5 * time.Second)
+		}
 		if err := syncStore(hdb.sZen, hdb.cmZen, tipZen); err != nil {
-			l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
+			index, _ := hdb.cmZen.BestIndex(tipZen.Height - 1)
+			if err := syncStore(hdb.sZen, hdb.cmZen, index); err != nil {
+				l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
+			}
 		}
 
 		reorgChan := make(chan types.ChainIndex, 1)

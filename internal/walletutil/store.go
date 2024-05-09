@@ -146,7 +146,9 @@ func (s *DBStore) addSiacoinElements(sces []types.SiacoinElement) error {
 		e.Flush()
 		_, err := s.tx.Exec(`
 			INSERT INTO wt_sces (scoid, network, bytes)
-			VALUES (?, ?, ?)
+			VALUES (?, ?, ?) AS new
+			ON DUPLICATE KEY UPDATE
+				bytes = new.bytes
 		`, sce.ID[:], s.network, buf.Bytes())
 		if err != nil {
 			s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
@@ -182,7 +184,9 @@ func (s *DBStore) addSiafundElements(sfes []types.SiafundElement) error {
 		e.Flush()
 		_, err := s.tx.Exec(`
 			INSERT INTO wt_sfes (sfoid, network, bytes)
-			VALUES (?, ?, ?)
+			VALUES (?, ?, ?) AS new
+			ON DUPLICATE KEY UPDATE
+				bytes = new.bytes
 		`, sfe.ID[:], s.network, buf.Bytes())
 		if err != nil {
 			s.log.Error("couldn't add SF output", zap.String("network", s.network), zap.Error(err))

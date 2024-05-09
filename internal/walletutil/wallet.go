@@ -169,8 +169,14 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 	}
 
 	go func() {
+		for w.cm.Tip().Height <= tip.Height {
+			time.Sleep(5 * time.Second)
+		}
 		if err := syncStore(w.s, w.cm, tip); err != nil {
-			l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
+			index, _ := w.cm.BestIndex(tip.Height - 1)
+			if err := syncStore(w.s, w.cm, index); err != nil {
+				l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
+			}
 		}
 
 		reorgChan := make(chan types.ChainIndex, 1)
@@ -190,8 +196,14 @@ func NewWallet(db *sql.DB, seed, seedZen, dir string, cm *chain.Manager, cmZen *
 	}()
 
 	go func() {
+		for w.cmZen.Tip().Height <= tipZen.Height {
+			time.Sleep(5 * time.Second)
+		}
 		if err := syncStore(w.sZen, w.cmZen, tipZen); err != nil {
-			l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
+			index, _ := w.cmZen.BestIndex(tipZen.Height - 1)
+			if err := syncStore(w.sZen, w.cmZen, index); err != nil {
+				l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
+			}
 		}
 
 		reorgChan := make(chan types.ChainIndex, 1)
