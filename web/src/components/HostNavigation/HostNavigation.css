@@ -5,6 +5,7 @@
 	justify-content: center;
 	flex-wrap: nowrap;
 	margin-top: 1rem;
+    margin-bottom: 1rem;
 }
 
 .host-navigation-select {
