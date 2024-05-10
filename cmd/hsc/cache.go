@@ -9,7 +9,7 @@ import (
 
 const (
 	hostsExpireThreshold = 10 * time.Minute
-	hostsRequestsLimit   = 100
+	cachedHostsLimit     = 2000
 )
 
 type cachedHosts struct {
@@ -29,6 +29,7 @@ type cachedHosts struct {
 
 type responseCache struct {
 	hosts    []cachedHosts
+	count    int
 	mu       sync.Mutex
 	stopChan chan struct{}
 }
@@ -54,6 +55,7 @@ func (rc *responseCache) prune() {
 		}
 		rc.mu.Lock()
 		i := 0
+		rc.count = 0
 		for {
 			if i >= len(rc.hosts) {
 				break
@@ -61,6 +63,7 @@ func (rc *responseCache) prune() {
 			if time.Since(rc.hosts[i].modified) > hostsExpireThreshold {
 				rc.hosts = append(rc.hosts[:i], rc.hosts[i+1:]...)
 			} else {
+				rc.count += len(rc.hosts[i].hosts)
 				i++
 			}
 		}
@@ -108,8 +111,20 @@ func (rc *responseCache) getHosts(network string, all bool, offset, limit int, q
 }
 
 func (rc *responseCache) putHosts(network string, all bool, offset, limit int, query, country string, sortBy sortType, asc bool, hosts []portalHost, more bool, total int) {
+	if len(hosts) > cachedHostsLimit {
+		return
+	}
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
+	rc.count += len(hosts)
+	for rc.count > cachedHostsLimit {
+		rc.count -= len(rc.hosts[0].hosts)
+		if len(rc.hosts) > 0 {
+			rc.hosts = rc.hosts[1:]
+		} else {
+			rc.hosts = nil
+		}
+	}
 	rc.hosts = append(rc.hosts, cachedHosts{
 		hosts:    hosts,
 		more:     more,
@@ -124,7 +139,4 @@ func (rc *responseCache) putHosts(network string, all bool, offset, limit int, q
 		asc:      asc,
 		modified: time.Now(),
 	})
-	if len(rc.hosts) > hostsRequestsLimit {
-		rc.hosts = rc.hosts[1:]
-	}
 }
