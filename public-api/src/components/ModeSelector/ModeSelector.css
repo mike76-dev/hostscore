@@ -1,0 +1,20 @@
+.mode-selector-switch {
+	text-decoration: none;
+	border-radius: 0.25rem;
+	cursor: pointer;
+	margin-left: auto;
+    margin-right: 1rem;
+}
+
+.mode-selector-switch:focus {
+	outline: 2px solid var(--outlineLight);
+}
+
+.mode-selector-container {
+	padding: 0.25rem;
+}
+
+.mode-selector-icon {
+	width: 1.2rem;
+	height: 1.2rem;
+}

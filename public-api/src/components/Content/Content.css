@@ -1,0 +1,79 @@
+.content {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex-grow: 1;
+	padding: 1rem;
+    overflow-x: auto;
+}
+
+.content-dark-mode {
+	background-color: var(--backgroundDark);
+}
+
+.content-dark-mode p,
+.content-dark-mode td,
+.content-dark-mode .brace-open,
+.content-dark-mode .brace-close,
+.content-dark-mode .title,
+.content-dark-mode .nostyle,
+.content-dark-mode .models-control,
+.content-dark-mode .model-title,
+.content-dark-mode .servers-title,
+.content-dark-mode .model-toggle ~ span {
+    color: var(--textDark)!important;
+}
+
+.content-dark-mode .opblock input,
+.content-dark-mode .opblock select {
+    background-color: hsla(0, 0%, 100%, 0.8);
+}
+
+.content-dark-mode .scheme-container {
+    background-color: var(--backgroundDark);
+}
+
+.content-dark-mode .arrow {
+    fill: var(--borderDark);
+}
+
+.content-dark-mode .servers * {
+    color: var(--textDark);
+    background-color: var(--selectDark);
+    border-color: var(--borderDark);
+}
+
+.content-dark-mode .scheme-container {
+    box-shadow: 0 1px 2px 0 rgba(255, 255, 255, 0.15);
+}
+
+.content-dark-mode .opblock-tag,
+.content-dark-mode .models,
+.content-dark-mode .models h4 {
+    border-color: rgba(127, 127, 127, 0.3)!important;
+}
+
+.content-dark-mode .models-control svg {
+    fill: var(--borderDark);
+}
+
+.content-dark-mode .model-container {
+    background-color: var(--selectDark)!important;
+}
+
+.content-dark-mode .models-control:focus {
+    outline: 2px solid var(--outlineDark);
+    border-radius: 4px;
+}
+
+.content-dark-mode .model-box-control:focus {
+    outline: 1px solid var(--outlineDark);
+    border-radius: 4px;
+}
+
+@media screen and (max-width: 1000px) {
+    .content {
+        overflow-x: inherit;
+    }
+}

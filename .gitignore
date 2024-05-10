@@ -24,3 +24,5 @@ utilities/
 
 web/node_modules
 web/build
+public-api/node_modules
+public-api/build

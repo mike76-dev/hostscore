@@ -1,0 +1,22 @@
+.header-container {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	padding: 0.25rem;
+	border-bottom: 2px solid var(--borderLight);
+}
+
+.header-dark-mode {
+	background-color: var(--backgroundDark);
+	border-bottom: 2px solid var(--borderDark);
+}
+
+.header-dark-mode a:focus {
+	outline: 2px solid var(--outlineDark);
+}
+
+@media screen and (max-width: 1000px) {
+    .header-container {
+        padding-bottom: 0.75rem;
+    }
+}

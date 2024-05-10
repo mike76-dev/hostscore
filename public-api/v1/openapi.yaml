@@ -2,9 +2,12 @@ openapi: 3.0.3
 info:
   title: HostScore API
   description: |-
-    This is a preliminary specification of HostScore API.
+    This is the specification of HostScore API.
+
+    The API requests are rate limited to 10 requests/second. Callers that surpass
+    the rate limit will receive an error response with a `429` HTTP status code.
   license:
-    name: MIT
+    name: MIT License
     url: https://opensource.org/license/mit/
   version: 1.0.0
 servers:
