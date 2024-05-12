@@ -17,6 +17,9 @@
     margin-left: 1rem;
 }
 
-.benchmark-error {
+.benchmark-info {
     font-size: 0.7rem;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
 }

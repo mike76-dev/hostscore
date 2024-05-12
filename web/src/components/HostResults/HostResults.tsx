@@ -181,6 +181,8 @@ export const HostResults = (props: HostResultsProps) => {
 											<Benchmark
 												timestamp={cell.timestamp}
 												success={cell.success}
+                                                upload={cell.uploadSpeed}
+                                                download={cell.downloadSpeed}
 												error={cell.error}
 											/>
 										}
