@@ -331,6 +331,7 @@ const PriceChart = (props: PriceChartProps) => {
 export const HostPrices = (props: HostPricesProps) => {
     const [scale, setScale] = useState<ScaleOptions>('day')
     const [maxTimestamp, setMaxTimestamp] = useState((new Date()).getTime())
+    const [collapsed, toggleCollapsed] = useState(false)
     const moveLeft = () => {
         if (!props.data || props.data.length === 0) return
         let ts = (new Date(props.data[0].timestamp)).getTime()
@@ -380,23 +381,38 @@ export const HostPrices = (props: HostPricesProps) => {
     }
     return (
         <div className={'host-prices-container' + (props.darkMode ? ' host-prices-dark' : '')}>
-            <p>Historic Price Development</p>
-            <PriceChart
-                data={props.data}
-                scale={scale}
-                setScale={setScale}
-                maxTimestamp={maxTimestamp}
-                setMaxTimestamp={setMaxTimestamp}
-                darkMode={props.darkMode}
-            />
-            {props.data &&
-                <Controls
-                    darkMode={props.darkMode}
-                    zoomIn={zoomIn}
-                    zoomOut={zoomOut}
-                    moveLeft={moveLeft}
-                    moveRight={moveRight}
-                />
+            <p
+                className={'host-prices-title' + (collapsed ? ' host-prices-collapsed' : '')}
+                tabIndex={1}
+                onClick={() => {toggleCollapsed(!collapsed)}}
+                onKeyUp={(e: React.KeyboardEvent<HTMLParagraphElement>) => {
+                    if (e.key === ' ' || e.key === 'Enter') {
+                        toggleCollapsed(!collapsed)
+                    }
+                }}
+            >
+                Historic Price Development
+            </p>
+            {!collapsed &&
+                <>
+                    <PriceChart
+                        data={props.data}
+                        scale={scale}
+                        setScale={setScale}
+                        maxTimestamp={maxTimestamp}
+                        setMaxTimestamp={setMaxTimestamp}
+                        darkMode={props.darkMode}
+                    />
+                    {props.data &&
+                        <Controls
+                            darkMode={props.darkMode}
+                            zoomIn={zoomIn}
+                            zoomOut={zoomOut}
+                            moveLeft={moveLeft}
+                            moveRight={moveRight}
+                        />
+                    }
+                </>
             }
         </div>
     )

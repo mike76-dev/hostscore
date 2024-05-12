@@ -8,16 +8,40 @@
     position: relative;
 }
 
-.host-prices-container p {
+.host-prices-title {
     margin-bottom: 0;
+    border-radius: 0.25rem;
+    padding: 0.25rem;
+    cursor: pointer;
+}
+
+.host-prices-title:focus {
+    outline: 2px solid var(--outlineLight);
 }
 
 .host-prices-dark {
     border-color: var(--borderDark);
 }
 
-.host-prices-dark p {
+.host-prices-dark .host-prices-title {
     color: var(--textDark);
+}
+
+.host-prices-dark .host-prices-title:focus {
+    outline: 2px solid var(--outlineDark);
+}
+
+.host-prices-title::before {
+    content: '\025b2';
+    margin-right: 0.25rem;
+}
+
+.host-prices-collapsed {
+    margin-bottom: 1rem;
+}
+
+.host-prices-collapsed::before {
+    content: '\025bc';
 }
 
 @media screen and (max-width: 1000px) {
