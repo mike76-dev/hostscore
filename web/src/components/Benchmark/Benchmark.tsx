@@ -19,12 +19,11 @@ export const Benchmark = (props: BenchmarkProps) => {
 				<div className="benchmark-info">{props.error}</div>
 			:
                 <div className="benchmark-info">
-                    <span>&#8613;</span>
+                    <span>&#8613;&nbsp;</span>
                     <span>{convertSize(props.upload) + '/s'}</span>
-                    <span>&nbsp;&nbsp;</span>
-                    <span>&#8615;</span>
+                    <span>&nbsp;&nbsp;&nbsp;</span>
+                    <span>&#8615;&nbsp;</span>
                     <span>{convertSize(props.download) + '/s'}</span>
-                    <span>&nbsp;</span>
                 </div>
 			}
 		</div>
