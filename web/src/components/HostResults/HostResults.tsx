@@ -69,6 +69,7 @@ export const HostResults = (props: HostResultsProps) => {
         locations.forEach(location => {
             if (!props.host.interactions || (props.node !== 'global' && props.node !== location.short)) return
             const interactions = props.host.interactions[location.short]
+			if (!interactions) return
             const index = res.findIndex(r => r.node === location.short)
             if (index < 0) return
             interactions.scanHistory?.forEach(scan => {
