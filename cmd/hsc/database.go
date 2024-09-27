@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"fmt"
 	"math"
 	"slices"
 	"strings"
@@ -286,8 +285,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			scan.Error,
 		)
 		if err != nil {
-			tx.Rollback()
-			return utils.AddContext(err, fmt.Sprintf("couldn't insert scan record, key: %v", scan.PublicKey))
+			api.log.Warn("couldn't insert scan record", zap.Stringer("host", scan.PublicKey), zap.String("network", scan.Network), zap.String("node", scan.Node), zap.Error(err))
 		}
 	}
 
@@ -304,8 +302,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			benchmark.Error,
 		)
 		if err != nil {
-			tx.Rollback()
-			return utils.AddContext(err, fmt.Sprintf("couldn't insert benchmark record, key: %v", benchmark.PublicKey))
+			api.log.Warn("couldn't insert benchmark record", zap.Stringer("host", benchmark.PublicKey), zap.String("network", benchmark.Network), zap.String("node", benchmark.Node), zap.Error(err))
 		}
 	}
 
@@ -323,7 +320,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			api.mu.Unlock()
 			return utils.AddContext(err, "couldn't count price changes")
 		}
-		if !exists || count == 0 || pricesChanged(h.Settings, host.Settings) {
+		if exists && (count == 0 || pricesChanged(h.Settings, host.Settings)) {
 			var cb, spb, upb, dpb bytes.Buffer
 			e := types.NewEncoder(&cb)
 			types.V1Currency(h.Settings.Collateral).EncodeTo(e)
