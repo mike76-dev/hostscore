@@ -346,9 +346,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				dpb.Bytes(),
 			)
 			if err != nil {
-				tx.Rollback()
-				api.mu.Unlock()
-				return utils.AddContext(err, "couldn't update price change")
+				api.log.Warn("couldn't update price change", zap.Stringer("host", h.PublicKey), zap.String("network", h.Network), zap.String("node", node), zap.Error(err))
 			}
 		}
 
@@ -468,7 +466,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			hosts := api.hosts[network]
 			host, exists := hosts[pk]
 			if !exists {
-				api.log.Error("orphaned scan or benchmark found", zap.String("network", network), zap.Stringer("host", pk))
+				api.log.Warn("orphaned scan or benchmark found", zap.String("network", network), zap.Stringer("host", pk))
 				continue
 			}
 
@@ -512,9 +510,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				interactions.LastUpdate,
 			)
 			if err != nil {
-				tx.Rollback()
-				api.mu.Unlock()
-				return utils.AddContext(err, "couldn't update host interactions")
+				api.log.Warn("couldn't update host interactions", zap.Stringer("host", host.PublicKey), zap.String("network", network), zap.String("node", node), zap.Error(err))
 			}
 
 			host.Score = calculateGlobalScore(host)
