@@ -125,6 +125,9 @@ export const Hosts = (props: HostsProps) => {
             }
         })
     }, [network, time, onlineOnly, setCountries])
+    useEffect(() => {
+        changeOffset(0)
+    }, [network, changeOffset])
     return (
         <div className="hosts-container">
             <div className="hosts-subcontainer">
