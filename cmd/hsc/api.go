@@ -221,6 +221,7 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 	go api.doRequestStatus()
 	go api.requestUpdates()
 	go api.updateAverages()
+	go api.pruneOldScans()
 
 	return api, nil
 }

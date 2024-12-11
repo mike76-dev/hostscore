@@ -19,6 +19,12 @@ import (
 	"go.uber.org/zap"
 )
 
+// scanPruneThreshold determines how old a scan record needs to be to get pruned.
+const scanPruneThreshold = 14 * 24 * time.Hour
+
+// scanPruneInterval determines how often old scan records get pruned.
+const scanPruneInterval = time.Hour
+
 // errHostNotFound is returned when the specified host couldn't be found.
 var errHostNotFound = errors.New("host not found")
 
@@ -1896,4 +1902,23 @@ func getSpeeds(interactions nodeInteractions) (lat time.Duration, ul, dl float64
 	}
 
 	return
+}
+
+func (api *portalAPI) pruneOldScans() {
+	for {
+		select {
+		case <-api.stopChan:
+			return
+		case <-time.After(scanPruneInterval):
+		}
+
+		_, err := api.db.Exec(`
+			DELETE FROM scans
+			WHERE ran_at < ?
+			LIMIT 100000
+		`, time.Now().Unix()-int64(scanPruneThreshold.Seconds()))
+		if err != nil {
+			api.log.Error("unable to prune old scans", zap.Error(err))
+		}
+	}
 }
