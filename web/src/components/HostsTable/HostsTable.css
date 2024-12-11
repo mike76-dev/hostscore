@@ -1,6 +1,9 @@
 .hosts-table-container {
 	max-width: 100%;
 	overflow: auto;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
 }
 
 .hosts-table-container table {
@@ -83,4 +86,10 @@
 
 .hosts-table-dark .hosts-table-link {
 	color: var(--textDark);
+}
+
+@media screen and (max-width: 2000px) {
+    .hosts-table-container {
+        display: initial;
+    }
 }

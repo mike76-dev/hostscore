@@ -6,6 +6,7 @@
     margin-top: 2rem;
     margin-left: 1rem;
     position: relative;
+    max-width: 33vw;
 }
 
 .host-prices-title {
@@ -44,9 +45,16 @@
     content: '\025bc';
 }
 
+@media screen and (max-width: 1980px) {
+    .host-prices-container {
+        max-width: 50vw;
+    }
+}
+
 @media screen and (max-width: 1000px) {
     .host-prices-container {
         margin-top: 1rem;
         margin-left: 0;
+        max-width: 100vw;
     }
 }

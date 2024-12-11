@@ -15,7 +15,7 @@
 }
 
 html {
-	font-size: 32px;
+	font-size: 16px;
 }
 
 body {
@@ -38,25 +38,4 @@ body {
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
 	monospace;
-}
-
-@media screen and (max-width: 3440px) {
-
-	html {
-		font-size: 28px;
-	}
-}
-
-@media screen and (max-width: 2560px) {
-
-	html {
-		font-size: 20px;
-	}
-}
-
-@media screen and (max-width: 1920px) {
-
-	html {
-		font-size: 16px;
-	}
 }
