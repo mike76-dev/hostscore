@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net"
@@ -233,14 +234,15 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		hdb:   hdb,
 		db:    mdb,
 		Start: func() func() {
+			ctx := context.Background()
 			ch := make(chan struct{})
 			go func() {
-				s.Run()
+				s.Run(ctx)
 				close(ch)
 			}()
 			chZen := make(chan struct{})
 			go func() {
-				sZen.Run()
+				sZen.Run(ctx)
 				close(chZen)
 			}()
 			return func() {
