@@ -55,6 +55,7 @@ export const Hosts = (props: HostsProps) => {
     const prevSorting = useRef(sorting)
     const [time, setTime] = useState(new Date())
     const { averages, setAverages } = useContext(NetworkContext)
+    const prevNetwork = useRef(network)
     useEffect((): any => {
         const interval = setInterval(() => {
             setTime(new Date())
@@ -126,7 +127,12 @@ export const Hosts = (props: HostsProps) => {
         })
     }, [network, time, onlineOnly, setCountries])
     useEffect(() => {
-        changeOffset(0)
+        if (prevNetwork.current !== network) {
+            changeOffset(0)
+            setOnlineOnly(true)
+            setQuery('')
+            prevNetwork.current = network
+        }
     }, [network, changeOffset])
     return (
         <div className="hosts-container">

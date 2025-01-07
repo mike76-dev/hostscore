@@ -5,20 +5,20 @@ import {
 	Outlet
 } from 'react-router-dom'
 import {
-    Header,
-    Footer,
-    Content,
-    About,
-    FAQ,
-    Hosts,
-    HostDetails,
-    Status
+	Header,
+	Footer,
+	Content,
+	About,
+	FAQ,
+	Hosts,
+	HostDetails,
+	Status
 } from './components'
 import {
-    Host,
-    useExcludedPaths,
-    HostSortType,
-    NetworkAverages
+	Host,
+	useExcludedPaths,
+	HostSortType,
+	NetworkAverages
 } from './api'
 import { NetworkContext, HostContext } from './contexts'
 
@@ -27,16 +27,32 @@ const App = () => {
 	let mode = data ? JSON.parse(data) : false
 	const [darkMode, toggleDarkMode] = useState(mode)
 	const [network, switchNetwork] = useState('')
-    const [averages, setAverages] = useState<{ [tier: string]: NetworkAverages }>({})
+	const [averages, setAverages] = useState<{ [tier: string]: NetworkAverages }>({})
 	const [hosts, setHosts] = useState<Host[]>([])
-    const [offset, changeOffset] = useState(0)
-    const [limit, changeLimit] = useState(10)
-    const [onlineOnly, setOnlineOnly] = useState(true)
-    const [query, setQuery] = useState('')
-    const [sorting, changeSorting] = useState<HostSortType>({ sortBy: 'rank', order: 'asc' })
-    const [countries, setCountries] = useState<string[]>([])
-    const [country, setCountry] = useState('')
-    const excludedPaths = useExcludedPaths()
+	const [offset, changeOffset] = useState(() => {
+		const savedOffset = window.localStorage.getItem('offset')
+		return savedOffset ? parseInt(savedOffset, 10) : 0
+	})
+	const [limit, changeLimit] = useState(() => {
+		const savedLimit = window.localStorage.getItem('limit')
+		return savedLimit ? parseInt(savedLimit, 10) : 10
+	})
+	const [onlineOnly, setOnlineOnly] = useState(() => {
+		const savedOnlineOnly = window.localStorage.getItem('online')
+		return savedOnlineOnly && savedOnlineOnly === 'false' ? false : true
+	})
+	const [query, setQuery] = useState(() => {
+		return window.localStorage.getItem('query') || ''
+	})
+	const [sorting, changeSorting] = useState<HostSortType>(() => {
+		const savedSorting = window.localStorage.getItem('sorting')
+		return savedSorting ? JSON.parse(savedSorting) : { sortBy: 'rank', order: 'asc' }
+	})
+	const [countries, setCountries] = useState<string[]>([])
+	const [country, setCountry] = useState(() => {
+		return window.localStorage.getItem('country') || ''
+	})
+	const excludedPaths = useExcludedPaths()
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
 	}, [darkMode])
@@ -48,6 +64,24 @@ const App = () => {
 			switchNetwork('mainnet')
 		}
 	}, [excludedPaths])
+	useEffect(() => {
+		window.localStorage.setItem('offset', offset.toString())
+	}, [offset])
+	useEffect(() => {
+		window.localStorage.setItem('limit', limit.toString())
+	}, [limit])
+	useEffect(() => {
+		window.localStorage.setItem('online', onlineOnly ? 'true' : 'false')
+	}, [onlineOnly])
+	useEffect(() => {
+		window.localStorage.setItem('query', query)
+	}, [query])
+	useEffect(() => {
+		window.localStorage.setItem('sorting', JSON.stringify(sorting))
+	}, [sorting])
+	useEffect(() => {
+		window.localStorage.setItem('country', country)
+	}, [country])
 	const router = createBrowserRouter([
 		{
 			element: <Outlet/>,
@@ -141,7 +175,7 @@ const App = () => {
 						</>
 					),
 				},
-                {
+				{
 					path: 'faq',
 					element: (
 						<>
@@ -156,7 +190,7 @@ const App = () => {
 						</>
 					),
 				},
-                {
+				{
 					path: 'faq/:link',
 					element: (
 						<>
@@ -171,7 +205,7 @@ const App = () => {
 						</>
 					),
 				},
-                {
+				{
 					path: 'status',
 					element: (
 						<>
@@ -192,29 +226,29 @@ const App = () => {
 
 	return (
 		<NetworkContext.Provider value={{
-            network,
-            switchNetwork,
-            averages,
-            setAverages
-        }}>
+			network,
+			switchNetwork,
+			averages,
+			setAverages
+		}}>
 			<HostContext.Provider value={{
-                hosts,
-                setHosts,
-                offset,
-                changeOffset,
-                limit,
-                changeLimit,
-                onlineOnly,
-                setOnlineOnly,
-                query,
-                setQuery,
-                sorting,
-                changeSorting,
-                countries,
-                setCountries,
-                country,
-                setCountry
-            }}>
+				hosts,
+				setHosts,
+				offset,
+				changeOffset,
+				limit,
+				changeLimit,
+				onlineOnly,
+				setOnlineOnly,
+				query,
+				setQuery,
+				sorting,
+				changeSorting,
+				countries,
+				setCountries,
+				country,
+				setCountry
+			}}>
 				<RouterProvider router={router}/>
 			</HostContext.Provider>
 		</NetworkContext.Provider>
