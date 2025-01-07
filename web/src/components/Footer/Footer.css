@@ -10,7 +10,7 @@
 
 .footer-container a {
 	border-radius: 0.25rem;
-    padding: 0.1rem;
+	padding: 0.1rem;
 }
 
 .footer-container a:focus {
@@ -25,7 +25,7 @@
 .footer-link {
 	margin: 0 1rem;
 	text-decoration: none;
-    color: #000000;
+	color: #000000;
 }
 
 .footer-link-dark {

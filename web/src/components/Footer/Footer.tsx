@@ -14,36 +14,36 @@ export const Footer = (props: FooterProps) => {
 			>
 				About
 			</Link>
-            <Link
+			<Link
 				className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
 				to="/faq"
 				tabIndex={1}
 			>
 				FAQ
 			</Link>
-            <Link
+			<Link
 				className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
 				to="/status"
 				tabIndex={1}
 			>
 				Status
 			</Link>
-            <a
-                className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
-                tabIndex={1}
-                href="https://api.hostscore.info"
-                target="_blank"
-                rel="noreferrer"
-            >
+			<a
+				className={'footer-link' + (props.darkMode ? ' footer-link-dark' : '')}
+				tabIndex={1}
+				href="https://api.hostscore.info"
+				target="_blank"
+				rel="noreferrer"
+			>
 				API
 			</a>
 			<a
-                className="footer-link"
-                tabIndex={1}
-                href="https://sia.tech"
-                target="_blank"
-                rel="noreferrer"
-            >
+				className="footer-link"
+				tabIndex={1}
+				href="https://sia.tech"
+				target="_blank"
+				rel="noreferrer"
+			>
 				<SiaLogo/>
 			</a>
 		</div>

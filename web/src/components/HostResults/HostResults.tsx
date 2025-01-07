@@ -1,7 +1,7 @@
 import './HostResults.css'
 import { useState, useEffect } from 'react'
 import {
-    Host,
+	Host,
 	HostBenchmark,
 	useLocations,
 	convertSize
@@ -26,11 +26,11 @@ type Results = {
 }
 
 const TTFBTooltip = () => (
-    <div>
-        This is not the Time To First Byte as it is usually meant,
-        but rather the time to download the first data sector
-        (4 MiB) from the host.
-    </div>
+	<div>
+		This is not the Time To First Byte as it is usually meant,
+		but rather the time to download the first data sector
+		(4 MiB) from the host.
+	</div>
 )
 
 export const HostResults = (props: HostResultsProps) => {
@@ -66,19 +66,19 @@ export const HostResults = (props: HostResultsProps) => {
 				data: []
 			})
 		}
-        locations.forEach(location => {
-            if (!props.host.interactions || (props.node !== 'global' && props.node !== location.short)) return
-            const interactions = props.host.interactions[location.short]
+		locations.forEach(location => {
+			if (!props.host.interactions || (props.node !== 'global' && props.node !== location.short)) return
+			const interactions = props.host.interactions[location.short]
 			if (!interactions) return
-            const index = res.findIndex(r => r.node === location.short)
-            if (index < 0) return
-            interactions.scanHistory?.forEach(scan => {
-                if (scan.success) {
-                    res[index].latency += scan.latency
-                    res[index].scanCount++
-                }
-            })
-            interactions.benchmarkHistory?.forEach(benchmark => {
+			const index = res.findIndex(r => r.node === location.short)
+			if (index < 0) return
+			interactions.scanHistory?.forEach(scan => {
+				if (scan.success) {
+					res[index].latency += scan.latency
+					res[index].scanCount++
+				}
+			})
+			interactions.benchmarkHistory?.forEach(benchmark => {
 				if (benchmark.success) {
 					res[index].upload += benchmark.uploadSpeed
 					res[index].download += benchmark.downloadSpeed
@@ -89,8 +89,8 @@ export const HostResults = (props: HostResultsProps) => {
 					res[index].data.push(benchmark)
 					if (res[index].data.length > rows) rows = res[index].data.length
 				}
-            })
-        })
+			})
+		})
 		for (let j = 0; j < rows; j++) {
 			let row: (HostBenchmark | undefined)[] = []
 			for (let i = 0; i < res.length; i++) {
@@ -117,8 +117,8 @@ export const HostResults = (props: HostResultsProps) => {
 						<th></th>
 						{results.map(res => (
 							<th key={'header-' + res.node}>
-                                {locations.find(loc => res.node === loc.short)?.long || ''}
-                            </th>
+								{locations.find(loc => res.node === loc.short)?.long || ''}
+							</th>
 						))}
 					</tr>
 				</thead>
@@ -127,37 +127,37 @@ export const HostResults = (props: HostResultsProps) => {
 						<td>Latency</td>
 						{results.map(res => (
 							<td key={'latency-' + res.node}>
-                                {res.scanCount > 0 ? res.latency.toFixed(0) + ' ms' : 'N/A'}
-                            </td>
+								{res.scanCount > 0 ? res.latency.toFixed(0) + ' ms' : 'N/A'}
+							</td>
 						))}
 					</tr>
 					<tr>
 						<td>Upload Speed</td>
 						{results.map(res => (
 							<td key={'upload-' + res.node}>
-                                {res.benchmarkCount > 0 ? convertSize(res.upload) + '/s' : 'N/A'}
-                            </td>
+								{res.benchmarkCount > 0 ? convertSize(res.upload) + '/s' : 'N/A'}
+							</td>
 						))}
 					</tr>
 					<tr>
 						<td>Download Speed</td>
 						{results.map(res => (
 							<td key={'download-' + res.node}>
-                                {res.benchmarkCount > 0 ? convertSize(res.download) + '/s' : 'N/A'}
-                            </td>
+								{res.benchmarkCount > 0 ? convertSize(res.download) + '/s' : 'N/A'}
+							</td>
 						))}
 					</tr>
 					<tr>
 						<td>
-                            TTFB
-                            <Tooltip className="host-results-tooltip" darkMode={props.darkMode}>
-                                <TTFBTooltip/>
-                            </Tooltip>
-                        </td>
+							TTFB
+							<Tooltip className="host-results-tooltip" darkMode={props.darkMode}>
+								<TTFBTooltip/>
+							</Tooltip>
+						</td>
 						{results.map(res => (
 							<td key={'ttfb-' + res.node}>
-                                {res.benchmarkCount > 0 ? res.ttfb.toFixed(2) + ' s' : 'N/A'}
-                            </td>
+								{res.benchmarkCount > 0 ? res.ttfb.toFixed(2) + ' s' : 'N/A'}
+							</td>
 						))}
 					</tr>
 				</tbody>
@@ -168,8 +168,8 @@ export const HostResults = (props: HostResultsProps) => {
 						<tr>
 							{results.map(res => (
 								<th key={'benchmark-header-' + res.node}>
-                                    {locations.find(loc => res.node === loc.short)?.long || ''}
-                                </th>
+									{locations.find(loc => res.node === loc.short)?.long || ''}
+								</th>
 							))}
 						</tr>
 					</thead>
@@ -182,8 +182,8 @@ export const HostResults = (props: HostResultsProps) => {
 											<Benchmark
 												timestamp={cell.timestamp}
 												success={cell.success}
-                                                upload={cell.uploadSpeed}
-                                                download={cell.downloadSpeed}
+												upload={cell.uploadSpeed}
+												download={cell.downloadSpeed}
 												error={cell.error}
 											/>
 										}

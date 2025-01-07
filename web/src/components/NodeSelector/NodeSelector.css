@@ -1,13 +1,13 @@
 .node-selector-container {
-    margin-bottom: 0.5rem;
+	margin-bottom: 0.5rem;
 }
 
 .node-selector-text {
-    margin-right: 0.5rem;
+	margin-right: 0.5rem;
 }
 
 .node-selector-dark .node-selector-text {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 .node-selector-select {

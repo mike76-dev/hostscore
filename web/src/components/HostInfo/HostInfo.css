@@ -25,41 +25,41 @@
 }
 
 .host-info-score span {
-    cursor: pointer;
+	cursor: pointer;
 }
 
 .host-info-score span::after {
-    display: inline-block;
-    content: '\025be';
-    margin-left: 0.5rem;
-    font-size: 1.1rem;
-    line-height: 0.9rem;
-    transition: transform 0.1s linear;
+	display: inline-block;
+	content: '\025be';
+	margin-left: 0.5rem;
+	font-size: 1.1rem;
+	line-height: 0.9rem;
+	transition: transform 0.1s linear;
 }
 
 .host-info-score-expanded span::after {
-    -webkit-transform: rotate(-180deg);
+	-webkit-transform: rotate(-180deg);
 	-moz-transform: rotate(-180deg);
 	-o-transform: rotate(-180deg);
 	transform: rotate(-180deg);
 }
 
 .host-info-score-details td {
-    padding-left: 1rem;
+	padding-left: 1rem;
 }
 
 .host-info-tooltip .tooltip-text {
-    left: 1.5rem;
-    top: 0;
-    right: unset;
-    white-space: nowrap;
+	left: 1.5rem;
+	top: 0;
+	right: unset;
+	white-space: nowrap;
 }
 
 .host-info-tooltip-row {
-    display: flex;
-    flex-direction: row;
+	display: flex;
+	flex-direction: row;
 }
 
 .host-info-tooltip-row span:first-child {
-    margin-right: 0.5rem;
+	margin-right: 0.5rem;
 }

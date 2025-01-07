@@ -1,25 +1,25 @@
 .benchmark-container {
-    display: flex;
-    flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 .benchmark-pass::after {
-    content: "\2714";
-    color: green;
-    font-size: 1rem;
-    margin-left: 1rem;
+	content: "\2714";
+	color: green;
+	font-size: 1rem;
+	margin-left: 1rem;
 }
 
 .benchmark-fail::after {
-    content: "\2717";
-    color: red;
-    font-size: 1rem;
-    margin-left: 1rem;
+	content: "\2717";
+	color: red;
+	font-size: 1rem;
+	margin-left: 1rem;
 }
 
 .benchmark-info {
-    font-size: 0.7rem;
-    display: flex;
-    flex-direction: row;
-    justify-content: center;
+	font-size: 0.7rem;
+	display: flex;
+	flex-direction: row;
+	justify-content: center;
 }

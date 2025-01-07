@@ -1,43 +1,43 @@
 .tooltip-spot {
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    position: relative;
-    border-radius: 50%;
-    margin-left: 0.5rem;
-    font-size: 0.8rem;
-    font-weight: bold;
-    text-align: center;
-    background-color: var(--outlineDark);
-    cursor: pointer;
+	display: inline-block;
+	width: 1rem;
+	height: 1rem;
+	position: relative;
+	border-radius: 50%;
+	margin-left: 0.5rem;
+	font-size: 0.8rem;
+	font-weight: bold;
+	text-align: center;
+	background-color: var(--outlineDark);
+	cursor: pointer;
 }
 
 .tooltip-text {
-    position: absolute;
-    right: 0;
-    top: 1.5rem;
-    z-index: 100;
-    font-weight: normal;
-    border-radius: 0.25rem;
-    background-color: var(--outlineDark);
-    padding: 0.5rem;
-    text-align: left;
-    display: none;
+	position: absolute;
+	right: 0;
+	top: 1.5rem;
+	z-index: 100;
+	font-weight: normal;
+	border-radius: 0.25rem;
+	background-color: var(--outlineDark);
+	padding: 0.5rem;
+	text-align: left;
+	display: none;
 }
 
 .tooltip-spot-dark, .tooltip-text-dark {
-    background-color: var(--outlineLight);
+	background-color: var(--outlineLight);
 }
 
 .tooltip-spot-focus {
-    outline: 2px solid var(--outlineLight);
+	outline: 2px solid var(--outlineLight);
 }
 
 .tooltip-spot-dark:focus {
-    border: 1px solid transparent;
-    outline: 2px solid var(--outlineDark);
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
 }
 
 .tooltip-spot:hover .tooltip-text, .tooltip-spot:focus .tooltip-text {
-    display: initial;
+	display: initial;
 }

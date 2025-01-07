@@ -1,21 +1,21 @@
 import './HostsTable.css'
 import { Link } from 'react-router-dom'
 import {
-    Host,
-    HostSortType,
-    stripePrefix,
-    useLocations,
-    convertSize,
-    countryByCode,
-    toSia
+	Host,
+	HostSortType,
+	stripePrefix,
+	useLocations,
+	convertSize,
+	countryByCode,
+	toSia
 } from '../../api'
 import { Sort, Tooltip } from '../'
 
 type HostsTableProps = {
 	darkMode: boolean,
 	hosts: Host[],
-    sorting: HostSortType,
-    changeSorting: (sorting: HostSortType) => any
+	sorting: HostSortType,
+	changeSorting: (sorting: HostSortType) => any
 }
 
 const StatusTooltip = () => (
@@ -66,71 +66,71 @@ export const HostsTable = (props: HostsTableProps) => {
 			<table>
 				<thead>
 					<tr>
-                        <th style={{minWidth: '4rem'}}>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'rank' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'rank', order: order })
-                                }}
-                            >Rank</Sort>
-                        </th>
 						<th style={{minWidth: '4rem'}}>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'id' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'id', order: order })
-                                }}
-                            >ID</Sort>
-                        </th>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'rank' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'rank', order: order })
+								}}
+							>Rank</Sort>
+						</th>
+						<th style={{minWidth: '4rem'}}>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'id' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'id', order: order })
+								}}
+							>ID</Sort>
+						</th>
 						<th style={{minWidth: '20rem'}}>Net Address</th>
-                        <th>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'storage' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'storage', order: order })
-                                }}
-                            >Storage Price</Sort>
-                        </th>
-                        <th>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'upload' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'upload', order: order })
-                                }}
-                            >Upload Price</Sort>
-                        </th>
-                        <th>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'download' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'download', order: order })
-                                }}
-                            >Download Price</Sort>
-                        </th>
-                        <th>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'used' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'used', order: order })
-                                }}
-                            >Used Storage</Sort>
-                        </th>
-                        <th>
-                            <Sort
-                                darkMode={props.darkMode}
-                                order={props.sorting.sortBy === 'total' ? props.sorting.order : 'none'}
-                                setOrder={(order: 'asc' | 'desc') => {
-                                    props.changeSorting({ sortBy: 'total', order: order })
-                                }}
-                            >Total Storage</Sort>
-                        </th>
-                        <th>Country</th>
+						<th>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'storage' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'storage', order: order })
+								}}
+							>Storage Price</Sort>
+						</th>
+						<th>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'upload' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'upload', order: order })
+								}}
+							>Upload Price</Sort>
+						</th>
+						<th>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'download' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'download', order: order })
+								}}
+							>Download Price</Sort>
+						</th>
+						<th>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'used' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'used', order: order })
+								}}
+							>Used Storage</Sort>
+						</th>
+						<th>
+							<Sort
+								darkMode={props.darkMode}
+								order={props.sorting.sortBy === 'total' ? props.sorting.order : 'none'}
+								setOrder={(order: 'asc' | 'desc') => {
+									props.changeSorting({ sortBy: 'total', order: order })
+								}}
+							>Total Storage</Sort>
+						</th>
+						<th>Country</th>
 						<th>
 							<div className="hosts-table-flex">
 								Status
@@ -142,23 +142,23 @@ export const HostsTable = (props: HostsTableProps) => {
 				<tbody>
 					{props.hosts.map(host => (
 						<tr key={host.publicKey}>
-                            <td>{host.rank}</td>
+							<td>{host.rank}</td>
 							<td>{host.id}</td>
 							<td>
 								<Link
-                                    className="hosts-table-link"
-                                    to={newLocation(host)}
-                                    tabIndex={1}
-                                >
+									className="hosts-table-link"
+									to={newLocation(host)}
+									tabIndex={1}
+								>
 									{host.netaddress}
 								</Link>
 							</td>
-                            <td style={{textAlign: 'center'}}>{toSia(host.settings.storageprice, true) + '/TB/month'}</td>
-                            <td style={{textAlign: 'center'}}>{toSia(host.settings.uploadbandwidthprice, false) + '/TB'}</td>
-                            <td style={{textAlign: 'center'}}>{toSia(host.settings.downloadbandwidthprice, false) + '/TB'}</td>
-                            <td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage - host.settings.remainingstorage)}</td>
-                            <td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage)}</td>
-                            <td>{countryByCode(host.country)}</td>
+							<td style={{textAlign: 'center'}}>{toSia(host.settings.storageprice, true) + '/TB/month'}</td>
+							<td style={{textAlign: 'center'}}>{toSia(host.settings.uploadbandwidthprice, false) + '/TB'}</td>
+							<td style={{textAlign: 'center'}}>{toSia(host.settings.downloadbandwidthprice, false) + '/TB'}</td>
+							<td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage - host.settings.remainingstorage)}</td>
+							<td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage)}</td>
+							<td>{countryByCode(host.country)}</td>
 							<td>
 								<div className={'hosts-table-status hosts-table-status-' + hostStatus(host)}></div>
 							</td>

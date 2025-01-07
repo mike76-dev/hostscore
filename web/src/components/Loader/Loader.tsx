@@ -1,8 +1,8 @@
 import './Loader.css'
 
 type LoaderProps = {
-    darkMode: boolean,
-    className?: string
+	darkMode: boolean,
+	className?: string
 }
 
 export const Loader = (props: LoaderProps) => {

@@ -1,6 +1,6 @@
 .network-selector-container {
 	margin: 0 1rem;
-    position: relative;
+	position: relative;
 }
 
 .network-selector-select {
@@ -14,15 +14,15 @@
 }
 
 .network-selector-text {
-    position: absolute;
-    right: 0;
-    font-size: 0.8rem;
-    margin-top: 0.5rem;
-    white-space: nowrap;
+	position: absolute;
+	right: 0;
+	font-size: 0.8rem;
+	margin-top: 0.5rem;
+	white-space: nowrap;
 }
 
 .network-selector-dark .network-selector-text {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 @media screen and (max-width: 1000px) {

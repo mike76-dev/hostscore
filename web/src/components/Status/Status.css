@@ -1,7 +1,7 @@
 .status-container {
-    display: flex;
-    flex-direction: column;
-    position: relative;
+	display: flex;
+	flex-direction: column;
+	position: relative;
 }
 
 .status-container h1 {
@@ -15,35 +15,35 @@
 }
 
 .status-container table {
-    margin-bottom: 2rem;
-    border-collapse: collapse;
+	margin-bottom: 2rem;
+	border-collapse: collapse;
 }
 
 .status-container table,
 .status-container tr,
 .status-container td,
 .status-container th {
-    border: 1px solid var(--borderLight);
+	border: 1px solid var(--borderLight);
 }
 
 .status-container-dark table,
 .status-container-dark tr,
 .status-container-dark td,
 .status-container-dark th {
-    border: 1px solid var(--borderDark);
+	border: 1px solid var(--borderDark);
 }
 
 .status-container td,
 .status-container th {
-    padding: 0.5rem;
+	padding: 0.5rem;
 }
 
 .status-container td {
-    text-align: center;
+	text-align: center;
 }
 
 .status-container th:first-child {
-    text-align: left;
+	text-align: left;
 }
 
 .status {
@@ -66,23 +66,23 @@
 }
 
 .status-unavailable {
-    margin-bottom: 2rem;
+	margin-bottom: 2rem;
 }
 
 .status-loader {
-    position: absolute!important;
-    left: 30%;
-    top: 30%;
+	position: absolute!important;
+	left: 30%;
+	top: 30%;
 }
 
 @media screen and (max-width: 1000px) {
 	.status-container h1 {
-        text-align: center;
+		text-align: center;
 		font-size: 1.5rem;
 	}
 
-    .status-loader {
-        left: 45%;
-        top: 35%;
-    }
+	.status-loader {
+		left: 45%;
+		top: 35%;
+	}
 }

@@ -7,7 +7,7 @@
 }
 
 .hosts-table-container table {
-    white-space: nowrap;
+	white-space: nowrap;
 	border-collapse: collapse;
 }
 
@@ -75,13 +75,13 @@
 .hosts-table-link {
 	color: black;
 	text-decoration: none;
-    border-radius: 0.25rem;
+	border-radius: 0.25rem;
 }
 
 .hosts-table-link:hover,
 .hosts-table-link:focus {
-    outline: none;
-    text-decoration: underline;
+	outline: none;
+	text-decoration: underline;
 }
 
 .hosts-table-dark .hosts-table-link {
@@ -89,7 +89,7 @@
 }
 
 @media screen and (max-width: 2000px) {
-    .hosts-table-container {
-        display: initial;
-    }
+	.hosts-table-container {
+		display: initial;
+	}
 }

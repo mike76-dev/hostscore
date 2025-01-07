@@ -1,86 +1,86 @@
 .hosts-container {
 	display: flex;
 	flex-direction: row;
-    width: 100%;
-    height: 100%;
+	width: 100%;
+	height: 100%;
 }
 
 .hosts-subcontainer {
-    display: flex;
-    flex-direction: column;
-    flex-grow: 1;
+	display: flex;
+	flex-direction: column;
+	flex-grow: 1;
 }
 
 .hosts-table-div {
-    display: flex;
-    flex-direction: column;
-    position: relative;
+	display: flex;
+	flex-direction: column;
+	position: relative;
 }
 
 .hosts-averages-div {
-    position: relative;
-    padding-right: 1rem;
+	position: relative;
+	padding-right: 1rem;
 }
 
 .hosts-row {
-    display: flex;
-    flex-direction: row;
-    margin-top: 0.5rem;
-    padding: 1rem 0;
-    justify-content: center;
+	display: flex;
+	flex-direction: row;
+	margin-top: 0.5rem;
+	padding: 1rem 0;
+	justify-content: center;
 }
 
 .hosts-not-found {
-    margin-top: 1rem;
+	margin-top: 1rem;
 }
 
 .hosts-not-found-dark {
-    color: var(--textDark);
+	color: var(--textDark);
 }
 
 .hosts-table-loader {
-    position: absolute!important;
-    left: 45%;
-    top: 35%;
+	position: absolute!important;
+	left: 45%;
+	top: 35%;
 }
 
 .hosts-averages-loader {
-    position: absolute!important;
-    left: 35%;
-    top: 15%;
-    width: 6vw;
-    height: 6vw;
+	position: absolute!important;
+	left: 35%;
+	top: 15%;
+	width: 6vw;
+	height: 6vw;
 }
 
 @media screen and (max-width: 2000px) {
-    .hosts-row {
-        justify-content: initial;
-    }
+	.hosts-row {
+		justify-content: initial;
+	}
 }
 
 @media screen and (max-width: 1000px) {
-    .hosts-container {
-        width: 100%;
-        flex-direction: column;
-    }
+	.hosts-container {
+		width: 100%;
+		flex-direction: column;
+	}
 
-    .hosts-subcontainer {
-        width: 100%;
-    }
+	.hosts-subcontainer {
+		width: 100%;
+	}
 
-    .hosts-averages-div {
-        padding-right: 0;
-    }
+	.hosts-averages-div {
+		padding-right: 0;
+	}
 
-    .hosts-row {
-        flex-direction: column;
-    }
+	.hosts-row {
+		flex-direction: column;
+	}
 
-    .hosts-table-loader,
-    .hosts-averages-loader {
-        width: 16vw;
-        height: 16vw;
-        left: 40%;
-        top: 40%;
-    }
+	.hosts-table-loader,
+	.hosts-averages-loader {
+		width: 16vw;
+		height: 16vw;
+		left: 40%;
+		top: 40%;
+	}
 }

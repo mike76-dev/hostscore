@@ -18,7 +18,7 @@ export const Header = (props: HeaderProps) => {
 				toggleDarkMode={props.toggleDarkMode}
 			/>
 			<NetworkSelector
-                darkMode={props.darkMode}
+				darkMode={props.darkMode}
 				network={network}
 				switchNetwork={switchNetwork}
 			/>
