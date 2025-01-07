@@ -75,9 +75,9 @@ These commands will install and start MySQL, but will not prompt you to set a pa
 ```
 $ sudo mysql
 ```
-Then run the following `ALTER USER` command to change the root user’s authentication method to one that uses a password. The following example changes the authentication method to `cached_sha2_password`:
+Then run the following `ALTER USER` command to change the root user’s authentication method to one that uses a password. The following example changes the authentication method to `mysql_native_password`:
 ```
-mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH cached_sha2_password BY 'password';
+mysql> ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
 ```
 After making this change, exit the MySQL prompt:
 ```
@@ -145,7 +145,7 @@ mysql> CREATE DATABASE hostscore;
 ```
 Then create a user for this database. This guide will be using `hsuser` as the user name. Take a note of this name and be sure to change password to a strong password of your choice:
 ```
-mysql> CREATE USER 'hsuser'@'localhost' IDENTIFIED WITH cached_sha2_password BY 'password';
+mysql> CREATE USER 'hsuser'@'localhost' IDENTIFIED WITH mysql_native_password BY 'password';
 ```
 Now grant this user access to the database:
 ```
