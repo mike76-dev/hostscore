@@ -9,7 +9,7 @@ type AboutProps = { darkMode: boolean }
 
 export const About = (props: AboutProps) => {
 	const navigate = useNavigate()
-    const { network } = useContext(NetworkContext)
+	const { network } = useContext(NetworkContext)
 	return (
 		<div className={'about-container' + (props.darkMode ? ' about-container-dark' : '')}>
 			<h1>About HostScore</h1>
@@ -34,6 +34,23 @@ export const About = (props: AboutProps) => {
 					</a>
 				</li>
 			</ul>
+			<p>HostScore was initially funded by the&nbsp;
+				<a
+					href="https://sia.tech/grants"
+					target="_blank"
+					rel="noreferrer"
+					tabIndex={1}
+				>
+					Sia Grants Program
+				</a>. However, it still requires private funding to operate the infrastructure.
+				You can support the project by donating some Siacoin to
+			</p>
+			<input
+				type="text"
+				readOnly
+				tabIndex={1}
+				value="279ee215af98f0bcdc979714f42ecfba125cadbda1ba3dada716f4de1718267db949a7e5040c"
+			/>
 			<Button
 				icon={Back}
 				caption="home"

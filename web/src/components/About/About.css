@@ -30,9 +30,30 @@
 	color: var(--textDark);
 }
 
+.about-container input {
+	width: 35rem;
+	max-width: 90vw;
+	margin-bottom: 2rem;
+}
+
+.about-container input:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineLight);
+}
+
+.about-container-dark input {
+	color: var(--textDark);
+	background-color: var(--selectDark);
+}
+
+.about-container-dark input:focus {
+	border: 1px solid transparent;
+	outline: 2px solid var(--outlineDark);
+}
+
 @media screen and (max-width: 1000px) {
 	.about-container h1 {
-        text-align: center;
+		text-align: center;
 		font-size: 1.5rem;
 	}
 }
