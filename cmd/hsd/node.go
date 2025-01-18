@@ -87,7 +87,12 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	if err != nil {
 		return nil, err
 	}
+	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dirMainnet, "cm.log"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	cm := chain.NewManager(dbstore, tipState)
+	chain.WithLog(cmLogger)(cm)
 
 	l, err := net.Listen("tcp", config.GatewayMainnet)
 	if err != nil {
@@ -115,11 +120,11 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	logger, closeFn, err := persist.NewFileLogger(filepath.Join(dirMainnet, "syncer.log"))
+	syncerLogger, syncerCloseFn, err := persist.NewFileLogger(filepath.Join(dirMainnet, "syncer.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	s := syncer.New(l, cm, ps, header, syncer.WithLogger(logger))
+	s := syncer.New(l, cm, ps, header, syncer.WithLogger(syncerLogger))
 
 	// Zen.
 	log.Println("Connecting to Zen...")
@@ -140,7 +145,12 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	if err != nil {
 		return nil, err
 	}
+	cmLoggerZen, cmCloseFnZen, err := persist.NewFileLogger(filepath.Join(dirZen, "cm.log"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	cmZen := chain.NewManager(dbstoreZen, tipStateZen)
+	chain.WithLog(cmLoggerZen)(cmZen)
 
 	lZen, err := net.Listen("tcp", config.GatewayZen)
 	if err != nil {
@@ -168,11 +178,11 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddrZen,
 	}
-	loggerZen, closeFnZen, err := persist.NewFileLogger(filepath.Join(dirZen, "syncer.log"))
+	syncerLoggerZen, syncerCloseFnZen, err := persist.NewFileLogger(filepath.Join(dirZen, "syncer.log"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	sZen := syncer.New(lZen, cmZen, psZen, headerZen, syncer.WithLogger(loggerZen))
+	sZen := syncer.New(lZen, cmZen, psZen, headerZen, syncer.WithLogger(syncerLoggerZen))
 
 	log.Println("Loading wallet...")
 	w, err := walletutil.NewWallet(mdb, seed, seedZen, config.Dir, cm, cmZen, s, sZen)
@@ -216,8 +226,10 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 				bdb.Close()
 				bdbZen.Close()
 				mdb.Close()
-				closeFn()
-				closeFnZen()
+				syncerCloseFn()
+				syncerCloseFnZen()
+				cmCloseFn()
+				cmCloseFnZen()
 			}
 		},
 	}, nil
