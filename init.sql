@@ -1,8 +1,6 @@
 /* wallet */
 DROP TABLE IF EXISTS wt_tip;
 DROP TABLE IF EXISTS wt_sces;
-DROP TABLE IF EXISTS wt_sfes;
-DROP TABLE IF EXISTS wt_locked;
 
 CREATE TABLE wt_tip (
 	id      INT NOT NULL,
@@ -17,19 +15,6 @@ CREATE TABLE wt_sces (
 	network VARCHAR(8) NOT NULL,
 	bytes   BLOB NOT NULL,
 	PRIMARY KEY (scoid)
-);
-
-CREATE TABLE wt_sfes (
-	sfoid   BINARY(32) NOT NULL,
-	network VARCHAR(8) NOT NULL,
-	bytes   BLOB NOT NULL,
-	PRIMARY KEY (sfoid)
-);
-
-CREATE TABLE wt_locked (
-	id    BINARY(32) NOT NULL,
-	until BIGINT NOT NULL,
-	PRIMARY KEY (id)
 );
 
 /* hostdb */
