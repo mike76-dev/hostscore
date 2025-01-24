@@ -164,9 +164,19 @@ func (wm *WalletManager) Key() types.PrivateKey {
 	return wm.store.key
 }
 
+// UnspentSiacoinElements returns the wallet's unspent siacoin outputs.
+func (wm *WalletManager) UnspentSiacoinElements() ([]types.SiacoinElement, error) {
+	return wm.wallet.UnspentSiacoinElements()
+}
+
 // Balance returns the balance of the wallet.
 func (wm *WalletManager) Balance() (wallet.Balance, error) {
 	return wm.wallet.Balance()
+}
+
+// UnconfirmedEvents returns all unconfirmed transactions relevant to the wallet.
+func (wm *WalletManager) UnconfirmedEvents() ([]wallet.Event, error) {
+	return wm.wallet.UnconfirmedEvents()
 }
 
 // FundTransaction adds siacoin inputs worth at least amount to the provided
