@@ -4,9 +4,9 @@ import (
 	"encoding/hex"
 
 	"github.com/mike76-dev/hostscore/hostdb"
-	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/wallet"
 	"go.sia.tech/jape"
 )
 
@@ -71,22 +71,21 @@ func (c *Client) Address(network string) (resp types.Address, err error) {
 }
 
 // Balance returns the wallet balance.
-func (c *Client) Balance(network string) (resp WalletBalanceResponse, err error) {
+func (c *Client) Balance(network string) (resp wallet.Balance, err error) {
 	err = c.c.GET("/wallet/balance?network="+network, &resp)
 	return
 }
 
-// PoolTransactions returns all txpool transactions relevant to the wallet.
-func (c *Client) PoolTransactions(network string) (resp []wallet.PoolTransaction, err error) {
-	err = c.c.GET("/wallet/txpool?network="+network, &resp)
+// UnconfirmedEvents returns all txpool transactions relevant to the wallet.
+func (c *Client) UnconfirmedEvents(network string) (resp []wallet.Event, err error) {
+	err = c.c.GET("/wallet/events?network="+network, &resp)
 	return
 }
 
 // Outputs returns the set of unspent outputs controlled by the wallet.
-func (c *Client) Outputs(network string) (sc []types.SiacoinElement, sf []types.SiafundElement, err error) {
-	var resp WalletOutputsResponse
-	err = c.c.GET("/wallet/outputs?network="+network, &resp)
-	return resp.SiacoinOutputs, resp.SiafundOutputs, err
+func (c *Client) Outputs(network string) (sc []types.SiacoinElement, err error) {
+	err = c.c.GET("/wallet/outputs?network="+network, &sc)
+	return
 }
 
 // Updates returns a list of most recent HostDB updates.
