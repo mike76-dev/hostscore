@@ -15,25 +15,62 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
+	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
+	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
 )
 
 type node struct {
-	cm    *chain.Manager
-	cmZen *chain.Manager
-	s     *syncer.Syncer
-	sZen  *syncer.Syncer
-	w     *walletutil.Wallet
-	hdb   *hostdb.HostDB
-	db    *sql.DB
+	chain  *chain.Manager
+	syncer *syncer.Syncer
+	wm     *walletutil.WalletManager
+	db     *sql.DB
 
 	Start func() (stop func())
 }
 
-func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node, error) {
+type app struct {
+	nodes map[string]*node
+	db    *sql.DB
+	hdb   *hostdb.HostDB
+}
+
+func (a *app) ChainManager(network string) *chain.Manager {
+	node, ok := a.nodes[network]
+	if ok {
+		return node.chain
+	}
+	return nil
+}
+
+func (a *app) Syncer(network string) *syncer.Syncer {
+	node, ok := a.nodes[network]
+	if ok {
+		return node.syncer
+	}
+	return nil
+}
+
+func (a *app) Wallet(network string) *walletutil.WalletManager {
+	node, ok := a.nodes[network]
+	if ok {
+		return node.wm
+	}
+	return nil
+}
+
+func (a *app) HostDB() *hostdb.HostDB {
+	return a.hdb
+}
+
+func initialize(config *persist.HSDConfig, dbPassword, seed, seedZen string) *app {
+	a := &app{
+		nodes: make(map[string]*node),
+	}
+
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
 		User:                 config.DBUser,
@@ -43,17 +80,17 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		DBName:               config.DBName,
 		AllowNativePasswords: true,
 	}
-	mdb, err := sql.Open("mysql", cfg.FormatDSN())
+	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		log.Fatalf("Could not connect to the database: %v\n", err)
 	}
-	err = mdb.Ping()
+	err = db.Ping()
 	if err != nil {
 		log.Fatalf("MySQL database not responding: %v\n", err)
 	}
-	mdb.SetConnMaxLifetime(time.Minute * 3)
-	mdb.SetMaxOpenConns(10)
-	mdb.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(time.Minute * 3)
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
 
 	// Make sure the path is an absolute one.
 	dir, err := filepath.Abs(config.Dir)
@@ -73,28 +110,65 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 	mainnet, genesisBlockMainnet := chain.Mainnet()
 	mainnetBootstrap := syncer.MainnetBootstrapPeers
 
-	dirMainnet := filepath.Join(dir, "mainnet")
-	err = os.MkdirAll(dirMainnet, 0700)
+	mainnetNode, err := newNode(db, "mainnet", seed, dir, config.GatewayMainnet, mainnet, genesisBlockMainnet, mainnetBootstrap)
 	if err != nil {
-		log.Fatalf("Provided parameter is invalid: %v\n", dirMainnet)
+		log.Fatalf("Couldn't start Mainnet node: %v\n", err)
 	}
 
-	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dirMainnet, "consensus.db"))
+	log.Println("p2p Mainnet: Listening on", mainnetNode.syncer.Addr())
+
+	// Zen.
+	log.Println("Connecting to Zen...")
+	zen, genesisBlockZen := chain.TestnetZen()
+	zenBootstrap := syncer.ZenBootstrapPeers
+
+	zenNode, err := newNode(db, "zen", seedZen, dir, config.GatewayZen, zen, genesisBlockZen, zenBootstrap)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Couldn't start Zen node: %v\n", err)
 	}
-	dbstore, tipState, err := chain.NewDBStore(bdb, mainnet, genesisBlockMainnet)
+
+	log.Println("p2p Zen: Listening on", zenNode.syncer.Addr())
+
+	a.nodes["mainnet"] = mainnetNode
+	a.nodes["zen"] = zenNode
+
+	log.Println("Loading host database...")
+	hdb, errChan := hostdb.NewHostDB(db, config.Dir, a)
+	if err := utils.PeekErr(errChan); err != nil {
+		log.Fatalf("Couldn't load host database: %v\n", err)
+	}
+
+	a.hdb = hdb
+
+	return a
+}
+
+func newNode(db *sql.DB, name, seed, dir, p2p string, network *consensus.Network, genesis types.Block, peers []string) (*node, error) {
+	dir = filepath.Join(dir, name)
+	err := os.MkdirAll(dir, 0700)
+	if err != nil {
+		log.Fatalf("Provided parameter is invalid: %v\n", dir)
+	}
+
+	bdb, err := coreutils.OpenBoltChainDB(filepath.Join(dir, "consensus.db"))
 	if err != nil {
 		return nil, err
 	}
-	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dirMainnet, "cm.log"))
+
+	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesis)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+
+	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "cm.log"))
+	if err != nil {
+		return nil, err
+	}
+
 	cm := chain.NewManager(dbstore, tipState)
 	chain.WithLog(cmLogger)(cm)
 
-	l, err := net.Listen("tcp", config.GatewayMainnet)
+	l, err := net.Listen("tcp", p2p)
 	if err != nil {
 		return nil, err
 	}
@@ -106,104 +180,50 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 		syncerAddr = net.JoinHostPort("127.0.0.1", port)
 	}
 
-	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(dirMainnet, "peers.json"))
+	ps, err := syncerutil.NewJSONPeerStore(filepath.Join(dir, "peers.json"))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	for _, peer := range mainnetBootstrap {
+
+	for _, peer := range peers {
 		if err := ps.AddPeer(peer); err != nil {
 			log.Fatal(err)
 		}
 	}
+
 	header := gateway.Header{
-		GenesisID:  genesisBlockMainnet.ID(),
+		GenesisID:  genesis.ID(),
 		UniqueID:   gateway.GenerateUniqueID(),
 		NetAddress: syncerAddr,
 	}
-	syncerLogger, syncerCloseFn, err := persist.NewFileLogger(filepath.Join(dirMainnet, "syncer.log"))
+
+	syncerLogger, syncerCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "syncer.log"))
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
+
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(syncerLogger))
 
-	// Zen.
-	log.Println("Connecting to Zen...")
-	zen, genesisBlockZen := chain.TestnetZen()
-	zenBootstrap := syncer.ZenBootstrapPeers
-
-	dirZen := filepath.Join(dir, "zen")
-	err = os.MkdirAll(dirZen, 0700)
-	if err != nil {
-		log.Fatalf("Provided parameter is invalid: %v\n", dirZen)
-	}
-
-	bdbZen, err := coreutils.OpenBoltChainDB(filepath.Join(dirZen, "consensus.db"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	dbstoreZen, tipStateZen, err := chain.NewDBStore(bdbZen, zen, genesisBlockZen)
-	if err != nil {
-		return nil, err
-	}
-	cmLoggerZen, cmCloseFnZen, err := persist.NewFileLogger(filepath.Join(dirZen, "cm.log"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	cmZen := chain.NewManager(dbstoreZen, tipStateZen)
-	chain.WithLog(cmLoggerZen)(cmZen)
-
-	lZen, err := net.Listen("tcp", config.GatewayZen)
+	walletLogger, walletCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
 	if err != nil {
 		return nil, err
 	}
 
-	// Peers will reject us if our hostname is empty or unspecified, so use loopback.
-	syncerAddrZen := lZen.Addr().String()
-	host, port, _ = net.SplitHostPort(syncerAddrZen)
-	if ip := net.ParseIP(host); ip == nil || ip.IsUnspecified() {
-		syncerAddrZen = net.JoinHostPort("127.0.0.1", port)
-	}
-
-	psZen, err := syncerutil.NewJSONPeerStore(filepath.Join(dirZen, "peers.json"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, peer := range zenBootstrap {
-		if err := psZen.AddPeer(peer); err != nil {
-			log.Fatal(err)
-		}
-	}
-	headerZen := gateway.Header{
-		GenesisID:  genesisBlockZen.ID(),
-		UniqueID:   gateway.GenerateUniqueID(),
-		NetAddress: syncerAddrZen,
-	}
-	syncerLoggerZen, syncerCloseFnZen, err := persist.NewFileLogger(filepath.Join(dirZen, "syncer.log"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	sZen := syncer.New(lZen, cmZen, psZen, headerZen, syncer.WithLogger(syncerLoggerZen))
-
-	log.Println("Loading wallet...")
-	w, err := walletutil.NewWallet(mdb, seed, seedZen, config.Dir, cm, cmZen, s, sZen)
+	store, _, err := walletutil.NewDBStore(db, seed, name, walletLogger)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Println("Loading host database...")
-	hdb, errChan := hostdb.NewHostDB(mdb, config.Dir, cm, cmZen, s, sZen, w)
-	if err := utils.PeekErr(errChan); err != nil {
+	wm, err := walletutil.NewWallet(store, cm, s, walletLogger)
+	if err != nil {
 		return nil, err
 	}
 
 	return &node{
-		cm:    cm,
-		cmZen: cmZen,
-		s:     s,
-		sZen:  sZen,
-		w:     w,
-		hdb:   hdb,
-		db:    mdb,
+		chain:  cm,
+		syncer: s,
+		wm:     wm,
+		db:     db,
 		Start: func() func() {
 			ctx := context.Background()
 			ch := make(chan struct{})
@@ -211,25 +231,14 @@ func newNode(config *persist.HSDConfig, dbPassword, seed, seedZen string) (*node
 				s.Run(ctx)
 				close(ch)
 			}()
-			chZen := make(chan struct{})
-			go func() {
-				sZen.Run(ctx)
-				close(chZen)
-			}()
 			return func() {
 				l.Close()
 				<-ch
-				lZen.Close()
-				<-chZen
-				hdb.Close()
-				w.Close()
+				wm.Close()
 				bdb.Close()
-				bdbZen.Close()
-				mdb.Close()
+				walletCloseFn()
 				syncerCloseFn()
-				syncerCloseFnZen()
 				cmCloseFn()
-				cmCloseFnZen()
 			}
 		},
 	}, nil

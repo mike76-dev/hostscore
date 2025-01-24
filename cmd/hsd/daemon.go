@@ -26,20 +26,19 @@ func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword, seed, seedZ
 	if err != nil {
 		log.Fatal(err)
 	}
-	n, err := newNode(config, dbPassword, seed, seedZen)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("p2p Mainnet: Listening on", n.s.Addr())
-	log.Println("p2p Zen: Listening on", n.sZen.Addr())
-	stop := n.Start()
+
+	a := initialize(config, dbPassword, seed, seedZen)
+
+	stopMainnet := a.nodes["mainnet"].Start()
+	stopZen := a.nodes["zen"].Start()
 	log.Println("api: Listening on", l.Addr())
-	go startWeb(l, n, apiPassword)
+	go startWeb(l, a, apiPassword)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt)
 	<-signalCh
 	log.Println("Shutting down...")
-	stop()
+	stopZen()
+	stopMainnet()
 
 	return nil
 }
