@@ -186,6 +186,7 @@ export const HostMap = (props: HostMapProps) => {
 						}
 					/>
 					{props.hosts.map(host => (
+						host.loc !== '' &&
 						<Marker
 							key={host.publicKey}
 							position={geolocation(host.loc)}
