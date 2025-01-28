@@ -181,8 +181,8 @@ func (wm *WalletManager) UnconfirmedEvents() ([]wallet.Event, error) {
 
 // FundTransaction adds siacoin inputs worth at least amount to the provided
 // transaction. If necessary, a change output will also be added.
-func (wm *WalletManager) FundTransaction(txn *types.Transaction, amount types.Currency, useUnconfirmed bool) ([]types.Hash256, error) {
-	return wm.wallet.FundTransaction(txn, amount, useUnconfirmed)
+func (wm *WalletManager) FundTransaction(txn *types.Transaction, amount types.Currency) ([]types.Hash256, error) {
+	return wm.wallet.FundTransaction(txn, amount, true)
 }
 
 // SignTransaction adds a signature to each of the specified inputs.
@@ -192,8 +192,8 @@ func (wm *WalletManager) SignTransaction(txn *types.Transaction, toSign []types.
 
 // FundV2Transaction adds siacoin inputs worth at least amount to the provided
 // transaction. If necessary, a change output will also be added.
-func (wm *WalletManager) FundV2Transaction(txn *types.V2Transaction, amount types.Currency, useUnconfirmed bool) (types.ChainIndex, []int, error) {
-	return wm.wallet.FundV2Transaction(txn, amount, useUnconfirmed)
+func (wm *WalletManager) FundV2Transaction(txn *types.V2Transaction, amount types.Currency) (types.ChainIndex, []int, error) {
+	return wm.wallet.FundV2Transaction(txn, amount, true)
 }
 
 // SignV2Inputs adds a signature to each of the specified siacoin inputs.
