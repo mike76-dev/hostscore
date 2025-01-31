@@ -39,6 +39,7 @@ func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword, seed, seedZ
 	log.Println("Shutting down...")
 	stopZen()
 	stopMainnet()
+	a.db.Close()
 
 	return nil
 }
