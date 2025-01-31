@@ -256,23 +256,22 @@ $ journalctl -u hsd -f
 If everything went well, you should see the following output:
 ```
 Output:
-Apr 18 12:37:29 server systemd[1]: Started hsd.
-Apr 18 12:37:29 server hsd[1945]: Using HSD_CONFIG_DIR environment variable to load config.
-Apr 18 12:37:29 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
-Apr 18 12:37:29 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
-Apr 18 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
-Apr 18 12:37:29 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
-Apr 18 12:37:29 server hsd[1945]: hsd v1.1.1
-Apr 18 12:37:29 server hsd[1945]: Git Revision 047f00c
-Apr 18 12:37:29 server hsd[1945]: Loading...
-Apr 18 12:37:29 server hsd[1945]: Connecting to the SQL database...
-Apr 18 12:37:29 server hsd[1945]: Connecting to Mainnet...
-Apr 18 12:37:29 server hsd[1945]: Connecting to Zen...
-Apr 18 12:37:29 server hsd[1945]: Loading wallet...
-Apr 18 12:37:29 server hsd[1945]: Loading host database...
-Apr 18 12:37:30 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
-Apr 18 12:37:30 server hsd[1945]: p2p Zen: Listening on [::]:9881
-Apr 18 12:37:30 server hsd[1945]: api: Listening on [::]:9980
+Jan 31 13:59:34 server systemd[1]: Started hsd.
+Jan 31 13:59:34 server hsd[1945]: Using HSD_CONFIG_DIR environment variable to load config.
+Jan 31 13:59:34 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
+Jan 31 13:59:34 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
+Jan 31 13:59:34 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
+Jan 31 13:59:34 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
+Jan 31 13:59:34 server hsd[1945]: hsd v2.0.0
+Jan 31 13:59:34 server hsd[1945]: Git Revision 047f00c
+Jan 31 13:59:34 server hsd[1945]: Loading...
+Jan 31 13:59:34 server hsd[1945]: Connecting to the SQL database...
+Jan 31 13:59:34 server hsd[1945]: Connecting to Mainnet...
+Jan 31 13:59:34 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
+Jan 31 13:59:34 server hsd[1945]: Connecting to Zen...
+Jan 31 13:59:34 server hsd[1945]: p2p Zen: Listening on [::]:9881
+Jan 31 13:59:34 server hsd[1945]: Loading host database...
+Jan 31 13:59:34 server hsd[1945]: api: Listening on [::]:9980
 ```
 The daemon will now be syncing to the blockchain. You can monitor the progress with the following command:
 ```
