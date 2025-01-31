@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"log"
 	"net"
@@ -13,8 +12,8 @@ import (
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/syncerutil"
 	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
+	walletutil "github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/consensus"
 	"go.sia.tech/core/gateway"
 	"go.sia.tech/core/types"
@@ -67,10 +66,6 @@ func (a *app) HostDB() *hostdb.HostDB {
 }
 
 func initialize(config *persist.HSDConfig, dbPassword, seed, seedZen string) *app {
-	a := &app{
-		nodes: make(map[string]*node),
-	}
-
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
 		User:                 config.DBUser,
@@ -91,6 +86,11 @@ func initialize(config *persist.HSDConfig, dbPassword, seed, seedZen string) *ap
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
+
+	a := &app{
+		nodes: make(map[string]*node),
+		db:    db,
+	}
 
 	// Make sure the path is an absolute one.
 	dir, err := filepath.Abs(config.Dir)
@@ -225,10 +225,9 @@ func newNode(db *sql.DB, name, seed, dir, p2p string, network *consensus.Network
 		wm:     wm,
 		db:     db,
 		Start: func() func() {
-			ctx := context.Background()
 			ch := make(chan struct{})
 			go func() {
-				s.Run(ctx)
+				s.Run()
 				close(ch)
 			}()
 			return func() {

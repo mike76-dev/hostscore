@@ -8,8 +8,8 @@ import (
 
 	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/persist"
-	"github.com/mike76-dev/hostscore/wallet"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/wallet"
 	"golang.org/x/term"
 	"lukechampine.com/flagg"
 )
@@ -230,11 +230,11 @@ func main() {
 			return
 		}
 		seed := wallet.NewSeedPhrase()
-		sk, err := wallet.KeyFromPhrase(seed)
-		if err != nil {
+		var s [32]byte
+		if err := wallet.SeedFromPhrase(&s, seed); err != nil {
 			log.Fatalln(err)
 		}
-		addr := types.StandardUnlockHash(sk.PublicKey())
+		addr := types.StandardUnlockHash(wallet.KeyFromSeed(&s, 0).PublicKey())
 		fmt.Printf("Seed:    %s\n", seed)
 		fmt.Printf("Address: %v\n", strings.TrimPrefix(addr.String(), "addr:"))
 	}
