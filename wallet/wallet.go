@@ -2,644 +2,346 @@ package wallet
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
-	"go.sia.tech/core/consensus"
+	"github.com/mike76-dev/hostscore/internal/sync"
+	"github.com/mike76-dev/hostscore/internal/utils"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/chain"
+	"go.sia.tech/coreutils/syncer"
+	"go.sia.tech/coreutils/wallet"
+	"go.uber.org/zap"
 )
 
-// StandardTransactionSignature is the most common form of TransactionSignature.
-// It covers the entire transaction, references a sole public key, and has no
-// timelock.
-func StandardTransactionSignature(id types.Hash256) types.TransactionSignature {
-	return types.TransactionSignature{
-		ParentID:       id,
-		CoveredFields:  types.CoveredFields{WholeTransaction: true},
-		PublicKeyIndex: 0,
-	}
+const (
+	// walletMaintenanceInterval is how often the wallet maintenance is done.
+	walletMaintenanceInterval = 10 * time.Minute
+
+	// wantedOutputs is how many unspent SiacoinOutputs we want to have.
+	wantedOutputs = 100
+)
+
+var (
+	defragThreshold     = 300
+	maxInputsForDefrag  = 300
+	maxDefragUTXOs      = 10
+	reservationDuration = 15 * time.Minute
+)
+
+// WalletManager represents a wallet that is stored in a MySQL database.
+type WalletManager struct {
+	wallet *wallet.SingleAddressWallet
+	store  *DBStore
+	chain  *chain.Manager
+	syncer *syncer.Syncer
+	log    *zap.Logger
+	tg     sync.ThreadGroup
 }
 
-// SignTransaction signs txn with the given key. The TransactionSignature object
-// must already be present in txn at the given index.
-func SignTransaction(cs consensus.State, txn *types.Transaction, sigIndex int, key types.PrivateKey) {
-	tsig := &txn.Signatures[sigIndex]
-	var sigHash types.Hash256
-	if tsig.CoveredFields.WholeTransaction {
-		sigHash = cs.WholeSigHash(*txn, tsig.ParentID, tsig.PublicKeyIndex, tsig.Timelock, tsig.CoveredFields.Signatures)
-	} else {
-		sigHash = cs.PartialSigHash(*txn, tsig.CoveredFields)
-	}
-	sig := key.SignHash(sigHash)
-	tsig.Signature = sig[:]
-}
-
-// ExplicitCoveredFields returns a CoveredFields that covers all elements
-// present in txn.
-func ExplicitCoveredFields(txn types.Transaction) (cf types.CoveredFields) {
-	for i := range txn.SiacoinInputs {
-		cf.SiacoinInputs = append(cf.SiacoinInputs, uint64(i))
-	}
-	for i := range txn.SiacoinOutputs {
-		cf.SiacoinOutputs = append(cf.SiacoinOutputs, uint64(i))
-	}
-	for i := range txn.FileContracts {
-		cf.FileContracts = append(cf.FileContracts, uint64(i))
-	}
-	for i := range txn.FileContractRevisions {
-		cf.FileContractRevisions = append(cf.FileContractRevisions, uint64(i))
-	}
-	for i := range txn.StorageProofs {
-		cf.StorageProofs = append(cf.StorageProofs, uint64(i))
-	}
-	for i := range txn.SiafundInputs {
-		cf.SiafundInputs = append(cf.SiafundInputs, uint64(i))
-	}
-	for i := range txn.SiafundOutputs {
-		cf.SiafundOutputs = append(cf.SiafundOutputs, uint64(i))
-	}
-	for i := range txn.MinerFees {
-		cf.MinerFees = append(cf.MinerFees, uint64(i))
-	}
-	for i := range txn.ArbitraryData {
-		cf.ArbitraryData = append(cf.ArbitraryData, uint64(i))
-	}
-	for i := range txn.Signatures {
-		cf.Signatures = append(cf.Signatures, uint64(i))
-	}
-	return
-}
-
-// A PoolTransaction summarizes the wallet-relevant data in a txpool
-// transaction.
-type PoolTransaction struct {
-	ID       types.TransactionID `json:"id"`
-	Raw      types.Transaction   `json:"raw"`
-	Type     string              `json:"type"`
-	Sent     types.Currency      `json:"sent"`
-	Received types.Currency      `json:"received"`
-	Locked   types.Currency      `json:"locked"`
-}
-
-// Annotate annotates a txpool transaction.
-func Annotate(txn types.Transaction, addr types.Address) PoolTransaction {
-	ptxn := PoolTransaction{ID: txn.ID(), Raw: txn, Type: "unknown"}
-
-	var totalValue types.Currency
-	for _, sco := range txn.SiacoinOutputs {
-		totalValue = totalValue.Add(sco.Value)
-	}
-	for _, fc := range txn.FileContracts {
-		totalValue = totalValue.Add(fc.Payout)
-	}
-	for _, fee := range txn.MinerFees {
-		totalValue = totalValue.Add(fee)
-	}
-
-	var ownedIn, ownedOut int
-	for _, sci := range txn.SiacoinInputs {
-		if sci.UnlockConditions.UnlockHash() == addr {
-			ownedIn++
-		}
-	}
-	for _, sco := range txn.SiacoinOutputs {
-		if sco.Address == addr {
-			ownedOut++
-		}
-	}
-	var ins, outs string
-	switch {
-	case ownedIn == 0:
-		ins = "none"
-	case ownedIn < len(txn.SiacoinInputs):
-		ins = "some"
-	case ownedIn == len(txn.SiacoinInputs):
-		ins = "all"
-	}
-	switch {
-	case ownedOut == 0:
-		outs = "none"
-	case ownedOut < len(txn.SiacoinOutputs):
-		outs = "some"
-	case ownedOut == len(txn.SiacoinOutputs):
-		outs = "all"
-	}
-
-	switch {
-	case ins == "none" && outs == "none":
-		ptxn.Type = "unrelated"
-	case ins == "all":
-		ptxn.Sent = totalValue
-		switch {
-		case outs == "all":
-			ptxn.Type = "redistribution"
-		case len(txn.FileContractRevisions) > 0:
-			ptxn.Type = "contract revision"
-		case len(txn.StorageProofs) > 0:
-			ptxn.Type = "storage proof"
-		case len(txn.ArbitraryData) > 0:
-			ptxn.Type = "announcement"
-		default:
-			ptxn.Type = "send"
-		}
-	case ins == "none" && outs != "none":
-		ptxn.Type = "receive"
-		for _, sco := range txn.SiacoinOutputs {
-			if sco.Address == addr {
-				ptxn.Received = ptxn.Received.Add(sco.Value)
-			}
-		}
-	case ins == "some" && len(txn.FileContracts) > 0:
-		ptxn.Type = "contract"
-		for _, fc := range txn.FileContracts {
-			var validLocked, missedLocked types.Currency
-			for _, sco := range fc.ValidProofOutputs {
-				if sco.Address == addr {
-					validLocked = validLocked.Add(fc.Payout)
-				}
-			}
-			for _, sco := range fc.MissedProofOutputs {
-				if sco.Address == addr {
-					missedLocked = missedLocked.Add(fc.Payout)
-				}
-			}
-			if validLocked.Cmp(missedLocked) > 0 {
-				ptxn.Locked = ptxn.Locked.Add(validLocked)
-			} else {
-				ptxn.Locked = ptxn.Locked.Add(missedLocked)
-			}
-		}
-	}
-
-	return ptxn
-}
-
-// An Event is something interesting that happened on the Sia blockchain.
-type Event struct {
-	Index     types.ChainIndex
-	Timestamp time.Time
-	Val       interface{ eventType() string }
-}
-
-func (*EventTransaction) eventType() string        { return "transaction" }
-func (*EventMinerPayout) eventType() string        { return "miner payout" }
-func (*EventMissedFileContract) eventType() string { return "missed file contract" }
-
-// String implements fmt.Stringer.
-func (e Event) String() string {
-	return fmt.Sprintf("%s at %s: %s", e.Val.eventType(), e.Timestamp, e.Val)
-}
-
-// A HostAnnouncement represents a host announcement within an EventTransaction.
-type HostAnnouncement struct {
-	PublicKey  types.PublicKey `json:"publicKey"`
-	NetAddress string          `json:"netAddress"`
-}
-
-// A SiafundInput represents a siafund input within an EventTransaction.
-type SiafundInput struct {
-	SiafundElement types.SiafundElement `json:"siafundElement"`
-	ClaimElement   types.SiacoinElement `json:"claimElement"`
-}
-
-// A FileContract represents a file contract within an EventTransaction.
-type FileContract struct {
-	FileContract types.FileContractElement `json:"fileContract"`
-	// only non-nil if transaction revised contract
-	Revision *types.FileContract `json:"revision,omitempty"`
-	// only non-nil if transaction resolved contract
-	ValidOutputs []types.SiacoinElement `json:"validOutputs,omitempty"`
-}
-
-// A V2FileContract represents a v2 file contract within an EventTransaction.
-type V2FileContract struct {
-	FileContract types.V2FileContractElement `json:"fileContract"`
-	// only non-nil if transaction revised contract
-	Revision *types.V2FileContract `json:"revision,omitempty"`
-	// only non-nil if transaction resolved contract
-	Resolution types.V2FileContractResolutionType `json:"resolution,omitempty"`
-	Outputs    []types.SiacoinElement             `json:"outputs,omitempty"`
-}
-
-type EventTransaction struct {
-	ID                types.TransactionID    `json:"id"`
-	SiacoinInputs     []types.SiacoinElement `json:"siacoinInputs"`
-	SiacoinOutputs    []types.SiacoinElement `json:"siacoinOutputs"`
-	SiafundInputs     []SiafundInput         `json:"siafundInputs"`
-	SiafundOutputs    []types.SiafundElement `json:"siafundOutputs"`
-	FileContracts     []FileContract         `json:"fileContracts"`
-	V2FileContracts   []V2FileContract       `json:"v2FileContracts"`
-	HostAnnouncements []HostAnnouncement     `json:"hostAnnouncements"`
-	Fee               types.Currency         `json:"fee"`
-}
-
-type EventMinerPayout struct {
-	SiacoinOutput types.SiacoinElement `json:"siacoinOutput"`
-}
-
-type EventMissedFileContract struct {
-	FileContract  types.FileContractElement `json:"fileContract"`
-	MissedOutputs []types.SiacoinElement    `json:"missedOutputs"`
-}
-
-// String implements fmt.Stringer.
-func (et EventTransaction) String() string {
-	result := et.ID.String()
-	if len(et.SiacoinOutputs) > 0 {
-		result += ": Siacoin outputs: "
-	}
-	for i, sco := range et.SiacoinOutputs {
-		result += sco.SiacoinOutput.Address.String()
-		result += fmt.Sprintf(" (%s)", sco.SiacoinOutput.Value)
-		if i < len(et.SiacoinOutputs)-1 {
-			result += ", "
-		}
-	}
-	if len(et.SiafundOutputs) > 0 {
-		result += "; Siafund outputs: "
-	}
-	for i, sfo := range et.SiafundOutputs {
-		result += sfo.SiafundOutput.Address.String()
-		result += fmt.Sprintf(" (%d SF)", sfo.SiafundOutput.Value)
-		if i < len(et.SiafundOutputs)-1 {
-			result += ", "
-		}
-	}
-	return result
-}
-
-// String implements fmt.Stringer.
-func (emp EventMinerPayout) String() string {
-	return fmt.Sprintf("%s (%s)",
-		emp.SiacoinOutput.SiacoinOutput.Address.String(),
-		emp.SiacoinOutput.SiacoinOutput.Value,
+// NewWallet returns an initialized WalletManager.
+func NewWallet(store *DBStore, cm *chain.Manager, syncer *syncer.Syncer, log *zap.Logger) (*WalletManager, error) {
+	tip, _ := store.Tip()
+	w, err := wallet.NewSingleAddressWallet(
+		store.key, cm, store,
+		wallet.WithLogger(log),
+		wallet.WithDefragThreshold(defragThreshold),
+		wallet.WithMaxDefragUTXOs(maxDefragUTXOs),
+		wallet.WithMaxInputsForDefrag(maxInputsForDefrag),
+		wallet.WithReservationDuration(reservationDuration),
 	)
-}
-
-// String implements fmt.Stringer.
-func (emfc EventMissedFileContract) String() string {
-	return emfc.FileContract.ID.String()
-}
-
-type ChainUpdate interface {
-	ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool))
-	ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool))
-	ForEachFileContractElement(func(fce types.FileContractElement, created bool, rev *types.FileContractElement, resolved, valid bool))
-	ForEachV2FileContractElement(func(fce types.V2FileContractElement, created bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType))
-}
-
-// AppliedEvents extracts a list of relevant events from a chain update.
-func AppliedEvents(cs consensus.State, b types.Block, cu ChainUpdate, addr types.Address) []Event {
-	var events []Event
-	addEvent := func(v interface{ eventType() string }) {
-		events = append(events, Event{
-			Timestamp: b.Timestamp,
-			Index:     cs.Index,
-			Val:       v,
-		})
+	if err != nil {
+		return nil, err
 	}
 
-	// do a first pass to see if there's anything relevant in the block
-	relevantContract := func(fc types.FileContract) bool {
-		for _, sco := range fc.ValidProofOutputs {
-			if sco.Address == addr {
-				return true
-			}
-		}
-		for _, sco := range fc.MissedProofOutputs {
-			if sco.Address == addr {
-				return true
-			}
-		}
-		return false
+	wm := &WalletManager{
+		wallet: w,
+		store:  store,
+		chain:  cm,
+		syncer: syncer,
+		log:    log,
 	}
-	relevantV2Contract := func(fc types.V2FileContract) bool {
-		if fc.RenterOutput.Address == addr {
-			return true
+
+	reorgCh := make(chan struct{}, 1)
+	reorgCh <- struct{}{}
+	stop := cm.OnReorg(func(index types.ChainIndex) {
+		select {
+		case reorgCh <- struct{}{}:
+		default:
 		}
-		if fc.HostOutput.Address == addr {
-			return true
+	})
+
+	go func() {
+		defer stop()
+
+		if err := wm.tg.Add(); err != nil {
+			return
 		}
-		return false
-	}
-	relevantV2ContractResolution := func(res types.V2FileContractResolutionType) bool {
-		switch r := res.(type) {
-		case *types.V2FileContractFinalization:
-			return relevantV2Contract(types.V2FileContract(*r))
-		case *types.V2FileContractRenewal:
-			return relevantV2Contract(r.FinalRevision)
+		defer wm.tg.Done()
+
+		for cm.Tip().Height <= tip.Height {
+			select {
+			case <-wm.tg.StopChan():
+				return
+			default:
+				time.Sleep(5 * time.Second)
+			}
 		}
-		return false
-	}
-	anythingRelevant := func() (ok bool) {
-		cu.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
-			if ok || sce.SiacoinOutput.Address == addr {
-				ok = true
+
+		for {
+			select {
+			case <-wm.tg.StopChan():
+				return
+			case <-reorgCh:
+				index, _ := wm.store.Tip()
+				if err := wm.syncStore(index); err != nil {
+					wm.log.Error("failed to sync database", zap.String("network", wm.store.network), zap.Error(err))
+				}
 			}
-		})
-		cu.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
-			if ok || sfe.SiafundOutput.Address == addr {
-				ok = true
-			}
-		})
-		cu.ForEachFileContractElement(func(fce types.FileContractElement, _ bool, rev *types.FileContractElement, resolved, valid bool) {
-			if ok || relevantContract(fce.FileContract) || (rev != nil && relevantContract(rev.FileContract)) {
-				ok = true
-			}
-		})
-		cu.ForEachV2FileContractElement(func(fce types.V2FileContractElement, _ bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-			if ok ||
-				relevantV2Contract(fce.V2FileContract) ||
-				(rev != nil && relevantV2Contract(rev.V2FileContract)) ||
-				(res != nil && relevantV2ContractResolution(res)) {
-				ok = true
-			}
-		})
-		return
+		}
 	}()
-	if !anythingRelevant {
-		return nil
+
+	go wm.performWalletMaintenance()
+
+	return wm, nil
+}
+
+func (wm *WalletManager) syncStore(index types.ChainIndex) error {
+	for index != wm.chain.Tip() {
+		select {
+		case <-wm.tg.StopChan():
+			return nil
+		default:
+		}
+
+		reverted, applied, err := wm.chain.UpdatesSince(index, 100)
+		if err != nil && strings.Contains(err.Error(), "missing block at index") {
+			wm.log.Warn("missing block at index, resetting chain state", zap.String("network", wm.store.network), zap.Uint64("height", index.Height))
+			if err := wm.store.resetChainState(); err != nil {
+				return utils.AddContext(err, "failed to reset consensus state")
+			}
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("failed to get updates since %v: %w", index, err)
+		} else if len(reverted) == 0 && len(applied) == 0 {
+			return nil
+		}
+
+		if err := wm.wallet.UpdateChainState(wm.store, reverted, applied); err != nil {
+			return fmt.Errorf("failed to update wallet state: %w", err)
+		}
+
+		if len(applied) > 0 {
+			index = applied[len(applied)-1].State.Index
+		} else {
+			index = reverted[len(reverted)-1].State.Index
+		}
+
+		if err := wm.store.updateChainState(index, true); err != nil {
+			wm.log.Error("couldn't update index", zap.String("network", wm.store.network), zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}
+
+// Close shuts down the WalletManager.
+func (wm *WalletManager) Close() error {
+	if err := wm.tg.Stop(); err != nil {
+		wm.log.Error("unable to stop threads", zap.String("network", wm.store.network), zap.Error(err))
+	}
+	wm.store.close()
+	return nil
+}
+
+// Address returns the address of the wallet.
+func (wm *WalletManager) Address() types.Address {
+	return wm.store.addr
+}
+
+// Key returns the private key that controls the wallet.
+func (wm *WalletManager) Key() types.PrivateKey {
+	return wm.store.key
+}
+
+// UnspentSiacoinElements returns the wallet's unspent siacoin outputs.
+func (wm *WalletManager) UnspentSiacoinElements() ([]types.SiacoinElement, error) {
+	return wm.wallet.UnspentSiacoinElements()
+}
+
+// Balance returns the balance of the wallet.
+func (wm *WalletManager) Balance() (wallet.Balance, error) {
+	return wm.wallet.Balance()
+}
+
+// UnconfirmedEvents returns all unconfirmed transactions relevant to the wallet.
+func (wm *WalletManager) UnconfirmedEvents() ([]wallet.Event, error) {
+	return wm.wallet.UnconfirmedEvents()
+}
+
+// FundTransaction adds siacoin inputs worth at least amount to the provided
+// transaction. If necessary, a change output will also be added.
+func (wm *WalletManager) FundTransaction(txn *types.Transaction, amount types.Currency, useUnconfirmed bool) ([]types.Hash256, error) {
+	return wm.wallet.FundTransaction(txn, amount, useUnconfirmed)
+}
+
+// SignTransaction adds a signature to each of the specified inputs.
+func (wm *WalletManager) SignTransaction(txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) {
+	wm.wallet.SignTransaction(txn, toSign, cf)
+}
+
+// FundV2Transaction adds siacoin inputs worth at least amount to the provided
+// transaction. If necessary, a change output will also be added.
+func (wm *WalletManager) FundV2Transaction(txn *types.V2Transaction, amount types.Currency, useUnconfirmed bool) (types.ChainIndex, []int, error) {
+	return wm.wallet.FundV2Transaction(txn, amount, useUnconfirmed)
+}
+
+// SignV2Inputs adds a signature to each of the specified siacoin inputs.
+func (wm *WalletManager) SignV2Inputs(txn *types.V2Transaction, toSign []int) {
+	wm.wallet.SignV2Inputs(txn, toSign)
+}
+
+// ReleaseInputs marks the inputs as unused.
+func (wm *WalletManager) ReleaseInputs(v1txns []types.Transaction, v2txns []types.V2Transaction) {
+	wm.wallet.ReleaseInputs(v1txns, v2txns)
+}
+
+// synced returns true if the wallet is synced to the blockchain.
+func (wm *WalletManager) synced() bool {
+	isSynced := func(s *syncer.Syncer) bool {
+		var count int
+		for _, p := range s.Peers() {
+			if p.Synced() {
+				count++
+			}
+		}
+		return count >= 5
+	}
+	return isSynced(wm.syncer) && time.Since(wm.chain.TipState().PrevTimestamps[0]) < 24*time.Hour
+}
+
+// performWalletMaintenance performs the wallet maintenance periodically.
+func (wm *WalletManager) performWalletMaintenance() {
+	redistribute := func() {
+		if relevantTransactions(wm.chain.PoolTransactions(), wm.store.addr) ||
+			relevantV2Transactions(wm.chain.V2PoolTransactions(), wm.store.addr) {
+			return
+		}
+
+		utxos, err := wm.wallet.UnspentSiacoinElements()
+		if err != nil {
+			wm.log.Error("couldn't get unspent outputs", zap.String("network", wm.store.network), zap.Error(err))
+			return
+		}
+
+		balance := wallet.SumOutputs(utxos)
+		amount := balance.Div64(wantedOutputs).Div64(2)
+		fee := wm.chain.RecommendedFee()
+
+		if state := wm.chain.TipState(); state.Index.Height < state.Network.HardforkV2.AllowHeight {
+			txns, toSign, err := wm.wallet.Redistribute(wantedOutputs, amount, fee)
+			if err != nil {
+				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", wantedOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
+				return
+			}
+
+			if len(txns) == 0 {
+				return
+			}
+
+			for i := 0; i < len(txns); i++ {
+				wm.SignTransaction(&txns[i], toSign, types.CoveredFields{WholeTransaction: true})
+			}
+
+			_, err = wm.chain.AddPoolTransactions(txns)
+			if err != nil {
+				wm.log.Error("failed to broadcast v1 transactions", zap.String("network", wm.store.network), zap.Error(err))
+				wm.ReleaseInputs(txns, nil)
+				return
+			}
+
+			wm.syncer.BroadcastTransactionSet(txns)
+		} else {
+			txns, toSign, err := wm.wallet.RedistributeV2(wantedOutputs, amount, fee)
+			if err != nil {
+				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", wantedOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
+				return
+			}
+
+			if len(txns) == 0 {
+				return
+			}
+
+			for i := 0; i < len(txns); i++ {
+				wm.SignV2Inputs(&txns[i], toSign[i])
+			}
+
+			_, err = wm.chain.AddV2PoolTransactions(state.Index, txns)
+			if err != nil {
+				wm.log.Error("failed to broadcast v2 transactions", zap.String("network", wm.store.network), zap.Error(err))
+				wm.ReleaseInputs(nil, txns)
+				return
+			}
+
+			wm.syncer.BroadcastV2TransactionSet(state.Index, txns)
+		}
 	}
 
-	// collect all elements
-	sces := make(map[types.SiacoinOutputID]types.SiacoinElement)
-	sfes := make(map[types.SiafundOutputID]types.SiafundElement)
-	fces := make(map[types.FileContractID]types.FileContractElement)
-	v2fces := make(map[types.FileContractID]types.V2FileContractElement)
-	cu.ForEachSiacoinElement(func(sce types.SiacoinElement, created, spent bool) {
-		sce.MerkleProof = nil
-		sces[types.SiacoinOutputID(sce.ID)] = sce
-	})
-	cu.ForEachSiafundElement(func(sfe types.SiafundElement, created, spent bool) {
-		sfe.MerkleProof = nil
-		sfes[types.SiafundOutputID(sfe.ID)] = sfe
-	})
-	cu.ForEachFileContractElement(func(fce types.FileContractElement, _ bool, rev *types.FileContractElement, resolved, valid bool) {
-		fce.MerkleProof = nil
-		fces[types.FileContractID(fce.ID)] = fce
-	})
-	cu.ForEachV2FileContractElement(func(fce types.V2FileContractElement, _ bool, rev *types.V2FileContractElement, res types.V2FileContractResolutionType) {
-		fce.MerkleProof = nil
-		v2fces[types.FileContractID(fce.ID)] = fce
-	})
+	if err := wm.tg.Add(); err != nil {
+		wm.log.Error("couldn't add a thread", zap.String("network", wm.store.network), zap.Error(err))
+		return
+	}
+	defer wm.tg.Done()
 
-	relevantTxn := func(txn types.Transaction) bool {
-		for _, sci := range txn.SiacoinInputs {
-			if sce := sces[sci.ParentID]; sce.SiacoinOutput.Address == addr {
-				return true
-			}
+	for {
+		if wm.synced() {
+			break
 		}
-		for _, sco := range txn.SiacoinOutputs {
-			if sco.Address == addr {
-				return true
-			}
+		select {
+		case <-wm.tg.StopChan():
+			return
+		case <-time.After(30 * time.Second):
 		}
-		for _, sfi := range txn.SiafundInputs {
-			if sfe := sfes[sfi.ParentID]; sfe.SiafundOutput.Address == addr {
-				return true
-			}
-		}
-		for _, sfo := range txn.SiafundOutputs {
-			if sfo.Address == addr {
-				return true
-			}
-		}
-		for _, fc := range txn.FileContracts {
-			if relevantContract(fc) {
-				return true
-			}
-		}
-		for _, fcr := range txn.FileContractRevisions {
-			if relevantContract(fcr.FileContract) {
-				return true
-			}
-		}
-		for _, sp := range txn.StorageProofs {
-			if relevantContract(fces[sp.ParentID].FileContract) {
-				return true
-			}
-		}
-		return false
 	}
 
-	relevantV2Txn := func(txn types.V2Transaction) bool {
+	redistribute()
+
+	for {
+		select {
+		case <-wm.tg.StopChan():
+			return
+		case <-time.After(walletMaintenanceInterval):
+			redistribute()
+		}
+	}
+}
+
+// relevantTransactions returns true if there is at least one relevant
+// transaction in the v1 transaction set.
+func relevantTransactions(txnSet []types.Transaction, addr types.Address) bool {
+	for _, txn := range txnSet {
+		if wallet.IsRelevantTransaction(txn, addr) {
+			return true
+		}
+	}
+	return false
+}
+
+// relevantV2Transactions returns true if there is at least one relevant
+// transaction in the v2 transaction set.
+func relevantV2Transactions(txnSet []types.V2Transaction, addr types.Address) bool {
+	for _, txn := range txnSet {
 		for _, sci := range txn.SiacoinInputs {
 			if sci.Parent.SiacoinOutput.Address == addr {
 				return true
 			}
 		}
+
 		for _, sco := range txn.SiacoinOutputs {
 			if sco.Address == addr {
 				return true
 			}
 		}
-		for _, sfi := range txn.SiafundInputs {
-			if sfi.Parent.SiafundOutput.Address == addr {
-				return true
-			}
-		}
-		for _, sfo := range txn.SiafundOutputs {
-			if sfo.Address == addr {
-				return true
-			}
-		}
-		for _, fc := range txn.FileContracts {
-			if relevantV2Contract(fc) {
-				return true
-			}
-		}
-		for _, fcr := range txn.FileContractRevisions {
-			if relevantV2Contract(fcr.Parent.V2FileContract) || relevantV2Contract(fcr.Revision) {
-				return true
-			}
-		}
-		for _, fcr := range txn.FileContractResolutions {
-			if relevantV2Contract(fcr.Parent.V2FileContract) {
-				return true
-			}
-			switch r := fcr.Resolution.(type) {
-			case *types.V2FileContractFinalization:
-				if relevantV2Contract(types.V2FileContract(*r)) {
-					return true
-				}
-			case *types.V2FileContractRenewal:
-				if relevantV2Contract(r.FinalRevision) {
-					return true
-				}
-			}
-		}
-		return false
 	}
-
-	// handle v1 transactions
-	for _, txn := range b.Transactions {
-		if !relevantTxn(txn) {
-			continue
-		}
-
-		e := &EventTransaction{
-			ID:             txn.ID(),
-			SiacoinInputs:  make([]types.SiacoinElement, len(txn.SiacoinInputs)),
-			SiacoinOutputs: make([]types.SiacoinElement, len(txn.SiacoinOutputs)),
-			SiafundInputs:  make([]SiafundInput, len(txn.SiafundInputs)),
-			SiafundOutputs: make([]types.SiafundElement, len(txn.SiafundOutputs)),
-		}
-
-		for i := range txn.SiacoinInputs {
-			e.SiacoinInputs[i] = sces[txn.SiacoinInputs[i].ParentID]
-		}
-		for i := range txn.SiacoinOutputs {
-			e.SiacoinOutputs[i] = sces[txn.SiacoinOutputID(i)]
-		}
-		for i := range txn.SiafundInputs {
-			e.SiafundInputs[i] = SiafundInput{
-				SiafundElement: sfes[txn.SiafundInputs[i].ParentID],
-				ClaimElement:   sces[txn.SiafundClaimOutputID(i)],
-			}
-		}
-		for i := range txn.SiafundOutputs {
-			e.SiafundOutputs[i] = sfes[txn.SiafundOutputID(i)]
-		}
-		addContract := func(id types.FileContractID) *FileContract {
-			for i := range e.FileContracts {
-				if types.FileContractID(e.FileContracts[i].FileContract.ID) == id {
-					return &e.FileContracts[i]
-				}
-			}
-			e.FileContracts = append(e.FileContracts, FileContract{FileContract: fces[id]})
-			return &e.FileContracts[len(e.FileContracts)-1]
-		}
-		for i := range txn.FileContracts {
-			addContract(txn.FileContractID(i))
-		}
-		for i := range txn.FileContractRevisions {
-			fc := addContract(txn.FileContractRevisions[i].ParentID)
-			rev := txn.FileContractRevisions[i].FileContract
-			fc.Revision = &rev
-		}
-		for i := range txn.StorageProofs {
-			fc := addContract(txn.StorageProofs[i].ParentID)
-			fc.ValidOutputs = make([]types.SiacoinElement, len(fc.FileContract.FileContract.ValidProofOutputs))
-			for i := range fc.ValidOutputs {
-				fc.ValidOutputs[i] = sces[types.FileContractID(fc.FileContract.ID).ValidOutputID(i)]
-			}
-		}
-		for _, arb := range txn.ArbitraryData {
-			var prefix types.Specifier
-			var uk types.UnlockKey
-			d := types.NewBufDecoder(arb)
-			prefix.DecodeFrom(d)
-			netAddress := d.ReadString()
-			uk.DecodeFrom(d)
-			if d.Err() == nil && prefix == types.NewSpecifier("HostAnnouncement") &&
-				uk.Algorithm == types.SpecifierEd25519 && len(uk.Key) == len(types.PublicKey{}) {
-				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
-					PublicKey:  *(*types.PublicKey)(uk.Key),
-					NetAddress: netAddress,
-				})
-			}
-		}
-		for i := range txn.MinerFees {
-			e.Fee = e.Fee.Add(txn.MinerFees[i])
-		}
-
-		addEvent(e)
-	}
-
-	// handle v2 transactions
-	for _, txn := range b.V2Transactions() {
-		if !relevantV2Txn(txn) {
-			continue
-		}
-
-		txid := txn.ID()
-		e := &EventTransaction{
-			ID:             txid,
-			SiacoinInputs:  make([]types.SiacoinElement, len(txn.SiacoinInputs)),
-			SiacoinOutputs: make([]types.SiacoinElement, len(txn.SiacoinOutputs)),
-			SiafundInputs:  make([]SiafundInput, len(txn.SiafundInputs)),
-			SiafundOutputs: make([]types.SiafundElement, len(txn.SiafundOutputs)),
-		}
-		for i := range txn.SiacoinInputs {
-			// NOTE: here (and elsewhere), we fetch the element from our maps,
-			// rather than using the parent directly, because our copy has its
-			// Merkle proof nil'd out
-			e.SiacoinInputs[i] = sces[types.SiacoinOutputID(txn.SiacoinInputs[i].Parent.ID)]
-		}
-		for i := range txn.SiacoinOutputs {
-			e.SiacoinOutputs[i] = sces[txn.SiacoinOutputID(txid, i)]
-		}
-		for i := range txn.SiafundInputs {
-			sfoid := types.SiafundOutputID(txn.SiafundInputs[i].Parent.ID)
-			e.SiafundInputs[i] = SiafundInput{
-				SiafundElement: sfes[sfoid],
-				ClaimElement:   sces[sfoid.ClaimOutputID()],
-			}
-		}
-		for i := range txn.SiafundOutputs {
-			e.SiafundOutputs[i] = sfes[txn.SiafundOutputID(txid, i)]
-		}
-		addContract := func(id types.FileContractID) *V2FileContract {
-			for i := range e.V2FileContracts {
-				if types.FileContractID(e.V2FileContracts[i].FileContract.ID) == id {
-					return &e.V2FileContracts[i]
-				}
-			}
-			e.V2FileContracts = append(e.V2FileContracts, V2FileContract{FileContract: v2fces[id]})
-			return &e.V2FileContracts[len(e.V2FileContracts)-1]
-		}
-		for i := range txn.FileContracts {
-			addContract(txn.V2FileContractID(txid, i))
-		}
-		for _, fcr := range txn.FileContractRevisions {
-			fc := addContract(types.FileContractID(fcr.Parent.ID))
-			fc.Revision = &fcr.Revision
-		}
-		for _, fcr := range txn.FileContractResolutions {
-			fc := addContract(types.FileContractID(fcr.Parent.ID))
-			fc.Resolution = fcr.Resolution
-			fc.Outputs = []types.SiacoinElement{
-				sces[types.FileContractID(fcr.Parent.ID).V2RenterOutputID()],
-				sces[types.FileContractID(fcr.Parent.ID).V2HostOutputID()],
-			}
-		}
-		for _, a := range txn.Attestations {
-			if a.Key == "HostAnnouncement" {
-				e.HostAnnouncements = append(e.HostAnnouncements, HostAnnouncement{
-					PublicKey:  a.PublicKey,
-					NetAddress: string(a.Value),
-				})
-			}
-		}
-
-		e.Fee = txn.MinerFee
-		addEvent(e)
-	}
-
-	// handle missed contracts
-	cu.ForEachFileContractElement(func(fce types.FileContractElement, _ bool, rev *types.FileContractElement, resolved, valid bool) {
-		if resolved && !valid {
-			if !relevantContract(fce.FileContract) {
-				return
-			}
-			missedOutputs := make([]types.SiacoinElement, len(fce.FileContract.MissedProofOutputs))
-			for i := range missedOutputs {
-				missedOutputs[i] = sces[types.FileContractID(fce.ID).MissedOutputID(i)]
-			}
-			addEvent(&EventMissedFileContract{
-				FileContract:  fce,
-				MissedOutputs: missedOutputs,
-			})
-		}
-	})
-
-	// handle block rewards
-	for i := range b.MinerPayouts {
-		if b.MinerPayouts[i].Address == addr {
-			addEvent(&EventMinerPayout{
-				SiacoinOutput: sces[cs.Index.ID.MinerOutputID(i)],
-			})
-		}
-	}
-
-	return events
+	return false
 }

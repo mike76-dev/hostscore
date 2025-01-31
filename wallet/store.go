@@ -1,4 +1,4 @@
-package walletutil
+package wallet
 
 import (
 	"bytes"
@@ -217,7 +217,7 @@ func (s *DBStore) logEvent(event wallet.Event) {
 	if !outflow.IsZero() {
 		desc += ", outflow: " + outflow.String()
 	}
-	s.log.Info("found new " + desc)
+	s.log.Info(desc)
 }
 
 // WalletApplyIndex implements wallet.UpdateTx.
