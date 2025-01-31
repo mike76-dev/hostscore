@@ -4,10 +4,10 @@ import (
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/wallet"
-	"go.sia.tech/core/consensus"
 	rhpv2 "go.sia.tech/core/rhp/v2"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
+	"go.sia.tech/coreutils/wallet"
 )
 
 // calculateFunding calculates the funding of a benchmarking contract.
@@ -34,6 +34,23 @@ func calculateFunding(settings rhpv2.HostSettings, txnFee types.Currency) (fundi
 	return
 }
 
+// calculateFundingV2 calculates the funding of a V2 benchmarking contract.
+func calculateFundingV2(prices rhpv4.HostPrices, txnFee types.Currency) (funding, collateral types.Currency) {
+	numBenchmarks := contractDuration / (6 * benchmarkInterval / time.Hour)
+	dataSize := benchmarkBatchSize * numBenchmarks
+
+	uploadCost := prices.RPCAppendSectorsCost(uint64(dataSize), contractDuration)
+	downloadCost := prices.RPCReadSectorCost(uint64(dataSize))
+
+	contractCost := prices.ContractPrice.Add(txnFee)
+	funding = uploadCost.Add(downloadCost).RenterCost()
+	funding = funding.Add(contractCost)
+
+	collateral = uploadCost.HostRiskedCollateral()
+
+	return
+}
+
 // prepareContractFormation creates a new contract and a formation
 // transaction set.
 func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transaction, error) {
@@ -42,20 +59,16 @@ func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transact
 	}
 
 	var blockHeight uint64
-	var state consensus.State
-	var txnFee types.Currency
 	if host.Network == "zen" {
 		blockHeight = hdb.sZen.tip.Height
-		state = hdb.cmZen.TipState()
-		txnFee = hdb.cmZen.RecommendedFee().Mul64(4)
 	} else {
 		blockHeight = hdb.s.tip.Height
-		state = hdb.cm.TipState()
-		txnFee = hdb.cm.RecommendedFee().Mul64(4)
 	}
+	state := hdb.nodes.ChainManager(host.Network).TipState()
+	txnFee := hdb.nodes.ChainManager(host.Network).RecommendedFee().Mul64(4)
+	ourKey := hdb.nodes.Wallet(host.Network).Key()
+	ourAddr := hdb.nodes.Wallet(host.Network).Address()
 	settings := host.Settings
-	ourKey := hdb.w.Key(host.Network)
-	ourAddr := hdb.w.Address(host.Network)
 
 	funding, collateral := calculateFunding(settings, txnFee.Mul64(2048))
 	fc := rhpv2.PrepareContractFormation(ourKey.PublicKey(), host.PublicKey, funding, collateral, blockHeight+contractDuration, settings, ourAddr)
@@ -68,13 +81,13 @@ func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transact
 	txn.MinerFees = []types.Currency{txnFee}
 	cost = cost.Add(txnFee)
 
-	parents, toSign, err := hdb.w.Fund(host.Network, &txn, cost, true)
+	toSign, err := hdb.nodes.Wallet(host.Network).FundTransaction(&txn, cost, true)
 	if err != nil {
 		return nil, utils.AddContext(err, "unable to fund transaction")
 	}
 
 	cf := wallet.ExplicitCoveredFields(txn)
-	hdb.w.Sign(host.Network, &txn, toSign, cf)
+	hdb.nodes.Wallet(host.Network).SignTransaction(&txn, toSign, cf)
 
-	return append(parents, txn), nil
+	return append(hdb.nodes.ChainManager(host.Network).UnconfirmedParents(txn), txn), nil
 }
