@@ -191,9 +191,12 @@ func (s *DBStore) removeSiacoinElements(sces []types.SiacoinElement) error {
 
 // UpdateWalletSiacoinElementProofs implements wallet.UpdateTx.
 func (s *DBStore) UpdateWalletSiacoinElementProofs(updater wallet.ProofUpdater) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	sces := s.getSiacoinElements()
-	for _, sce := range sces {
-		updater.UpdateElementProof(&sce.StateElement)
+	for i := range sces {
+		updater.UpdateElementProof(&sces[i].StateElement)
 	}
 
 	return s.updateSiacoinElements(sces)
@@ -222,6 +225,9 @@ func (s *DBStore) logEvent(event wallet.Event) {
 
 // WalletApplyIndex implements wallet.UpdateTx.
 func (s *DBStore) WalletApplyIndex(_ types.ChainIndex, created, spent []types.SiacoinElement, events []wallet.Event, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if err := s.removeSiacoinElements(spent); err != nil {
 		return fmt.Errorf("failed to delete Siacoin elements: %w", err)
 	}
@@ -239,6 +245,9 @@ func (s *DBStore) WalletApplyIndex(_ types.ChainIndex, created, spent []types.Si
 
 // WalletRevertIndex implements wallet.UpdateTx.
 func (s *DBStore) WalletRevertIndex(_ types.ChainIndex, removed, unspent []types.SiacoinElement, _ time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if err := s.removeSiacoinElements(removed); err != nil {
 		return fmt.Errorf("failed to delete Siacoin elements: %w", err)
 	}
