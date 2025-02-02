@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -28,7 +29,8 @@ func isSynced(s *syncer.Syncer) bool {
 }
 
 func checkNetwork(jc jape.Context, network *string) error {
-	if err := jc.DecodeForm("network", &network); err != nil {
+	if err := jc.DecodeForm("network", network); err != nil {
+		fmt.Println(err)
 		return err
 	}
 
