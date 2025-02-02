@@ -20,6 +20,7 @@ import (
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"lukechampine.com/frand"
 )
 
@@ -217,7 +218,7 @@ func syncStore(store *hostDBStore, cm *chain.Manager, index types.ChainIndex) er
 // NewHostDB returns a new HostDB.
 func NewHostDB(db *sql.DB, dir string, nodes NodeStore) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
-	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
+	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"), zapcore.InfoLevel)
 	if err != nil {
 		log.Fatal(err)
 	}

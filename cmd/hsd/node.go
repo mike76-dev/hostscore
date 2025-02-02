@@ -20,6 +20,7 @@ import (
 	"go.sia.tech/coreutils"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
+	"go.uber.org/zap/zapcore"
 )
 
 type node struct {
@@ -160,7 +161,7 @@ func newNode(db *sql.DB, name, seed, dir, p2p string, network *consensus.Network
 		return nil, err
 	}
 
-	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "cm.log"))
+	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "cm.log"), zapcore.ErrorLevel)
 	if err != nil {
 		return nil, err
 	}
@@ -197,14 +198,14 @@ func newNode(db *sql.DB, name, seed, dir, p2p string, network *consensus.Network
 		NetAddress: syncerAddr,
 	}
 
-	syncerLogger, syncerCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "syncer.log"))
+	syncerLogger, syncerCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "syncer.log"), zapcore.ErrorLevel)
 	if err != nil {
 		return nil, err
 	}
 
 	s := syncer.New(l, cm, ps, header, syncer.WithLogger(syncerLogger))
 
-	walletLogger, walletCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"))
+	walletLogger, walletCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "wallet.log"), zapcore.InfoLevel)
 	if err != nil {
 		return nil, err
 	}

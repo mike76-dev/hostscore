@@ -17,7 +17,7 @@ func printCommitHash(logger *zap.Logger) {
 }
 
 // NewFileLogger returns a logger that logs to logFilename.
-func NewFileLogger(logFilename string) (*zap.Logger, func(), error) {
+func NewFileLogger(logFilename string, level zapcore.Level) (*zap.Logger, func(), error) {
 	writer, closeFn, err := zap.Open(logFilename)
 	if err != nil {
 		return nil, nil, err
@@ -29,7 +29,7 @@ func NewFileLogger(logFilename string) (*zap.Logger, func(), error) {
 	fileEncoder := zapcore.NewJSONEncoder(config)
 
 	core := zapcore.NewTee(
-		zapcore.NewCore(fileEncoder, writer, zapcore.DebugLevel),
+		zapcore.NewCore(fileEncoder, writer, level),
 	)
 
 	logger := zap.New(
