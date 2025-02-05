@@ -10,11 +10,11 @@ This guide will assume that you use Ubuntu Server 22.04 LTS. If you run any othe
 
 ## Downloading Binaries
 
-Log into your server and download the binaries. This guide assumes that you will use the version `1.1.1` for an x86 CPU:
+Log into your server and download the binaries. This guide assumes that you will use the version `2.0.0` for an x86 CPU:
 ```
 mkdir ~/hostscore
 cd ~/hostscore
-wget -q https://github.com/mike76-dev/hostscore/releases/download/v1.1.1-hsd/hostscore_linux_amd64.zip
+wget -q https://github.com/mike76-dev/hostscore/releases/download/v2.0.0-hsd/hostscore_linux_amd64.zip
 unzip hostscore_linux_amd64.zip
 rm hostscore_linux_amd64.zip
 ```
@@ -275,14 +275,38 @@ Jan 31 13:59:34 server hsd[1945]: api: Listening on [::]:9980
 ```
 The daemon will now be syncing to the blockchain. You can monitor the progress with the following command:
 ```
-$ curl -u "":<api_password> "http://localhost:9980/api/consensus/tip?network=mainnet"
+$ curl -u "":<api_password> "http://localhost:9980/api/node/status"
 ```
 ```
 Output:
 {
-	"network": "Mainnet",
-	"height": 38540,
-	"id": "bid:000000000000dedd2b77efddf81a92f633687ae26ef59580edae1446e2491319",
+	"version": "2.0.0",
+	"heightMainnet": 12080,
+	"heightZen": 16600,
+	"balanceMainnet": {
+		"spendable": "0",
+		"confirmed": "0",
+		"unconfirmed": "0",
+		"immature": "0"
+	},
+	"balanceZen": {
+		"spendable": "0",
+		"confirmed": "0",
+		"unconfirmed": "0",
+		"immature": "0"
+	}
+}
+```
+To check if the node is synced to the network, enter:
+```
+$ curl -u "":<api_password> "http://localhost:9980/api/consensus/tip?network=mainnet"
+```
+(`mainnet` defaults for the network, so you may as well omit `?network=mainnet`).
+```
+Output:
+{
+	"height": 344214,
+	"id": "00000000000000010ef6e1beba972404073c7d33160e567f1322965643ffd426",
 	"synced": false
 }
 ```
@@ -290,7 +314,6 @@ Once the node is synced, the output will change:
 ```
 Output:
 {
-	"network": "Mainnet",
 	"height": 466428,
 	"id": "bid:00000000000000000d826c4eaa3212ef0f92ed837b22b8115ea6c7c40d80648c",
 	"synced": true
@@ -303,10 +326,10 @@ $ curl -u "":<api_password> "http://localhost:9980/api/wallet/balance?network=ma
 ```
 Output:
 {
-	"network": "Mainnet",
-	"siacoins": "1000000000000000000000000000",
-	"immatureSiacoins": "0",
-	"siafunds": 0
+	"spendable": "1000000000000000000000000000",
+	"confirmed": "1000000000000000000000000000",
+	"unconfirmed": "0",
+	"immature": 0
 }
 ```
 `hsd` will start forming contracts with the hosts and benchmarking them. You are all set!
