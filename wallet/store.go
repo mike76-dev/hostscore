@@ -25,7 +25,6 @@ type DBStore struct {
 	tx            *sql.Tx
 	log           *zap.Logger
 	network       string
-	rowIndex      int
 	lastCommitted time.Time
 }
 
@@ -35,9 +34,9 @@ func (s *DBStore) save() error {
 	}
 
 	_, err := s.tx.Exec(`
-		REPLACE INTO wt_tip (id, network, height, bid)
-		VALUES (?, ?, ?, ?)
-	`, s.rowIndex, s.network, s.tip.Height, s.tip.ID[:])
+		REPLACE INTO wt_tip (network, height, bid)
+		VALUES (?, ?, ?)
+	`, s.network, s.tip.Height, s.tip.ID[:])
 	if err != nil {
 		s.tx.Rollback()
 		s.tx, _ = s.db.Begin()
@@ -60,8 +59,8 @@ func (s *DBStore) load() error {
 	err := s.db.QueryRow(`
 		SELECT height, bid
 		FROM wt_tip
-		WHERE id = ?
-	`, s.rowIndex).Scan(&height, &id)
+		WHERE network = ?
+	`, s.network).Scan(&height, &id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return utils.AddContext(err, "couldn't load tip")
 	}
@@ -282,15 +281,6 @@ func (s *DBStore) close() {
 
 // NewDBStore returns a new DBStore.
 func NewDBStore(db *sql.DB, seedPhrase, network string, logger *zap.Logger) (*DBStore, types.ChainIndex, error) {
-	var rowIndex int
-	if network == "mainnet" {
-		rowIndex = 1
-	} else if network == "zen" {
-		rowIndex = 2
-	} else {
-		panic("wrong network provided")
-	}
-
 	var seed [32]byte
 	if err := wallet.SeedFromPhrase(&seed, seedPhrase); err != nil {
 		return nil, types.ChainIndex{}, err
@@ -298,13 +288,12 @@ func NewDBStore(db *sql.DB, seedPhrase, network string, logger *zap.Logger) (*DB
 
 	sk := wallet.KeyFromSeed(&seed, 0)
 	s := &DBStore{
-		addr:     types.StandardUnlockHash(sk.PublicKey()),
-		key:      sk,
-		sces:     make(map[types.SiacoinOutputID]types.SiacoinElement),
-		db:       db,
-		network:  network,
-		rowIndex: rowIndex,
-		log:      logger,
+		addr:    types.StandardUnlockHash(sk.PublicKey()),
+		key:     sk,
+		sces:    make(map[types.SiacoinOutputID]types.SiacoinElement),
+		db:      db,
+		network: network,
+		log:     logger,
 	}
 
 	if err := s.load(); err != nil {

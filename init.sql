@@ -3,11 +3,10 @@ DROP TABLE IF EXISTS wt_tip;
 DROP TABLE IF EXISTS wt_sces;
 
 CREATE TABLE wt_tip (
-	id      INT NOT NULL,
 	network VARCHAR(8) NOT NULL,
 	height  BIGINT UNSIGNED NOT NULL,
 	bid     BINARY(32) NOT NULL,
-	PRIMARY KEY (id)
+	PRIMARY KEY (network)
 );
 
 CREATE TABLE wt_sces (
