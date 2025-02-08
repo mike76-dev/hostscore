@@ -66,7 +66,7 @@ func (a *app) HostDB() *hostdb.HostDB {
 	return a.hdb
 }
 
-func initialize(config *persist.HSDConfig, dbPassword, seed, seedZen string) *app {
+func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]string) *app {
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
 		User:                 config.DBUser,
@@ -106,32 +106,37 @@ func initialize(config *persist.HSDConfig, dbPassword, seed, seedZen string) *ap
 		log.Fatalf("Provided parameter is invalid: %v\n", dir)
 	}
 
-	// Mainnet.
-	log.Println("Connecting to Mainnet...")
-	mainnet, genesisBlockMainnet := chain.Mainnet()
-	mainnetBootstrap := syncer.MainnetBootstrapPeers
+	// Connect to the networks.
+	for name, seed := range seeds {
+		title := utils.Capitalize(name)
+		log.Printf("Connecting to %s...\n", title)
+		var network *consensus.Network
+		var genesisBlock types.Block
+		var bootstrap []string
+		var gatewayAddr string
+		switch name {
+		case "mainnet":
+			network, genesisBlock = chain.Mainnet()
+			bootstrap = syncer.MainnetBootstrapPeers
+			gatewayAddr = config.GatewayMainnet
+		case "zen":
+			network, genesisBlock = chain.TestnetZen()
+			bootstrap = syncer.ZenBootstrapPeers
+			gatewayAddr = config.GatewayZen
+		case "anagami":
+			network, genesisBlock = chain.TestnetAnagami()
+			bootstrap = syncer.AnagamiBootstrapPeers
+			gatewayAddr = config.GatewayAnagami
+		}
 
-	mainnetNode, err := newNode(db, "mainnet", seed, dir, config.GatewayMainnet, mainnet, genesisBlockMainnet, mainnetBootstrap)
-	if err != nil {
-		log.Fatalf("Couldn't start Mainnet node: %v\n", err)
+		node, err := newNode(db, name, seed, dir, gatewayAddr, network, genesisBlock, bootstrap)
+		if err != nil {
+			log.Fatalf("Couldn't start %s node: %v\n", title, err)
+		}
+
+		a.nodes[name] = node
+		log.Printf("p2p %s: Listening on %s\n", title, node.syncer.Addr())
 	}
-
-	log.Println("p2p Mainnet: Listening on", mainnetNode.syncer.Addr())
-
-	// Zen.
-	log.Println("Connecting to Zen...")
-	zen, genesisBlockZen := chain.TestnetZen()
-	zenBootstrap := syncer.ZenBootstrapPeers
-
-	zenNode, err := newNode(db, "zen", seedZen, dir, config.GatewayZen, zen, genesisBlockZen, zenBootstrap)
-	if err != nil {
-		log.Fatalf("Couldn't start Zen node: %v\n", err)
-	}
-
-	log.Println("p2p Zen: Listening on", zenNode.syncer.Addr())
-
-	a.nodes["mainnet"] = mainnetNode
-	a.nodes["zen"] = zenNode
 
 	log.Println("Loading host database...")
 	hdb, errChan := hostdb.NewHostDB(db, config.Dir, a)

@@ -18,6 +18,7 @@ import (
 var defaultConfig = persist.HSDConfig{
 	GatewayMainnet: ":9981",
 	GatewayZen:     ":9881",
+	GatewayAnagami: ":9781",
 	APIAddr:        ":9980",
 	Dir:            ".",
 	DBUser:         "",
@@ -59,28 +60,30 @@ func getDBPassword() string {
 	return dbPassword
 }
 
-func getWalletSeed() string {
-	seed := os.Getenv("HSD_WALLET_SEED")
-	if seed != "" {
-		log.Println("Using HSD_WALLET_SEED environment variable.")
-	} else {
-		fmt.Print("Enter Mainnet wallet seed: ")
-		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
-		fmt.Println()
-		if err != nil {
-			log.Fatalf("Could not read wallet seed: %v\n", err)
-		}
-		seed = string(pw)
+func getWalletSeed(network string) string {
+	env := "HSD_WALLET_SEED"
+	name := strings.ToUpper(network)
+	var title string
+	switch name {
+	case "MAINNET":
+		title = "Mainnet"
+	case "ZEN":
+		title = "Zen"
+		env += "_ZEN"
+	case "ANAGAMI":
+		title = "Anagami"
+		env += "_ANAGAMI"
+	case "":
+		name = "MAINNET"
+		title = "Mainnet"
+	default:
+		log.Fatalf("Unsupported network: %s", network)
 	}
-	return seed
-}
-
-func getWalletSeedZen() string {
-	seed := os.Getenv("HSD_WALLET_SEED_ZEN")
+	seed := os.Getenv(env)
 	if seed != "" {
-		log.Println("Using HSD_WALLET_SEED_ZEN environment variable.")
+		log.Printf("Using %s environment variable.\n", env)
 	} else {
-		fmt.Print("Enter Zen wallet seed: ")
+		fmt.Printf("Enter %s wallet seed: ", title)
 		pw, err := term.ReadPassword(int(os.Stdin.Fd()))
 		fmt.Println()
 		if err != nil {
@@ -131,19 +134,28 @@ func main() {
 
 	var gatewayMainnet,
 		gatewayZen,
+		gatewayAnagami,
 		apiAddr,
 		dir,
 		dbUser,
 		dbName string
 
+	var disableMainnet,
+		disableZen,
+		disableAnagami bool
+
 	rootCmd := flagg.Root
 	rootCmd.Usage = flagg.SimpleUsage(rootCmd, rootUsage)
 	rootCmd.StringVar(&gatewayMainnet, "addr-mainnet", "", "Mainnet p2p address to listen on")
 	rootCmd.StringVar(&gatewayZen, "addr-zen", "", "Zen p2p address to listen on")
+	rootCmd.StringVar(&gatewayAnagami, "addr-anagami", "", "Anagami p2p address to listen on")
 	rootCmd.StringVar(&apiAddr, "api-addr", "", "address to serve API on")
 	rootCmd.StringVar(&dir, "dir", "", "directory to store node state in")
 	rootCmd.StringVar(&dbUser, "db-user", "", "username for accessing the database")
 	rootCmd.StringVar(&dbName, "db-name", "", "name of MYSQL database")
+	rootCmd.BoolVar(&disableMainnet, "no-mainnet", false, "disable Mainnet")
+	rootCmd.BoolVar(&disableZen, "no-zen", false, "disable Zen")
+	rootCmd.BoolVar(&disableAnagami, "no-anagami", false, "disable Anagami")
 	versionCmd := flagg.New("version", versionUsage)
 	seedCmd := flagg.New("seed", seedUsage)
 
@@ -169,6 +181,9 @@ func main() {
 		if gatewayZen != "" {
 			config.GatewayZen = gatewayZen
 		}
+		if gatewayAnagami != "" {
+			config.GatewayAnagami = gatewayAnagami
+		}
 		if apiAddr != "" {
 			config.APIAddr = apiAddr
 		}
@@ -180,6 +195,20 @@ func main() {
 		}
 		if dbName != "" {
 			config.DBName = dbName
+		}
+		if disableMainnet {
+			config.GatewayMainnet = ""
+		}
+		if disableZen {
+			config.GatewayZen = ""
+		}
+		if disableAnagami {
+			config.GatewayAnagami = ""
+		}
+
+		if disableMainnet && disableZen && disableAnagami {
+			// All networks disabled, exiting.
+			log.Fatalln("All networks disabled")
 		}
 
 		// Save the configuration.
@@ -195,8 +224,16 @@ func main() {
 		dbPassword := getDBPassword()
 
 		// Fetch wallet seeds.
-		seed := getWalletSeed()
-		seedZen := getWalletSeedZen()
+		seeds := make(map[string]string)
+		if !disableMainnet {
+			seeds["mainnet"] = getWalletSeed("mainnet")
+		}
+		if !disableZen {
+			seeds["zen"] = getWalletSeed("zen")
+		}
+		if !disableAnagami {
+			seeds["anagami"] = getWalletSeed("anagami")
+		}
 
 		// Create the directory if it does not yet exist.
 		// This also checks if the provided directory parameter is valid.
@@ -206,7 +243,7 @@ func main() {
 		}
 
 		// Start hsd. startDaemon will only return when it is shutting down.
-		err = startDaemon(&config, apiPassword, dbPassword, seed, seedZen)
+		err = startDaemon(&config, apiPassword, dbPassword, seeds)
 		if err != nil {
 			log.Fatalln(err)
 		}
