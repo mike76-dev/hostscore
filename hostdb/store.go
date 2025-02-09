@@ -100,8 +100,9 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 		}
 	}
 	_, err := s.tx.Exec(`
-		INSERT INTO hdb_hosts_`+s.network+` (
+		INSERT INTO hdb_hosts (
 			id,
+			network,
 			public_key,
 			first_seen,
 			known_since,
@@ -123,7 +124,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			modified,
 			fetched
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -145,6 +146,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			modified = new.modified
 	`,
 		host.ID,
+		host.Network,
 		host.PublicKey[:],
 		host.FirstSeen.Unix(),
 		host.KnownSince,
@@ -231,7 +233,8 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 	}
 
 	_, err := s.tx.Exec(`
-		INSERT INTO hdb_scans_`+s.network+` (
+		INSERT INTO hdb_scans (
+			network,
 			public_key,
 			ran_at,
 			success,
@@ -243,8 +246,9 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 			modified,
 			fetched
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
+		host.Network,
 		host.PublicKey[:],
 		scan.Timestamp.Unix(),
 		scan.Success,
@@ -287,7 +291,8 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 
 	host.LastBenchmark = benchmark
 	_, err := s.tx.Exec(`
-		INSERT INTO hdb_benchmarks_`+s.network+` (
+		INSERT INTO hdb_benchmarks (
+			network,
 			public_key,
 			ran_at,
 			success,
@@ -298,8 +303,9 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 			modified,
 			fetched
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
+		host.Network,
 		host.PublicKey[:],
 		benchmark.Timestamp.Unix(),
 		benchmark.Success,
@@ -336,26 +342,29 @@ func (s *hostDBStore) lastFailedScans(host *HostDBEntry) int {
 	var count int
 	err := s.tx.QueryRow(`
 		SELECT COUNT(*)
-		FROM hdb_scans_`+s.network+` AS a
+		FROM hdb_scans AS a
 		WHERE a.public_key = ?
+		AND a.network = ?
 		AND a.success = FALSE
 		AND (
 			a.ran_at > (
 				SELECT b.ran_at
-				FROM hdb_scans_`+s.network+` AS b
+				FROM hdb_scans AS b
 				WHERE b.public_key = a.public_key
+				AND b.network = a.network
 				AND b.success = TRUE
 				ORDER BY b.ran_at DESC
 				LIMIT 1
 			)
 			OR (
 				SELECT COUNT(*)
-				FROM hdb_scans_`+s.network+` AS c
+				FROM hdb_scans AS c
 				WHERE c.public_key = a.public_key
+				AND c.network = a.network
 				AND c.success = TRUE
 			) = 0
 		)
-	`, host.PublicKey[:]).Scan(&count)
+	`, host.PublicKey[:], host.Network).Scan(&count)
 	if err != nil {
 		s.log.Error("couldn't query scans", zap.String("network", s.network), zap.Error(err))
 		return 0
@@ -378,26 +387,29 @@ func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 	var count int
 	err := s.tx.QueryRow(`
 		SELECT COUNT(*)
-		FROM hdb_benchmarks_`+s.network+` AS a
+		FROM hdb_benchmarks AS a
 		WHERE a.public_key = ?
+		AND a.network = ?
 		AND a.success = FALSE
 		AND (
 			a.ran_at > (
 				SELECT b.ran_at
-				FROM hdb_benchmarks_`+s.network+` AS b
+				FROM hdb_benchmarks AS b
 				WHERE b.public_key = a.public_key
+				AND b.network = a.network
 				AND b.success = TRUE
 				ORDER BY b.ran_at DESC
 				LIMIT 1
 			)
 			OR (
 				SELECT COUNT(*)
-				FROM hdb_benchmarks_`+s.network+` AS c
+				FROM hdb_benchmarks AS c
 				WHERE c.public_key = a.public_key
+				AND c.network = a.network
 				AND c.success = TRUE
 			) = 0
 		)
-	`, host.PublicKey[:]).Scan(&count)
+	`, host.PublicKey[:], host.Network).Scan(&count)
 	if err != nil {
 		s.log.Error("couldn't query benchmarks", zap.String("network", s.network), zap.Error(err))
 		return 0
@@ -417,18 +429,13 @@ func (s *hostDBStore) close() {
 }
 
 func (s *hostDBStore) load(domains *blockedDomains) error {
-	row := 1
-	if s.network == "zen" {
-		row = 2
-	}
-
 	var height uint64
 	id := make([]byte, 32)
 	err := s.db.QueryRow(`
 		SELECT height, bid
 		FROM hdb_tip
-		WHERE id = ?
-	`, row).Scan(&height, &id)
+		WHERE network = ?
+	`, s.network).Scan(&height, &id)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return utils.AddContext(err, "couldn't load tip")
 	}
@@ -456,7 +463,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			settings,
 			price_table,
 			siamux_addresses
-		FROM hdb_hosts_` + s.network,
+		FROM hdb_hosts
+		WHERE network = ?
+	`, s.network,
 	)
 	if err != nil {
 		return utils.AddContext(err, "couldn't query hosts")
@@ -538,8 +547,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 
 	scanStmt, err := s.db.Prepare(`
 		SELECT ran_at, success, latency, error, v2, settings, price_table
-		FROM hdb_scans_` + s.network + `
+		FROM hdb_scans
 		WHERE public_key = ?
+		AND network = ?
 		ORDER BY ran_at DESC
 		LIMIT 2
 	`)
@@ -550,8 +560,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 
 	settingsStmt, err := s.db.Prepare(`
 		SELECT settings
-		FROM hdb_scans_` + s.network + `
+		FROM hdb_scans
 		WHERE public_key = ?
+		AND network = ?
 		AND v2 = ?
 		AND settings IS NOT NULL
 		ORDER BY ran_at DESC
@@ -564,8 +575,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 
 	priceTableStmt, err := s.db.Prepare(`
 		SELECT price_table
-		FROM hdb_scans_` + s.network + `
+		FROM hdb_scans
 		WHERE public_key = ?
+		AND network = ?
 		AND price_table IS NOT NULL
 		ORDER BY ran_at DESC
 		LIMIT 1
@@ -577,8 +589,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 
 	benchmarkStmt, err := s.db.Prepare(`
 		SELECT ran_at, success, upload_speed, download_speed, ttfb, error
-		FROM hdb_benchmarks_` + s.network + `
+		FROM hdb_benchmarks
 		WHERE public_key = ?
+		AND network = ?
 		ORDER BY ran_at DESC
 		LIMIT 1
 	`)
@@ -588,7 +601,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 	defer benchmarkStmt.Close()
 
 	for _, host := range s.hosts {
-		rows, err := scanStmt.Query(host.PublicKey[:])
+		rows, err := scanStmt.Query(host.PublicKey[:], host.Network)
 		if err != nil {
 			return utils.AddContext(err, "couldn't query scans")
 		}
@@ -636,7 +649,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		if host.V2 {
 			if (host.V2Settings == rhpv4.HostSettings{}) {
 				var settings []byte
-				err = settingsStmt.QueryRow(host.PublicKey[:], true).Scan(&settings)
+				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network, true).Scan(&settings)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return utils.AddContext(err, "couldn't load host settings")
 				}
@@ -651,7 +664,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		} else {
 			if (host.Settings == rhpv2.HostSettings{}) {
 				var settings []byte
-				err = settingsStmt.QueryRow(host.PublicKey[:], false).Scan(&settings)
+				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network, false).Scan(&settings)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return utils.AddContext(err, "couldn't load host settings")
 				}
@@ -666,7 +679,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 
 			if (host.PriceTable == rhpv3.HostPriceTable{}) {
 				var pt []byte
-				err = priceTableStmt.QueryRow(host.PublicKey[:]).Scan(&pt)
+				err = priceTableStmt.QueryRow(host.PublicKey[:], host.Network).Scan(&pt)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return utils.AddContext(err, "couldn't load host price table")
 				}
@@ -684,7 +697,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		var success bool
 		var ul, dl, ttfb float64
 		var msg string
-		err = benchmarkStmt.QueryRow(host.PublicKey[:]).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
+		err = benchmarkStmt.QueryRow(host.PublicKey[:], host.Network).Scan(&ra, &success, &ul, &dl, &ttfb, &msg)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return utils.AddContext(err, "couldn't load benchmarks")
 		}
@@ -710,11 +723,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 }
 
 func (s *hostDBStore) isSynced() bool {
-	if s.network == "zen" {
-		return isSynced(s.hdb.nodes.Syncer("zen"))
-	} else {
-		return isSynced(s.hdb.nodes.Syncer("mainnet"))
-	}
+	return isSynced(s.hdb.nodes.Syncer(s.network))
 }
 
 // updateChainState applies the chain manager updates.
@@ -736,14 +745,10 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 		}
 
 		s.tip = cau.State.Index
-		row := 1
-		if s.network == "zen" {
-			row = 2
-		}
 		_, err := s.tx.Exec(`
-			REPLACE INTO hdb_tip (id, network, height, bid)
-			VALUES (?, ?, ?, ?)
-		`, row, s.network, s.tip.Height, s.tip.ID[:])
+			REPLACE INTO hdb_tip (network, height, bid)
+			VALUES (?, ?, ?)
+		`, s.network, s.tip.Height, s.tip.ID[:])
 		if err != nil {
 			s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
 			return err
@@ -896,11 +901,12 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err := s.tx.Query(`
 		SELECT public_key
-		FROM hdb_hosts_` + s.network + `
-		WHERE modified > fetched
+		FROM hdb_hosts
+		WHERE network = ?
+		AND modified > fetched
 		ORDER BY id ASC
 		LIMIT 1000
-	`)
+	`, s.network)
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query hosts")
 	}
@@ -919,14 +925,16 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err = s.tx.Query(`
 		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.settings, s.price_table
-		FROM hdb_scans_` + s.network + ` s
-		JOIN hdb_hosts_` + s.network + ` h
+		FROM hdb_scans s
+		WHERE s.network = ?
+		JOIN hdb_hosts h
 		ON s.public_key = h.public_key
+		AND s.network = h.network
 		WHERE s.modified > s.fetched
 		AND h.modified <= h.fetched
 		ORDER BY s.id ASC
 		LIMIT 1000
-	`)
+	`, s.network)
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query scans")
 	}
@@ -942,7 +950,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 			rows.Close()
 			return HostUpdates{}, utils.AddContext(err, "couldn't decode scans")
 		}
-		scan := ScanHistory{
+		scan := ScanHistoryEntry{
 			HostScan: HostScan{
 				ID:        id,
 				Timestamp: time.Unix(ra, 0),
@@ -980,14 +988,16 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	rows, err = s.tx.Query(`
 		SELECT b.id, b.public_key, b.ran_at, b.success, b.upload_speed, b.download_speed, b.ttfb, b.error
-		FROM hdb_benchmarks_` + s.network + ` b
-		JOIN hdb_hosts_` + s.network + ` h
+		FROM hdb_benchmarks b
+		WHERE network = ?
+		JOIN hdb_hosts h
 		ON b.public_key = h.public_key
+		AND b.network = h.network
 		WHERE b.modified > b.fetched
 		AND h.modified <= h.fetched
 		ORDER BY b.id ASC
 		LIMIT 1000
-	`)
+	`, s.network)
 	if err != nil {
 		return HostUpdates{}, utils.AddContext(err, "couldn't query benchmarks")
 	}
@@ -1002,7 +1012,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 			rows.Close()
 			return HostUpdates{}, utils.AddContext(err, "couldn't decode benchmarks")
 		}
-		benchmark := BenchmarkHistory{
+		benchmark := BenchmarkHistoryEntry{
 			HostBenchmark: HostBenchmark{
 				ID:            id,
 				Timestamp:     time.Unix(ra, 0),
@@ -1040,9 +1050,10 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 	defer s.mu.Unlock()
 
 	hostStsmt, err := s.tx.Prepare(`
-		UPDATE hdb_hosts_` + s.network + `
+		UPDATE hdb_hosts
 		SET fetched = ?
 		WHERE id = ?
+		AND network = ?
 	`)
 	if err != nil {
 		return utils.AddContext(err, "couldn't prepare host statement")
@@ -1052,7 +1063,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		if host.Network != s.network {
 			continue
 		}
-		_, err := hostStsmt.Exec(time.Now().Unix(), host.ID)
+		_, err := hostStsmt.Exec(time.Now().Unix(), host.ID, s.network)
 		if err != nil {
 			hostStsmt.Close()
 			return utils.AddContext(err, "couldn't update timestamp in hosts table")
@@ -1061,9 +1072,10 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 	hostStsmt.Close()
 
 	scanStmt, err := s.tx.Prepare(`
-		UPDATE hdb_scans_` + s.network + `
+		UPDATE hdb_scans
 		SET fetched = ?
 		WHERE id = ?
+		AND network = ?
 	`)
 	if err != nil {
 		return utils.AddContext(err, "couldn't prepare scan statement")
@@ -1073,7 +1085,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		if scan.Network != s.network {
 			continue
 		}
-		_, err := scanStmt.Exec(time.Now().Unix(), scan.ID)
+		_, err := scanStmt.Exec(time.Now().Unix(), scan.ID, s.network)
 		if err != nil {
 			scanStmt.Close()
 			return utils.AddContext(err, "couldn't update timestamp in scans table")
@@ -1082,9 +1094,10 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 	scanStmt.Close()
 
 	benchmarkStmt, err := s.tx.Prepare(`
-		UPDATE hdb_benchmarks_` + s.network + `
+		UPDATE hdb_benchmarks
 		SET fetched = ?
 		WHERE id = ?
+		AND network = ?
 	`)
 	if err != nil {
 		return utils.AddContext(err, "couldn't prepare benchmark statement")
@@ -1094,7 +1107,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		if benchmark.Network != s.network {
 			continue
 		}
-		_, err := benchmarkStmt.Exec(time.Now().Unix(), benchmark.ID)
+		_, err := benchmarkStmt.Exec(time.Now().Unix(), benchmark.ID, s.network)
 		if err != nil {
 			benchmarkStmt.Close()
 			return utils.AddContext(err, "couldn't update timestamp in benchmarks table")
@@ -1140,9 +1153,10 @@ func (s *hostDBStore) pruneOldRecords() error {
 	defer s.mu.Unlock()
 
 	_, err := s.tx.Exec(`
-		DELETE FROM hdb_scans_`+s.network+`
+		DELETE FROM hdb_scans
 		WHERE ran_at < ?
-	`, time.Now().AddDate(0, 0, -7).Unix())
+		AND network = ?
+	`, time.Now().AddDate(0, 0, -7).Unix(), s.network)
 	if err != nil {
 		return utils.AddContext(err, "couldn't delete old scans")
 	}
@@ -1150,7 +1164,8 @@ func (s *hostDBStore) pruneOldRecords() error {
 	_, err = s.tx.Exec(`
 		DELETE FROM hdb_benchmarks_`+s.network+`
 		WHERE ran_at < ?
-	`, time.Now().AddDate(0, 0, -28).Unix())
+		AND network = ?
+	`, time.Now().AddDate(0, 0, -28).Unix(), s.network)
 	if err != nil {
 		return utils.AddContext(err, "couldn't delete old benchmarks")
 	}

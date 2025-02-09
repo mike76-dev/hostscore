@@ -30,6 +30,7 @@ type NodeStore interface {
 	Syncer(network string) *syncer.Syncer
 	Wallet(network string) *walletutil.WalletManager
 	HostDB() *HostDB
+	Networks() []string
 }
 
 // A HostDBEntry represents one host entry in the HostDB. It
@@ -81,8 +82,8 @@ type HostScan struct {
 	PriceTable rhpv3.HostPriceTable `json:"priceTable,omitempty"`
 }
 
-// ScanHistory combines the scan history with the host's public key.
-type ScanHistory struct {
+// ScanHistoryEntry combines the scan history with the host's public key.
+type ScanHistoryEntry struct {
 	HostScan
 	PublicKey types.PublicKey `json:"publicKey"`
 	Network   string          `json:"network"`
@@ -100,8 +101,8 @@ type HostBenchmark struct {
 	TTFB          time.Duration `json:"ttfb"`
 }
 
-// BenchmarkHistory combines the benchmark history with the host's public key.
-type BenchmarkHistory struct {
+// BenchmarkHistoryEntry combines the benchmark history with the host's public key.
+type BenchmarkHistoryEntry struct {
 	HostBenchmark
 	PublicKey types.PublicKey `json:"publicKey"`
 	Network   string          `json:"network"`
@@ -113,21 +114,19 @@ type UpdateID = [8]byte
 
 // HostUpdates represents a batch of updates sent to the client.
 type HostUpdates struct {
-	ID         UpdateID           `json:"id"`
-	Hosts      []HostDBEntry      `json:"hosts"`
-	Scans      []ScanHistory      `json:"scans"`
-	Benchmarks []BenchmarkHistory `json:"benchmarks"`
+	ID         UpdateID                `json:"id"`
+	Hosts      []HostDBEntry           `json:"hosts"`
+	Scans      []ScanHistoryEntry      `json:"scans"`
+	Benchmarks []BenchmarkHistoryEntry `json:"benchmarks"`
 }
 
 // The HostDB is a database of hosts.
 type HostDB struct {
-	nodes          NodeStore
-	s              *hostDBStore
-	sZen           *hostDBStore
-	unsubscribe    func()
-	unsubscribeZen func()
-	log            *zap.Logger
-	closeFn        func()
+	nodes        NodeStore
+	stores       map[string]*hostDBStore
+	unsubscribes map[string]func()
+	log          *zap.Logger
+	closeFn      func()
 
 	tg siasync.ThreadGroup
 	mu sync.Mutex
@@ -147,26 +146,36 @@ func (hdb *HostDB) RecentUpdates() (HostUpdates, error) {
 	var id UpdateID
 	frand.Read(id[:])
 
-	updates, err := hdb.s.getRecentUpdates(id)
-	if err != nil {
-		return HostUpdates{}, err
+	var hosts []HostDBEntry
+	var scans []ScanHistoryEntry
+	var benchmarks []BenchmarkHistoryEntry
+
+	for _, store := range hdb.stores {
+		updates, err := store.getRecentUpdates(id)
+		if err != nil {
+			return HostUpdates{}, err
+		}
+
+		hosts = append(hosts, updates.Hosts...)
+		scans = append(scans, updates.Scans...)
+		benchmarks = append(benchmarks, updates.Benchmarks...)
 	}
 
-	updatesZen, err := hdb.sZen.getRecentUpdates(id)
-	if err != nil {
-		return HostUpdates{}, err
-	}
-
-	updates.Hosts = append(updates.Hosts, updatesZen.Hosts...)
-	updates.Scans = append(updates.Scans, updatesZen.Scans...)
-	updates.Benchmarks = append(updates.Benchmarks, updatesZen.Benchmarks...)
-
-	return updates, nil
+	return HostUpdates{
+		ID:         id,
+		Hosts:      hosts,
+		Scans:      scans,
+		Benchmarks: benchmarks,
+	}, nil
 }
 
 // FinalizeUpdates updates the timestamps after the client confirms the data receipt.
 func (hdb *HostDB) FinalizeUpdates(id UpdateID) error {
-	return utils.ComposeErrors(hdb.s.finalizeUpdates(id), hdb.sZen.finalizeUpdates(id))
+	var err error
+	for _, store := range hdb.stores {
+		err = utils.ComposeErrors(err, store.finalizeUpdates(id))
+	}
+	return err
 }
 
 // Close shuts down HostDB.
@@ -174,10 +183,12 @@ func (hdb *HostDB) Close() {
 	if err := hdb.tg.Stop(); err != nil {
 		hdb.log.Error("unable to stop threads", zap.Error(err))
 	}
-	hdb.unsubscribe()
-	hdb.unsubscribeZen()
-	hdb.s.close()
-	hdb.sZen.close()
+
+	for network := range hdb.stores {
+		hdb.unsubscribes[network]()
+		hdb.stores[network].close()
+	}
+
 	hdb.closeFn()
 }
 
@@ -216,7 +227,7 @@ func syncStore(store *hostDBStore, cm *chain.Manager, index types.ChainIndex) er
 }
 
 // NewHostDB returns a new HostDB.
-func NewHostDB(db *sql.DB, dir string, nodes NodeStore) (*HostDB, <-chan error) {
+func NewHostDB(db *sql.DB, dir string, nodes NodeStore, networks []string) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
 	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"), zapcore.InfoLevel)
 	if err != nil {
@@ -229,24 +240,13 @@ func NewHostDB(db *sql.DB, dir string, nodes NodeStore) (*HostDB, <-chan error) 
 		return nil, errChan
 	}
 
-	store, tip, err := newHostDBStore(db, l, "mainnet", domains)
-	if err != nil {
-		errChan <- err
-		return nil, errChan
-	}
-	storeZen, tipZen, err := newHostDBStore(db, l, "zen", domains)
-	if err != nil {
-		errChan <- err
-		return nil, errChan
-	}
-
 	hdb := &HostDB{
-		nodes:   nodes,
-		s:       store,
-		sZen:    storeZen,
-		log:     l,
-		closeFn: closeFn,
-		scanMap: make(map[types.PublicKey]bool),
+		nodes:        nodes,
+		stores:       make(map[string]*hostDBStore),
+		unsubscribes: make(map[string]func()),
+		log:          l,
+		closeFn:      closeFn,
+		scanMap:      make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
 			maxContractPrice:     maxContractPrice,
 			maxUploadPrice:       maxUploadPriceSC,
@@ -257,63 +257,45 @@ func NewHostDB(db *sql.DB, dir string, nodes NodeStore) (*HostDB, <-chan error) 
 		},
 		blockedDomains: domains,
 	}
-	hdb.s.hdb = hdb
-	hdb.sZen.hdb = hdb
 
-	// Subscribe in a goroutine to prevent blocking.
-	go func() {
-		for hdb.nodes.ChainManager("mainnet").Tip().Height <= tip.Height {
-			time.Sleep(5 * time.Second)
-		}
-		if err := syncStore(hdb.s, hdb.nodes.ChainManager("mainnet"), tip); err != nil {
-			index, _ := hdb.nodes.ChainManager("mainnet").BestIndex(tip.Height - 1)
-			if err := syncStore(hdb.s, hdb.nodes.ChainManager("mainnet"), index); err != nil {
-				l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
-			}
+	for _, network := range networks {
+		store, tip, err := newHostDBStore(db, l, network, domains)
+		if err != nil {
+			errChan <- err
+			return nil, errChan
 		}
 
-		reorgChan := make(chan types.ChainIndex, 1)
-		hdb.unsubscribe = hdb.nodes.ChainManager("mainnet").OnReorg(func(index types.ChainIndex) {
-			select {
-			case reorgChan <- index:
-			default:
-			}
-		})
+		store.hdb = hdb
+		hdb.stores[network] = store
 
-		for range reorgChan {
-			lastTip := hdb.s.tip
-			if err := syncStore(hdb.s, hdb.nodes.ChainManager("mainnet"), lastTip); err != nil {
-				l.Error("failed to sync store", zap.String("network", "mainnet"), zap.Error(err))
+		// Subscribe in a goroutine to prevent blocking.
+		go func() {
+			for hdb.nodes.ChainManager(network).Tip().Height <= tip.Height {
+				time.Sleep(5 * time.Second)
 			}
-		}
-	}()
+			if err := syncStore(store, hdb.nodes.ChainManager(network), tip); err != nil {
+				index, _ := hdb.nodes.ChainManager(network).BestIndex(tip.Height - 1)
+				if err := syncStore(store, hdb.nodes.ChainManager(network), index); err != nil {
+					l.Fatal("failed to subscribe to chain manager", zap.String("network", network), zap.Error(err))
+				}
+			}
 
-	go func() {
-		for hdb.nodes.ChainManager("zen").Tip().Height <= tipZen.Height {
-			time.Sleep(5 * time.Second)
-		}
-		if err := syncStore(hdb.sZen, hdb.nodes.ChainManager("zen"), tipZen); err != nil {
-			index, _ := hdb.nodes.ChainManager("zen").BestIndex(tipZen.Height - 1)
-			if err := syncStore(hdb.sZen, hdb.nodes.ChainManager("zen"), index); err != nil {
-				l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
-			}
-		}
+			reorgChan := make(chan types.ChainIndex, 1)
+			hdb.unsubscribes[network] = hdb.nodes.ChainManager(network).OnReorg(func(index types.ChainIndex) {
+				select {
+				case reorgChan <- index:
+				default:
+				}
+			})
 
-		reorgChan := make(chan types.ChainIndex, 1)
-		hdb.unsubscribeZen = hdb.nodes.ChainManager("zen").OnReorg(func(index types.ChainIndex) {
-			select {
-			case reorgChan <- index:
-			default:
+			for range reorgChan {
+				lastTip := store.tip
+				if err := syncStore(store, hdb.nodes.ChainManager(network), lastTip); err != nil {
+					l.Error("failed to sync store", zap.String("network", network), zap.Error(err))
+				}
 			}
-		})
-
-		for range reorgChan {
-			lastTip := hdb.sZen.tip
-			if err := syncStore(hdb.sZen, hdb.nodes.ChainManager("zen"), lastTip); err != nil {
-				l.Error("failed to sync store", zap.String("network", "zen"), zap.Error(err))
-			}
-		}
-	}()
+		}()
+	}
 
 	// Fetch SC rate.
 	go hdb.updateSCRate()
@@ -407,12 +389,10 @@ func (hdb *HostDB) pruneOldRecords() {
 		case <-time.After(24 * time.Hour):
 		}
 
-		if err := hdb.s.pruneOldRecords(); err != nil {
-			hdb.log.Error("couldn't prune old records", zap.String("network", "mainnet"), zap.Error(err))
-		}
-
-		if err := hdb.sZen.pruneOldRecords(); err != nil {
-			hdb.log.Error("couldn't prune old records", zap.String("network", "zen"), zap.Error(err))
+		for network, store := range hdb.stores {
+			if err := store.pruneOldRecords(); err != nil {
+				hdb.log.Error("couldn't prune old records", zap.String("network", network), zap.Error(err))
+			}
 		}
 	}
 }

@@ -25,9 +25,11 @@ const (
 
 // queueScan will add a host to the queue to be scanned.
 func (hdb *HostDB) queueScan(host *HostDBEntry) {
-	if host.Network != "mainnet" && host.Network != "zen" {
+	store, ok := hdb.stores[host.Network]
+	if !ok {
 		panic("wrong host network")
 	}
+
 	// If this entry is already in the scan pool, can return immediately.
 	hdb.mu.Lock()
 	_, exists := hdb.scanMap[host.PublicKey]
@@ -35,13 +37,9 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 		hdb.mu.Unlock()
 		return
 	}
+
 	// Put the entry in the scan list.
-	var interval time.Duration
-	if host.Network == "zen" {
-		interval = hdb.sZen.calculateScanInterval(host)
-	} else {
-		interval = hdb.s.calculateScanInterval(host)
-	}
+	interval := store.calculateScanInterval(host)
 	toBenchmark := len(host.ScanHistory) > 0 && time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) < interval
 	hdb.scanMap[host.PublicKey] = toBenchmark
 	if toBenchmark {
@@ -49,13 +47,15 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 	} else {
 		hdb.scanList = append(hdb.scanList, host)
 	}
+
 	hdb.mu.Unlock()
 }
 
 // scanHost will connect to a host and grab the settings and the price
 // table as well as adjust the info.
 func (hdb *HostDB) scanHost(host *HostDBEntry) {
-	if host.Network != "mainnet" && host.Network != "zen" {
+	store, ok := hdb.stores[host.Network]
+	if !ok {
 		panic("wrong host network")
 	}
 
@@ -148,12 +148,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	}
 
 	// Update the host database.
-	if host.Network == "zen" {
-		err = hdb.sZen.updateScanHistory(host, scan)
-	} else {
-		err = hdb.s.updateScanHistory(host, scan)
-	}
-	if err != nil {
+	if err := store.updateScanHistory(host, scan); err != nil {
 		hdb.log.Error("couldn't update scan history", zap.Error(err))
 	}
 
@@ -174,7 +169,14 @@ func (hdb *HostDB) scanHosts() {
 	defer hdb.tg.Done()
 
 	for {
-		if hdb.synced("mainnet") || hdb.synced("zen") {
+		var synced bool
+		for network := range hdb.stores {
+			if hdb.synced(network) {
+				synced = true
+				break
+			}
+		}
+		if synced {
 			break
 		}
 		select {
@@ -185,11 +187,10 @@ func (hdb *HostDB) scanHosts() {
 	}
 
 	for {
-		if hdb.synced("mainnet") {
-			hdb.s.getHostsForScan()
-		}
-		if hdb.synced("zen") {
-			hdb.sZen.getHostsForScan()
+		for network, store := range hdb.stores {
+			if hdb.synced(network) {
+				store.getHostsForScan()
+			}
 		}
 
 		for len(hdb.scanList) > 0 {

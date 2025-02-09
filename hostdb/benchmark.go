@@ -49,7 +49,8 @@ func (s signer) ReleaseInputs(txns []types.V2Transaction) {
 
 // benchmarkHost runs an up/download benchmark on a host.
 func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
-	if host.Network != "mainnet" && host.Network != "zen" {
+	store, ok := hdb.stores[host.Network]
+	if !ok {
 		panic("wrong host network")
 	}
 
@@ -71,13 +72,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			return errors.New("host settings unavailable")
 		}
 
-		var count int
-		if host.Network == "zen" {
-			count = hdb.sZen.checkSubnets(host.IPNets)
-		} else {
-			count = hdb.s.checkSubnets(host.IPNets)
-		}
-		if count > 5 {
+		if count := store.checkSubnets(host.IPNets); count > 5 {
 			return errors.New("too many hosts in the same subnet")
 		}
 
@@ -193,12 +188,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		DownloadSpeed: dl,
 		TTFB:          ttfb,
 	}
-	if host.Network == "zen" {
-		err = hdb.sZen.updateBenchmarks(host, benchmark)
-	} else {
-		err = hdb.s.updateBenchmarks(host, benchmark)
-	}
-	if err != nil {
+	if err := store.updateBenchmarks(host, benchmark); err != nil {
 		hdb.log.Error("couldn't update benchmarks", zap.Error(err))
 	}
 

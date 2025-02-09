@@ -54,21 +54,12 @@ func calculateFundingV2(prices rhpv4.HostPrices, txnFee types.Currency) (funding
 // prepareContractFormation creates a new contract and a formation
 // transaction set.
 func (hdb *HostDB) prepareContractFormation(host *HostDBEntry) ([]types.Transaction, error) {
-	if host.Network != "mainnet" && host.Network != "zen" {
-		panic("wrong host network")
-	}
-
-	var blockHeight uint64
-	if host.Network == "zen" {
-		blockHeight = hdb.sZen.tip.Height
-	} else {
-		blockHeight = hdb.s.tip.Height
-	}
 	state := hdb.nodes.ChainManager(host.Network).TipState()
 	txnFee := hdb.nodes.ChainManager(host.Network).RecommendedFee().Mul64(4)
 	ourKey := hdb.nodes.Wallet(host.Network).Key()
 	ourAddr := hdb.nodes.Wallet(host.Network).Address()
 	settings := host.Settings
+	blockHeight := state.Index.Height
 
 	funding, collateral := calculateFunding(settings, txnFee.Mul64(2048))
 	fc := rhpv2.PrepareContractFormation(ourKey.PublicKey(), host.PublicKey, funding, collateral, blockHeight+contractDuration, settings, ourAddr)
