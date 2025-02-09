@@ -206,11 +206,11 @@ func (s *DBStore) logEvent(event wallet.Event) {
 	desc := s.network + ": found new "
 	switch event.Type {
 	case wallet.EventTypeV1Transaction:
-		desc += " v1 transaction"
+		desc += "v1 transaction"
 	case wallet.EventTypeV2Transaction:
-		desc += " v2 transaction"
+		desc += "v2 transaction"
 	default:
-		desc += " unknown event"
+		desc += "unknown event"
 	}
 	desc += ", id: " + event.ID.String()
 	if !inflow.IsZero() {
