@@ -8,8 +8,8 @@ require (
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/julienschmidt/httprouter v1.3.0
 	gitlab.com/NebulousLabs/merkletree v0.0.0-20200118113624-07fbf710afc4
-	go.sia.tech/core v0.9.2-0.20250129201228-5ce4a942cc22
-	go.sia.tech/coreutils v0.10.2-0.20250129201138-206731fc0a4d
+	go.sia.tech/core v0.10.0
+	go.sia.tech/coreutils v0.11.0
 	go.sia.tech/mux v1.3.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/term v0.28.0
