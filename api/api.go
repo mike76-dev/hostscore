@@ -12,13 +12,17 @@ type GatewayPeer struct {
 	Version string `json:"version"`
 }
 
+// NetworkStatus describes the current status of the network.
+type NetworkStatus struct {
+	Network string         `json:"network"`
+	Height  uint64         `json:"height"`
+	Balance wallet.Balance `json:"balance"`
+}
+
 // NodeStatusResponse is the response type for /node/status.
 type NodeStatusResponse struct {
-	Version    string         `json:"version"`
-	Height     uint64         `json:"heightMainnet"`
-	HeightZen  uint64         `json:"heightZen"`
-	Balance    wallet.Balance `json:"balanceMainnet"`
-	BalanceZen wallet.Balance `json:"balanceZen"`
+	Version  string          `json:"version"`
+	Networks []NetworkStatus `json:"networks"`
 }
 
 // ConsensusTipResponse is the response type for /consensus/tip.

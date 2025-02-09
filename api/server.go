@@ -10,6 +10,7 @@ import (
 
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/build"
+	"github.com/mike76-dev/hostscore/internal/utils"
 	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/jape"
 )
@@ -28,7 +29,7 @@ func isSynced(s *syncer.Syncer) bool {
 	return count >= 5
 }
 
-func checkNetwork(jc jape.Context, network *string) error {
+func (s *server) checkNetwork(jc jape.Context, network *string) error {
 	if err := jc.DecodeForm("network", network); err != nil {
 		fmt.Println(err)
 		return err
@@ -39,7 +40,15 @@ func checkNetwork(jc jape.Context, network *string) error {
 		*network = "mainnet"
 	}
 
-	if *network != "mainnet" && *network != "zen" {
+	var found bool
+	for _, n := range s.nodes.Networks() {
+		if *network == n {
+			found = true
+			break
+		}
+	}
+
+	if !found {
 		err := errors.New("wrong network parameter")
 		jc.Error(err, http.StatusBadRequest)
 		return err
@@ -49,31 +58,30 @@ func checkNetwork(jc jape.Context, network *string) error {
 }
 
 func (s *server) nodeStatusHandler(jc jape.Context) {
-	balance, err := s.nodes.Wallet("mainnet").Balance()
-	if jc.Check("couldn't fetch Mainnet balance", err) != nil {
-		return
-	}
+	var networks []NetworkStatus
+	for _, network := range s.nodes.Networks() {
+		balance, err := s.nodes.Wallet(network).Balance()
+		if jc.Check(fmt.Sprintf("couldn't fetch %s balance", utils.Capitalize(network)), err) != nil {
+			return
+		}
 
-	balanceZen, err := s.nodes.Wallet("zen").Balance()
-	if jc.Check("couldn't fetch Zen balance", err) != nil {
-		return
+		height := s.nodes.ChainManager(network).TipState().Index.Height
+		networks = append(networks, NetworkStatus{
+			Network: network,
+			Height:  height,
+			Balance: balance,
+		})
 	}
-
-	height := s.nodes.ChainManager("mainnet").TipState().Index.Height
-	heightZen := s.nodes.ChainManager("zen").TipState().Index.Height
 
 	jc.Encode(NodeStatusResponse{
-		Version:    build.NodeVersion,
-		Height:     height,
-		HeightZen:  heightZen,
-		Balance:    balance,
-		BalanceZen: balanceZen,
+		Version:  build.NodeVersion,
+		Networks: networks,
 	})
 }
 
 func (s *server) consensusNetworkHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -82,7 +90,7 @@ func (s *server) consensusNetworkHandler(jc jape.Context) {
 
 func (s *server) consensusTipHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -98,7 +106,7 @@ func (s *server) consensusTipHandler(jc jape.Context) {
 
 func (s *server) consensusTipStateHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -107,7 +115,7 @@ func (s *server) consensusTipStateHandler(jc jape.Context) {
 
 func (s *server) syncerPeersHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -127,7 +135,7 @@ func (s *server) syncerPeersHandler(jc jape.Context) {
 
 func (s *server) txpoolTransactionsHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -139,7 +147,7 @@ func (s *server) txpoolTransactionsHandler(jc jape.Context) {
 
 func (s *server) txpoolFeeHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -148,7 +156,7 @@ func (s *server) txpoolFeeHandler(jc jape.Context) {
 
 func (s *server) walletAddressHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -157,7 +165,7 @@ func (s *server) walletAddressHandler(jc jape.Context) {
 
 func (s *server) walletBalanceHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -171,7 +179,7 @@ func (s *server) walletBalanceHandler(jc jape.Context) {
 
 func (s *server) walletEventsHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
@@ -185,7 +193,7 @@ func (s *server) walletEventsHandler(jc jape.Context) {
 
 func (s *server) walletOutputsHandler(jc jape.Context) {
 	var network string
-	if checkNetwork(jc, &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 

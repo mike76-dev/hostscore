@@ -66,6 +66,14 @@ func (a *app) HostDB() *hostdb.HostDB {
 	return a.hdb
 }
 
+func (a *app) Networks() []string {
+	var networks []string
+	for network := range a.nodes {
+		networks = append(networks, network)
+	}
+	return networks
+}
+
 func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]string) *app {
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
@@ -107,6 +115,7 @@ func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]s
 	}
 
 	// Connect to the networks.
+	var networks []string
 	for name, seed := range seeds {
 		title := utils.Capitalize(name)
 		log.Printf("Connecting to %s...\n", title)
@@ -136,10 +145,11 @@ func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]s
 
 		a.nodes[name] = node
 		log.Printf("p2p %s: Listening on %s\n", title, node.syncer.Addr())
+		networks = append(networks, name)
 	}
 
 	log.Println("Loading host database...")
-	hdb, errChan := hostdb.NewHostDB(db, config.Dir, a)
+	hdb, errChan := hostdb.NewHostDB(db, config.Dir, a, networks)
 	if err := utils.PeekErr(errChan); err != nil {
 		log.Fatalf("Couldn't load host database: %v\n", err)
 	}
