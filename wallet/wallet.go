@@ -234,14 +234,20 @@ func (wm *WalletManager) performWalletMaintenance() {
 			return
 		}
 
+		numOutputs := wantedOutputs
+		maxOutputs := len(utxos) * 10
+		if numOutputs > maxOutputs {
+			numOutputs = maxOutputs
+		}
+
 		balance := wallet.SumOutputs(utxos)
-		amount := balance.Div64(wantedOutputs).Div64(2)
+		amount := balance.Div64(uint64(numOutputs)).Div64(2)
 		fee := wm.chain.RecommendedFee()
 
 		if state := wm.chain.TipState(); state.Index.Height < state.Network.HardforkV2.AllowHeight {
-			txns, toSign, err := wm.wallet.Redistribute(wantedOutputs, amount, fee)
+			txns, toSign, err := wm.wallet.Redistribute(numOutputs, amount, fee)
 			if err != nil {
-				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", wantedOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
+				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
 				return
 			}
 
@@ -250,7 +256,7 @@ func (wm *WalletManager) performWalletMaintenance() {
 			}
 
 			for i := 0; i < len(txns); i++ {
-				wm.SignTransaction(&txns[i], toSign, types.CoveredFields{WholeTransaction: true})
+				wm.SignTransaction(&txns[i], toSign[i], types.CoveredFields{WholeTransaction: true})
 			}
 
 			_, err = wm.chain.AddPoolTransactions(txns)
@@ -262,9 +268,9 @@ func (wm *WalletManager) performWalletMaintenance() {
 
 			wm.syncer.BroadcastTransactionSet(txns)
 		} else {
-			txns, toSign, err := wm.wallet.RedistributeV2(wantedOutputs, amount, fee)
+			txns, toSign, err := wm.wallet.RedistributeV2(numOutputs, amount, fee)
 			if err != nil {
-				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", wantedOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
+				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
 				return
 			}
 
