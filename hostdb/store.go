@@ -819,16 +819,15 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 				host, exists := s.hosts[at.PublicKey]
 				if !exists {
 					host = &HostDBEntry{
-						ID:              len(s.hosts) + 1,
-						Network:         s.network,
-						PublicKey:       at.PublicKey,
-						FirstSeen:       cau.Block.Timestamp,
-						KnownSince:      cau.State.Index.Height,
-						V2:              true,
-						SiamuxAddresses: extractAddresses(ha),
+						ID:         len(s.hosts) + 1,
+						Network:    s.network,
+						PublicKey:  at.PublicKey,
+						FirstSeen:  cau.Block.Timestamp,
+						KnownSince: cau.State.Index.Height,
+						V2:         true,
 					}
 				}
-				host.NetAddress = ha[0].Address
+				host.SiamuxAddresses = extractAddresses(ha)
 				ipNets, err := utils.LookupIPNets(ha[0].Address)
 				if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
 					host.IPNets = ipNets
