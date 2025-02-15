@@ -27,6 +27,7 @@ var (
 	maxInputsForDefrag  = 300
 	maxDefragUTXOs      = 10
 	reservationDuration = 15 * time.Minute
+	outputValue         = types.Siacoins(20)
 )
 
 // WalletManager represents a wallet that is stored in a MySQL database.
@@ -241,13 +242,12 @@ func (wm *WalletManager) performWalletMaintenance() {
 		}
 
 		balance := wallet.SumOutputs(utxos)
-		amount := balance.Div64(uint64(numOutputs)).Div64(2)
 		fee := wm.chain.RecommendedFee()
 
 		if state := wm.chain.TipState(); state.Index.Height < state.Network.HardforkV2.AllowHeight {
-			txns, toSign, err := wm.wallet.Redistribute(numOutputs, amount, fee)
+			txns, toSign, err := wm.wallet.Redistribute(numOutputs, outputValue, fee)
 			if err != nil {
-				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
+				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", outputValue), zap.Stringer("balance", balance), zap.Error(err))
 				return
 			}
 
@@ -268,9 +268,9 @@ func (wm *WalletManager) performWalletMaintenance() {
 
 			wm.syncer.BroadcastTransactionSet(txns)
 		} else {
-			txns, toSign, err := wm.wallet.RedistributeV2(numOutputs, amount, fee)
+			txns, toSign, err := wm.wallet.RedistributeV2(numOutputs, outputValue, fee)
 			if err != nil {
-				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", amount), zap.Stringer("balance", balance), zap.Error(err))
+				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", outputValue), zap.Stringer("balance", balance), zap.Error(err))
 				return
 			}
 
