@@ -98,6 +98,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 				return err
 			})
 			latency = time.Since(start)
+			success = err == nil
 		} else {
 			// Initiate RHP2 protocol.
 			err = rhp.WithTransportV2(ctx, host.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
@@ -131,7 +132,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	} else {
 		errMsg = err.Error()
 		// If we are offline it probably wasn't the host's fault.
-		if !hdb.online(host.Network) {
+		if hdb.online(host.Network) {
 			host.Interactions.Failures++
 		}
 	}
