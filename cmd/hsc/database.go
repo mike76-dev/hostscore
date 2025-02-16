@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
 )
@@ -43,6 +45,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			first_seen,
 			known_since,
 			blocked,
+			v2,
 			net_address,
 			ip_nets,
 			last_ip_change,
@@ -58,18 +61,21 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			contracts_score,
 			total_score,
 			settings,
-			price_table
+			price_table,
+			siamux_addresses
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
 			blocked = new.blocked,
+			v2 = new.v2,
 			net_address = new.net_address,
 			ip_nets = new.ip_nets,
 			last_ip_change = new.last_ip_change,
 			settings = new.settings,
-			price_table = new.price_table
+			price_table = new.price_table,
+			siamux_addresses = new.siamux_addresses
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -97,13 +103,11 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			benchmarks_score,
 			contracts_score,
 			total_score,
-			historic_successful_interactions,
-			historic_failed_interactions,
-			recent_successful_interactions,
-			recent_failed_interactions,
+			successes,
+			failures,
 			last_update
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			uptime = new.uptime,
 			downtime = new.downtime,
@@ -120,10 +124,8 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			benchmarks_score = new.benchmarks_score,
 			contracts_score = new.contracts_score,
 			total_score = new.total_score,
-			historic_successful_interactions = new.historic_successful_interactions,
-			historic_failed_interactions = new.historic_failed_interactions,
-			recent_successful_interactions = new.recent_successful_interactions,
-			recent_failed_interactions = new.recent_failed_interactions,
+			successes = new.successes,
+			failures = new.failures,
 			last_update = new.last_update
 	`)
 	if err != nil {
@@ -240,15 +242,23 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 
 	for _, host := range updates.Hosts {
 		var settings, pt bytes.Buffer
-		e := types.NewEncoder(&settings)
-		if (host.Settings != rhpv2.HostSettings{}) {
-			utils.EncodeSettings(&host.Settings, e)
-			e.Flush()
-		}
-		e = types.NewEncoder(&pt)
-		if (host.PriceTable != rhpv3.HostPriceTable{}) {
-			utils.EncodePriceTable(&host.PriceTable, e)
-			e.Flush()
+		if host.V2 {
+			e := types.NewEncoder(&settings)
+			if (host.V2Settings != rhpv4.HostSettings{}) {
+				host.V2Settings.EncodeTo(e)
+				e.Flush()
+			}
+		} else {
+			e := types.NewEncoder(&settings)
+			if (host.Settings != rhpv2.HostSettings{}) {
+				utils.EncodeSettings(&host.Settings, e)
+				e.Flush()
+			}
+			e = types.NewEncoder(&pt)
+			if (host.PriceTable != rhpv3.HostPriceTable{}) {
+				utils.EncodePriceTable(&host.PriceTable, e)
+				e.Flush()
+			}
 		}
 		_, err := hostStmt.Exec(
 			host.ID,
@@ -257,6 +267,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.FirstSeen.Unix(),
 			host.KnownSince,
 			host.Blocked,
+			host.V2,
 			host.NetAddress,
 			strings.Join(host.IPNets, ";"),
 			host.LastIPChange.Unix(),
@@ -273,6 +284,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			0,
 			settings.Bytes(),
 			pt.Bytes(),
+			strings.Join(host.SiamuxAddresses, ","),
 		)
 		if err != nil {
 			tx.Rollback()
@@ -326,7 +338,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			api.mu.Unlock()
 			return utils.AddContext(err, "couldn't count price changes")
 		}
-		if exists && (count == 0 || pricesChanged(h.Settings, host.Settings)) {
+		if exists && (count == 0 || pricesChanged(h, *host)) {
 			var cb, spb, upb, dpb bytes.Buffer
 			e := types.NewEncoder(&cb)
 			types.V1Currency(h.Settings.Collateral).EncodeTo(e)
@@ -359,36 +371,40 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		if exists {
 			host.NetAddress = h.NetAddress
 			host.Blocked = h.Blocked
+			host.V2 = h.V2
 			host.IPNets = h.IPNets
 			host.LastIPChange = h.LastIPChange
 			host.Settings = h.Settings
 			host.PriceTable = h.PriceTable
+			host.V2Settings = h.V2Settings
+			host.SiamuxAddresses = append([]string{}, h.SiamuxAddresses...)
 			interactions := host.Interactions[node]
 			interactions.Uptime = h.Uptime
 			interactions.Downtime = h.Downtime
 			interactions.LastSeen = h.LastSeen
 			interactions.ActiveHosts = h.ActiveHosts
 			interactions.HostInteractions = hostdb.HostInteractions{
-				HistoricSuccesses: h.Interactions.HistoricSuccesses,
-				HistoricFailures:  h.Interactions.HistoricFailures,
-				RecentSuccesses:   h.Interactions.RecentSuccesses,
-				RecentFailures:    h.Interactions.RecentFailures,
-				LastUpdate:        h.Interactions.LastUpdate,
+				Successes:  h.Interactions.Successes,
+				Failures:   h.Interactions.Failures,
+				LastUpdate: h.Interactions.LastUpdate,
 			}
 			host.Interactions[node] = interactions
 		} else {
 			host = &portalHost{
-				ID:           h.ID,
-				PublicKey:    h.PublicKey,
-				FirstSeen:    h.FirstSeen,
-				KnownSince:   h.KnownSince,
-				NetAddress:   h.NetAddress,
-				Blocked:      h.Blocked,
-				Interactions: make(map[string]nodeInteractions),
-				IPNets:       h.IPNets,
-				LastIPChange: h.LastIPChange,
-				Settings:     h.Settings,
-				PriceTable:   h.PriceTable,
+				ID:              h.ID,
+				PublicKey:       h.PublicKey,
+				FirstSeen:       h.FirstSeen,
+				KnownSince:      h.KnownSince,
+				NetAddress:      h.NetAddress,
+				Blocked:         h.Blocked,
+				V2:              h.V2,
+				Interactions:    make(map[string]nodeInteractions),
+				IPNets:          h.IPNets,
+				LastIPChange:    h.LastIPChange,
+				Settings:        h.Settings,
+				PriceTable:      h.PriceTable,
+				V2Settings:      h.V2Settings,
+				SiamuxAddresses: append([]string{}, h.SiamuxAddresses...),
 			}
 			host.Interactions[node] = nodeInteractions{
 				Uptime:      h.Uptime,
@@ -396,24 +412,28 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				LastSeen:    h.LastSeen,
 				ActiveHosts: h.ActiveHosts,
 				HostInteractions: hostdb.HostInteractions{
-					HistoricSuccesses: h.Interactions.HistoricSuccesses,
-					HistoricFailures:  h.Interactions.HistoricFailures,
-					RecentSuccesses:   h.Interactions.RecentSuccesses,
-					RecentFailures:    h.Interactions.RecentFailures,
-					LastUpdate:        h.Interactions.LastUpdate,
+					Successes:  h.Interactions.Successes,
+					Failures:   h.Interactions.Failures,
+					LastUpdate: h.Interactions.LastUpdate,
 				},
 			}
-			info, err := external.FetchIPInfo(h.NetAddress, api.token)
+			var addr string
+			if h.V2 {
+				addr = h.SiamuxAddresses[0]
+			} else {
+				addr = h.NetAddress
+			}
+			info, err := external.FetchIPInfo(addr, api.token)
 			if err != nil {
-				api.log.Error("couldn't fetch host location", zap.String("host", h.NetAddress), zap.Error(err))
+				api.log.Error("couldn't fetch host location", zap.String("host", addr), zap.Error(err))
 			} else {
 				if (info != external.IPInfo{}) {
 					err = api.saveLocation(h.PublicKey, h.Network, info)
 					if err != nil {
-						api.log.Error("couldn't update host location", zap.String("host", h.NetAddress), zap.Error(err))
+						api.log.Error("couldn't update host location", zap.String("host", addr), zap.Error(err))
 					}
 				} else {
-					api.log.Debug("empty host location received", zap.String("host", h.NetAddress))
+					api.log.Debug("empty host location received", zap.String("host", addr))
 				}
 			}
 		}
@@ -443,12 +463,14 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 
 	toUpdate := make(map[string]map[types.PublicKey]struct{})
-	toUpdate["mainnet"] = make(map[types.PublicKey]struct{})
-	toUpdate["zen"] = make(map[types.PublicKey]struct{})
-
 	newScans := make(map[string]map[types.PublicKey][]portalScan)
-	newScans["mainnet"] = make(map[types.PublicKey][]portalScan)
-	newScans["zen"] = make(map[types.PublicKey][]portalScan)
+	newBenchmarks := make(map[string]map[types.PublicKey][]hostdb.HostBenchmark)
+	for _, network := range networks {
+		toUpdate[network] = make(map[types.PublicKey]struct{})
+		newScans[network] = make(map[types.PublicKey][]portalScan)
+		newBenchmarks[network] = make(map[types.PublicKey][]hostdb.HostBenchmark)
+	}
+
 	for _, scan := range updates.Scans {
 		toUpdate[scan.Network][scan.PublicKey] = struct{}{}
 		newScans[scan.Network][scan.PublicKey] = append(newScans[scan.Network][scan.PublicKey], portalScan{
@@ -459,9 +481,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		})
 	}
 
-	newBenchmarks := make(map[string]map[types.PublicKey][]hostdb.HostBenchmark)
-	newBenchmarks["mainnet"] = make(map[types.PublicKey][]hostdb.HostBenchmark)
-	newBenchmarks["zen"] = make(map[types.PublicKey][]hostdb.HostBenchmark)
 	for _, benchmark := range updates.Benchmarks {
 		toUpdate[benchmark.Network][benchmark.PublicKey] = struct{}{}
 		newBenchmarks[benchmark.Network][benchmark.PublicKey] = append(newBenchmarks[benchmark.Network][benchmark.PublicKey], benchmark.HostBenchmark)
@@ -509,10 +528,8 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				interactions.Score.BenchmarksScore,
 				interactions.Score.ContractsScore,
 				interactions.Score.TotalScore,
-				interactions.HistoricSuccesses,
-				interactions.HistoricFailures,
-				interactions.RecentSuccesses,
-				interactions.RecentFailures,
+				interactions.Successes,
+				interactions.Failures,
 				interactions.LastUpdate,
 			)
 			if err != nil {
@@ -543,52 +560,37 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		}
 	}
 
-	var hosts, hostsZen []portalHost
-	for _, host := range api.hosts["mainnet"] {
-		hosts = append(hosts, *host)
+	hosts := make(map[string][]portalHost)
+	for _, network := range networks {
+		for _, host := range api.hosts[network] {
+			hosts[network] = append(hosts[network], *host)
+		}
 	}
-	for _, host := range api.hosts["zen"] {
-		hostsZen = append(hostsZen, *host)
-	}
-	slices.SortStableFunc(hosts, func(a, b portalHost) int {
-		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
-			if aIsOnline && !bIsOnline {
+
+	for _, network := range networks {
+		slices.SortStableFunc(hosts[network], func(a, b portalHost) int {
+			if a.Score.TotalScore == b.Score.TotalScore {
+				aIsOnline, bIsOnline := isOnline(a), isOnline(b)
+				if aIsOnline && !bIsOnline {
+					return -1
+				}
+				if !aIsOnline && bIsOnline {
+					return 1
+				}
+				return a.ID - b.ID
+			}
+			if a.Score.TotalScore < b.Score.TotalScore {
+				return 1
+			} else {
 				return -1
 			}
-			if !aIsOnline && bIsOnline {
-				return 1
-			}
-			return a.ID - b.ID
-		}
-		if a.Score.TotalScore < b.Score.TotalScore {
-			return 1
-		} else {
-			return -1
-		}
-	})
-	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
-		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
-			if aIsOnline && !bIsOnline {
-				return -1
-			}
-			if !aIsOnline && bIsOnline {
-				return 1
-			}
-			return a.ID - b.ID
-		}
-		if a.Score.TotalScore < b.Score.TotalScore {
-			return 1
-		} else {
-			return -1
-		}
-	})
-	for i := range hosts {
-		api.hosts["mainnet"][hosts[i].PublicKey].Rank = i + 1
+		})
 	}
-	for i := range hostsZen {
-		api.hosts["zen"][hostsZen[i].PublicKey].Rank = i + 1
+
+	for _, network := range networks {
+		for i := range hosts[network] {
+			api.hosts[network][hosts[network][i].PublicKey].Rank = i + 1
+		}
 	}
 	api.mu.Unlock()
 
@@ -618,20 +620,75 @@ func isOnline(host portalHost) bool {
 }
 
 // pricesChanged returns true if any relevant part of the host's settings has changed.
-func pricesChanged(os, ns rhpv2.HostSettings) bool {
-	if ns.RemainingStorage != os.RemainingStorage || ns.TotalStorage != os.TotalStorage {
+func pricesChanged(oh hostdb.HostDBEntry, nh portalHost) bool {
+	type settings struct {
+		remainingStorage uint64
+		totalStorage     uint64
+		storagePrice     types.Currency
+		collateral       types.Currency
+		ingressPrice     types.Currency
+		egressPrice      types.Currency
+	}
+	var os, ns settings
+	if oh.V2 {
+		os = settings{
+			remainingStorage: oh.V2Settings.RemainingStorage,
+			totalStorage:     oh.V2Settings.TotalStorage,
+			storagePrice:     oh.V2Settings.Prices.StoragePrice,
+			collateral:       oh.V2Settings.Prices.Collateral,
+			ingressPrice:     oh.V2Settings.Prices.IngressPrice,
+			egressPrice:      oh.V2Settings.Prices.EgressPrice,
+		}
+	} else {
+		os = settings{
+			remainingStorage: oh.Settings.RemainingStorage,
+			totalStorage:     oh.Settings.TotalStorage,
+			storagePrice:     oh.Settings.StoragePrice,
+			collateral:       oh.Settings.Collateral,
+			ingressPrice:     oh.Settings.UploadBandwidthPrice,
+			egressPrice:      oh.Settings.DownloadBandwidthPrice,
+		}
+	}
+	if nh.V2 {
+		ns = settings{
+			remainingStorage: nh.V2Settings.RemainingStorage,
+			totalStorage:     nh.V2Settings.TotalStorage,
+			storagePrice:     nh.V2Settings.Prices.StoragePrice,
+			collateral:       nh.V2Settings.Prices.Collateral,
+			ingressPrice:     nh.V2Settings.Prices.IngressPrice,
+			egressPrice:      nh.V2Settings.Prices.EgressPrice,
+		}
+	} else {
+		ns = settings{
+			remainingStorage: nh.Settings.RemainingStorage,
+			totalStorage:     nh.Settings.TotalStorage,
+			storagePrice:     nh.Settings.StoragePrice,
+			collateral:       nh.Settings.Collateral,
+			ingressPrice:     nh.Settings.UploadBandwidthPrice,
+			egressPrice:      nh.Settings.DownloadBandwidthPrice,
+		}
+	}
+	if ns.remainingStorage != os.remainingStorage || ns.totalStorage != os.totalStorage {
 		return true
 	}
-	if ns.StoragePrice.Cmp(os.StoragePrice) != 0 || ns.Collateral.Cmp(os.Collateral) != 0 {
+	if ns.storagePrice.Cmp(os.storagePrice) != 0 || ns.collateral.Cmp(os.collateral) != 0 {
 		return true
 	}
-	if ns.UploadBandwidthPrice.Cmp(os.UploadBandwidthPrice) != 0 {
+	if ns.ingressPrice.Cmp(os.ingressPrice) != 0 {
 		return true
 	}
-	if ns.DownloadBandwidthPrice.Cmp(os.DownloadBandwidthPrice) != 0 {
+	if ns.egressPrice.Cmp(os.egressPrice) != 0 {
 		return true
 	}
 	return false
+}
+
+func getAddress(host portalHost) string {
+	if host.V2 {
+		return host.SiamuxAddresses[0]
+	} else {
+		return host.NetAddress
+	}
 }
 
 // getHost retrieves the information about a specific host.
@@ -645,13 +702,14 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 	}
 
 	host = *h
-	info, lastFetched, err := api.getLocation(pk, network, host.NetAddress)
+	addr := getAddress(host)
+	info, lastFetched, err := api.getLocation(pk, network, addr)
 	if err != nil {
 		return portalHost{}, utils.AddContext(err, "couldn't get host location")
 	} else if host.LastIPChange.After(lastFetched) {
-		newInfo, err := external.FetchIPInfo(host.NetAddress, api.token)
+		newInfo, err := external.FetchIPInfo(addr, api.token)
 		if err != nil {
-			api.log.Error("couldn't fetch host location", zap.String("host", host.NetAddress), zap.Error(err))
+			api.log.Error("couldn't fetch host location", zap.String("host", addr), zap.Error(err))
 		} else {
 			if (newInfo != external.IPInfo{}) {
 				info = newInfo
@@ -660,7 +718,7 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 					return portalHost{}, utils.AddContext(err, "couldn't update host location")
 				}
 			} else {
-				api.log.Debug("empty host location received", zap.String("host", host.NetAddress))
+				api.log.Debug("empty host location received", zap.String("host", addr))
 			}
 		}
 	}
@@ -701,7 +759,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		allHosts := api.hosts[network]
 		for _, key := range keys {
 			host := allHosts[key]
-			if (all || isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+			if (all || isOnline(*host)) && (query == "" || strings.Contains(getAddress(*host), query)) {
 				hosts = append(hosts, *host)
 			}
 		}
@@ -710,7 +768,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		api.mu.RLock()
 		allHosts := api.hosts[network]
 		for _, host := range allHosts {
-			if (all || isOnline(*host)) && (query == "" || strings.Contains(host.NetAddress, query)) {
+			if (all || isOnline(*host)) && (query == "" || strings.Contains(getAddress(*host), query)) {
 				hosts = append(hosts, *host)
 			}
 		}
@@ -834,13 +892,14 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 	hosts = hosts[offset : offset+limit]
 
 	for i := range hosts {
-		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, network, hosts[i].NetAddress)
+		addr := getAddress(hosts[i])
+		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, network, addr)
 		if err != nil {
 			return nil, false, 0, utils.AddContext(err, "couldn't get host location")
 		} else if hosts[i].LastIPChange.After(lastFetched) {
-			newInfo, err := external.FetchIPInfo(hosts[i].NetAddress, api.token)
+			newInfo, err := external.FetchIPInfo(addr, api.token)
 			if err != nil {
-				api.log.Error("couldn't fetch host location", zap.String("host", hosts[i].NetAddress), zap.Error(err))
+				api.log.Error("couldn't fetch host location", zap.String("host", addr), zap.Error(err))
 			} else {
 				if (newInfo != external.IPInfo{}) {
 					info = newInfo
@@ -849,7 +908,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 						return nil, false, 0, utils.AddContext(err, "couldn't update host location")
 					}
 				} else {
-					api.log.Debug("empty host location received", zap.String("host", hosts[i].NetAddress))
+					api.log.Debug("empty host location received", zap.String("host", addr))
 				}
 			}
 		}
@@ -1028,7 +1087,7 @@ func (api *portalAPI) getScans(network, node string, pk types.PublicKey, all boo
 }
 
 // getBenchmarks returns the benchmark history according to the criteria provided.
-func (api *portalAPI) getBenchmarks(network, node string, pk types.PublicKey, all bool, from, to time.Time, limit int64) (benchmarks []hostdb.BenchmarkHistory, err error) {
+func (api *portalAPI) getBenchmarks(network, node string, pk types.PublicKey, all bool, from, to time.Time, limit int64) (benchmarks []hostdb.BenchmarkHistoryEntry, err error) {
 	f := int64(0)
 	t := time.Now().Unix()
 	if from.Unix() != (time.Time{}).Unix() {
@@ -1084,7 +1143,7 @@ func (api *portalAPI) getBenchmarks(network, node string, pk types.PublicKey, al
 		if err := rows.Scan(&n, &ra, &success, &ul, &dl, &ttfb, &msg); err != nil {
 			return nil, utils.AddContext(err, "couldn't query benchmark history")
 		}
-		benchmark := hostdb.BenchmarkHistory{
+		benchmark := hostdb.BenchmarkHistoryEntry{
 			HostBenchmark: hostdb.HostBenchmark{
 				Timestamp:     time.Unix(ra, 0),
 				Success:       success,
@@ -1113,6 +1172,7 @@ func (api *portalAPI) load() error {
 			first_seen,
 			known_since,
 			blocked,
+			v2,
 			net_address,
 			ip_nets,
 			last_ip_change,
@@ -1128,7 +1188,8 @@ func (api *portalAPI) load() error {
 			contracts_score,
 			total_score,
 			settings,
-			price_table
+			price_table,
+			siamux_addresses
 		FROM hosts
 	`)
 	if err != nil {
@@ -1143,11 +1204,11 @@ func (api *portalAPI) load() error {
 
 	for rows.Next() {
 		var id int
-		var network, netaddress, ipNets string
+		var network, netaddress, ipNets, smux string
 		pk := make([]byte, 32)
 		var fs, lc int64
 		var ks uint64
-		var blocked bool
+		var blocked, v2 bool
 		var ps, ss, cs, is, us, as, vs, ls, bs, cons, ts float64
 		var settings, pt []byte
 		if err := rows.Scan(
@@ -1157,6 +1218,7 @@ func (api *portalAPI) load() error {
 			&fs,
 			&ks,
 			&blocked,
+			&v2,
 			&netaddress,
 			&ipNets,
 			&lc,
@@ -1173,6 +1235,7 @@ func (api *portalAPI) load() error {
 			&ts,
 			&settings,
 			&pt,
+			&smux,
 		); err != nil {
 			rows.Close()
 			return utils.AddContext(err, "couldn't decode host data")
@@ -1183,6 +1246,7 @@ func (api *portalAPI) load() error {
 			FirstSeen:    time.Unix(fs, 0),
 			KnownSince:   ks,
 			Blocked:      blocked,
+			V2:           v2,
 			NetAddress:   netaddress,
 			IPNets:       strings.Split(ipNets, ";"),
 			LastIPChange: time.Unix(lc, 0),
@@ -1199,11 +1263,16 @@ func (api *portalAPI) load() error {
 				ContractsScore:    cons,
 				TotalScore:        ts,
 			},
-			Interactions: make(map[string]nodeInteractions),
+			Interactions:    make(map[string]nodeInteractions),
+			SiamuxAddresses: strings.Split(smux, ","),
 		}
 		if len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
-			utils.DecodeSettings(&host.Settings, d)
+			if v2 {
+				host.V2Settings.DecodeFrom(d)
+			} else {
+				utils.DecodeSettings(&host.Settings, d)
+			}
 			if err := d.Err(); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode host settings")
@@ -1222,60 +1291,43 @@ func (api *portalAPI) load() error {
 	}
 	rows.Close()
 
-	var hosts, hostsZen []portalHost
-	for _, host := range api.hosts["mainnet"] {
-		hosts = append(hosts, *host)
-	}
-	for _, host := range api.hosts["zen"] {
-		hostsZen = append(hostsZen, *host)
-	}
-	slices.SortStableFunc(hosts, func(a, b portalHost) int {
-		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
-			if aIsOnline && !bIsOnline {
-				return -1
-			}
-			if !aIsOnline && bIsOnline {
-				return 1
-			}
-			return a.ID - b.ID
+	hosts := make(map[string][]portalHost)
+	for _, network := range networks {
+		for _, host := range api.hosts[network] {
+			hosts[network] = append(hosts[network], *host)
 		}
-		if a.Score.TotalScore < b.Score.TotalScore {
-			return 1
-		} else {
-			return -1
-		}
-	})
-	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
-		if a.Score.TotalScore == b.Score.TotalScore {
-			aIsOnline, bIsOnline := isOnline(a), isOnline(b)
-			if aIsOnline && !bIsOnline {
-				return -1
-			}
-			if !aIsOnline && bIsOnline {
-				return 1
-			}
-			return a.ID - b.ID
-		}
-		if a.Score.TotalScore < b.Score.TotalScore {
-			return 1
-		} else {
-			return -1
-		}
-	})
-	for i := range hosts {
-		api.hosts["mainnet"][hosts[i].PublicKey].Rank = i + 1
-	}
-	for i := range hostsZen {
-		api.hosts["zen"][hostsZen[i].PublicKey].Rank = i + 1
 	}
 
-	if err := api.loadInteractions("mainnet"); err != nil {
-		return utils.AddContext(err, "couldn't load mainnet interactions")
+	for _, network := range networks {
+		slices.SortStableFunc(hosts[network], func(a, b portalHost) int {
+			if a.Score.TotalScore == b.Score.TotalScore {
+				aIsOnline, bIsOnline := isOnline(a), isOnline(b)
+				if aIsOnline && !bIsOnline {
+					return -1
+				}
+				if !aIsOnline && bIsOnline {
+					return 1
+				}
+				return a.ID - b.ID
+			}
+			if a.Score.TotalScore < b.Score.TotalScore {
+				return 1
+			} else {
+				return -1
+			}
+		})
 	}
 
-	if err := api.loadInteractions("zen"); err != nil {
-		return utils.AddContext(err, "couldn't load zen interactions")
+	for _, network := range networks {
+		for i := range hosts[network] {
+			api.hosts[network][hosts[network][i].PublicKey].Rank = i + 1
+		}
+	}
+
+	for _, network := range networks {
+		if err := api.loadInteractions(network); err != nil {
+			return utils.AddContext(err, fmt.Sprintf("couldn't load %s interactions", network))
+		}
 	}
 
 	return nil
@@ -1300,10 +1352,8 @@ func (api *portalAPI) loadInteractions(network string) error {
 			benchmarks_score,
 			contracts_score,
 			total_score,
-			historic_successful_interactions,
-			historic_failed_interactions,
-			recent_successful_interactions,
-			recent_failed_interactions,
+			successes,
+			failures,
 			last_update
 		FROM interactions
 		WHERE network = ?
@@ -1326,7 +1376,7 @@ func (api *portalAPI) loadInteractions(network string) error {
 			var lu uint64
 			var ut, dt, lastSeen int64
 			var ps, ss, cs, is, us, as, vs, ls, bs, cons, ts float64
-			var hsi, hfi, rsi, rfi float64
+			var hsi, hfi float64
 			var ah int
 			if err := rows.Scan(
 				&node,
@@ -1347,8 +1397,6 @@ func (api *portalAPI) loadInteractions(network string) error {
 				&ts,
 				&hsi,
 				&hfi,
-				&rsi,
-				&rfi,
 				&lu,
 			); err != nil {
 				rows.Close()
@@ -1373,11 +1421,9 @@ func (api *portalAPI) loadInteractions(network string) error {
 					TotalScore:        ts,
 				},
 				HostInteractions: hostdb.HostInteractions{
-					HistoricSuccesses: hsi,
-					HistoricFailures:  hfi,
-					RecentSuccesses:   rsi,
-					RecentFailures:    rfi,
-					LastUpdate:        lu,
+					Successes:  hsi,
+					Failures:   hfi,
+					LastUpdate: lu,
 				},
 			}
 			host.Interactions[node] = interactions
@@ -1583,30 +1629,27 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey, from, 
 
 // calculateAverages calculates the averages for the given network.
 func (api *portalAPI) calculateAverages() {
-	var hosts, hostsZen []portalHost
+	hosts := make(map[string][]portalHost)
 	api.mu.RLock()
-	for _, host := range api.hosts["mainnet"] {
-		if isOnline(*host) {
-			hosts = append(hosts, *host)
-		}
-	}
-	for _, host := range api.hosts["zen"] {
-		if isOnline(*host) {
-			hostsZen = append(hostsZen, *host)
+	for _, network := range networks {
+		for _, host := range api.hosts[network] {
+			if isOnline(*host) {
+				hosts[network] = append(hosts[network], *host)
+			}
 		}
 	}
 	api.mu.RUnlock()
 
-	slices.SortStableFunc(hosts, func(a, b portalHost) int {
-		return a.Rank - b.Rank
-	})
-	slices.SortStableFunc(hostsZen, func(a, b portalHost) int {
-		return a.Rank - b.Rank
-	})
+	for _, network := range networks {
+		slices.SortStableFunc(hosts[network], func(a, b portalHost) int {
+			return a.Rank - b.Rank
+		})
+	}
 
 	api.mu.Lock()
-	api.averages["mainnet"] = calculateTiers(hosts)
-	api.averages["zen"] = calculateTiers(hostsZen)
+	for _, network := range networks {
+		api.averages[network] = calculateTiers(hosts[network])
+	}
 	api.mu.Unlock()
 }
 
@@ -1615,11 +1658,19 @@ func calculateTiers(sortedHosts []portalHost) map[string]networkAverages {
 		var tier networkAverages
 		var count int
 		for _, host := range hostSlice {
-			tier.StoragePrice = tier.StoragePrice.Add(host.Settings.StoragePrice)
-			tier.Collateral = tier.Collateral.Add(host.Settings.Collateral)
-			tier.UploadPrice = tier.UploadPrice.Add(host.Settings.UploadBandwidthPrice)
-			tier.DownloadPrice = tier.DownloadPrice.Add(host.Settings.DownloadBandwidthPrice)
-			tier.ContractDuration += host.Settings.MaxDuration
+			if host.V2 {
+				tier.StoragePrice = tier.StoragePrice.Add(host.V2Settings.Prices.StoragePrice)
+				tier.Collateral = tier.Collateral.Add(host.V2Settings.Prices.Collateral)
+				tier.UploadPrice = tier.UploadPrice.Add(host.V2Settings.Prices.IngressPrice)
+				tier.DownloadPrice = tier.DownloadPrice.Add(host.V2Settings.Prices.EgressPrice)
+				tier.ContractDuration += host.V2Settings.MaxContractDuration
+			} else {
+				tier.StoragePrice = tier.StoragePrice.Add(host.Settings.StoragePrice)
+				tier.Collateral = tier.Collateral.Add(host.Settings.Collateral)
+				tier.UploadPrice = tier.UploadPrice.Add(host.Settings.UploadBandwidthPrice)
+				tier.DownloadPrice = tier.DownloadPrice.Add(host.Settings.DownloadBandwidthPrice)
+				tier.ContractDuration += host.Settings.MaxDuration
+			}
 			count++
 		}
 		if count > 0 {
@@ -1778,43 +1829,43 @@ outer:
 			continue
 		}
 
-		if !host.Settings.AcceptingContracts {
+		if (host.V2 && !host.V2Settings.AcceptingContracts) || !host.Settings.AcceptingContracts {
 			continue
 		}
 
-		if host.Settings.StoragePrice.Cmp(maxStoragePrice) > 0 {
+		if (host.V2 && host.V2Settings.Prices.StoragePrice.Cmp(maxStoragePrice) > 0) || (host.Settings.StoragePrice.Cmp(maxStoragePrice) > 0) {
 			continue
 		}
 
-		if host.Settings.UploadBandwidthPrice.Cmp(maxUploadPrice) > 0 {
+		if (host.V2 && host.V2Settings.Prices.IngressPrice.Cmp(maxUploadPrice) > 0) || (host.Settings.UploadBandwidthPrice.Cmp(maxUploadPrice) > 0) {
 			continue
 		}
 
-		if host.Settings.DownloadBandwidthPrice.Cmp(maxDownloadPrice) > 0 {
+		if (host.V2 && host.V2Settings.Prices.EgressPrice.Cmp(maxDownloadPrice) > 0) || (host.Settings.DownloadBandwidthPrice.Cmp(maxDownloadPrice) > 0) {
 			continue
 		}
 
-		if host.Settings.ContractPrice.Cmp(maxContractPrice) > 0 {
+		if (host.V2 && host.V2Settings.Prices.ContractPrice.Cmp(maxContractPrice) > 0) || (host.Settings.ContractPrice.Cmp(maxContractPrice) > 0) {
 			continue
 		}
 
-		if host.Settings.MaxDuration < minContractDuration {
+		if (host.V2 && host.V2Settings.MaxContractDuration < minContractDuration) || (host.Settings.MaxDuration < minContractDuration) {
 			continue
 		}
 
-		if host.Settings.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
+		if !host.V2 && host.Settings.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
 			continue
 		}
 
-		if host.Settings.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
+		if !host.V2 && host.Settings.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
 			continue
 		}
 
-		if host.Settings.RemainingStorage < minAvailableStorage {
+		if (host.V2 && host.V2Settings.RemainingStorage < minAvailableStorage) || (host.Settings.RemainingStorage < minAvailableStorage) {
 			continue
 		}
 
-		if minVersion != "" && build.VersionCmp(host.Settings.Version, minVersion) < 0 {
+		if minVersion != "" && ((host.V2 && build.VersionCmp(fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2]), minVersion) < 0) || build.VersionCmp(host.Settings.Version, minVersion) < 0) {
 			continue
 		}
 

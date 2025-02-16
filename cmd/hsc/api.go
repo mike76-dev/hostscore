@@ -141,21 +141,22 @@ type nodeInteractions struct {
 }
 
 type portalHost struct {
-	ID           int                         `json:"id"`
-	Rank         int                         `json:"rank"`
-	PublicKey    types.PublicKey             `json:"publicKey"`
-	FirstSeen    time.Time                   `json:"firstSeen"`
-	KnownSince   uint64                      `json:"knownSince"`
-	NetAddress   string                      `json:"netaddress"`
-	Blocked      bool                        `json:"blocked"`
-	V2           bool                        `json:"v2"`
-	Interactions map[string]nodeInteractions `json:"interactions"`
-	IPNets       []string                    `json:"ipNets"`
-	LastIPChange time.Time                   `json:"lastIPChange"`
-	Score        scoreBreakdown              `json:"score"`
-	Settings     rhpv2.HostSettings          `json:"settings,omitempty"`
-	V2Settings   rhpv4.HostSettings          `json:"v2Settings,omitempty"`
-	PriceTable   rhpv3.HostPriceTable        `json:"priceTable,omitempty"`
+	ID              int                         `json:"id"`
+	Rank            int                         `json:"rank"`
+	PublicKey       types.PublicKey             `json:"publicKey"`
+	FirstSeen       time.Time                   `json:"firstSeen"`
+	KnownSince      uint64                      `json:"knownSince"`
+	NetAddress      string                      `json:"netaddress"`
+	Blocked         bool                        `json:"blocked"`
+	V2              bool                        `json:"v2"`
+	Interactions    map[string]nodeInteractions `json:"interactions"`
+	IPNets          []string                    `json:"ipNets"`
+	LastIPChange    time.Time                   `json:"lastIPChange"`
+	Score           scoreBreakdown              `json:"score"`
+	Settings        rhpv2.HostSettings          `json:"settings,omitempty"`
+	V2Settings      rhpv4.HostSettings          `json:"v2Settings,omitempty"`
+	PriceTable      rhpv3.HostPriceTable        `json:"priceTable,omitempty"`
+	SiamuxAddresses []string                    `json:"siamuxAddresses"`
 	external.IPInfo
 }
 
