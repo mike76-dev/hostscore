@@ -17,9 +17,8 @@ import (
 // To calculate the score of each host, we need to assume the settings
 // of an average renter.
 var (
-	hostPeriodBudget = types.Siacoins(1000)              // 1 KS
-	dataPerHost      = uint64(1024 * 1024 * 1024 * 1024) // 1 TiB
-	contractPeriod   = uint64(144 * 30)                  // 1 month
+	dataPerHost    = uint64(1024 * 1024 * 1024 * 1024) // 1 TiB
+	contractPeriod = uint64(144 * 30)                  // 1 month
 )
 
 var (
