@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"math/big"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/mike76-dev/hostscore/internal/build"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 )
 
@@ -20,24 +22,67 @@ var (
 	contractPeriod   = uint64(144 * 30)                  // 1 month
 )
 
+var (
+	maxUploadPrice   = types.Siacoins(1000)                             // 1 KS/TB
+	maxDownloadPrice = types.Siacoins(3000)                             // 3 KS/TB
+	maxStoragePrice  = types.Siacoins(1000).Div64(1e12).Div64(30 * 144) // 1 KS/TB/month
+)
+
 // calculateScore calculates the total host's score.
 func calculateScore(host portalHost, node string, scans []portalScan, benchmarks []hostdb.HostBenchmark) scoreBreakdown {
-	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
 	interactions, ok := host.Interactions[node]
 	if !ok {
 		return scoreBreakdown{}
 	}
+
+	var uploadSectorCost types.Currency
+	var collateral, maxCollateral types.Currency
+	var egressPrice, ingressPrice, storagePrice types.Currency
+	var remainingStorage uint64
+	var version string
+	var acceptingContracts bool
+	if host.V2 {
+		appendCost := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost()
+		uploadCost := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost()
+		uploadSectorCost = appendCost.Add(uploadCost)
+		maxCollateral = host.V2Settings.MaxCollateral
+		collateral = host.V2Settings.Prices.Collateral
+		egressPrice = host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
+		ingressPrice = host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
+		storagePrice = host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
+		remainingStorage = host.V2Settings.RemainingStorage
+		version = fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2])
+		acceptingContracts = host.V2Settings.AcceptingContracts
+	} else {
+		var overflow bool
+		uploadSectorCost = host.PriceTable.AppendSectorCost(contractPeriod).Storage
+		maxCollateral = host.PriceTable.MaxCollateral
+		collateral = host.PriceTable.CollateralCost
+		egressPrice, overflow = downloadPricePerByte(host.PriceTable)
+		if overflow {
+			egressPrice = types.MaxCurrency
+		}
+		ingressPrice, overflow = uploadPricePerByte(host.PriceTable)
+		if overflow {
+			ingressPrice = types.MaxCurrency
+		}
+		storagePrice = host.PriceTable.WriteStoreCost
+		remainingStorage = host.Settings.RemainingStorage
+		version = host.Settings.Version
+		acceptingContracts = host.Settings.AcceptingContracts
+	}
+
 	sb := scoreBreakdown{
-		PricesScore:       priceAdjustmentScore(hostPeriodCost),
-		StorageScore:      storageRemainingScore(host.Settings),
-		CollateralScore:   collateralScore(host.PriceTable),
-		InteractionsScore: interactionScore(interactions.HistoricSuccesses, interactions.HistoricFailures),
+		PricesScore:       priceAdjustmentScore(egressPrice, ingressPrice, storagePrice),
+		StorageScore:      storageRemainingScore(remainingStorage),
+		CollateralScore:   collateralScore(uploadSectorCost, maxCollateral, collateral),
+		InteractionsScore: interactionScore(interactions.Successes, interactions.Failures),
 		UptimeScore:       uptimeScore(interactions.Uptime, interactions.Downtime, scans),
 		AgeScore:          ageScore(host.FirstSeen),
-		VersionScore:      versionScore(host.Settings),
+		VersionScore:      versionScore(version),
 		LatencyScore:      latencyScore(scans),
 		BenchmarksScore:   benchmarksScore(benchmarks),
-		ContractsScore:    contractsScore(host.Settings),
+		ContractsScore:    contractsScore(acceptingContracts),
 	}
 	sb.TotalScore = sb.PricesScore *
 		sb.StorageScore *
@@ -54,20 +99,57 @@ func calculateScore(host portalHost, node string, scans []portalScan, benchmarks
 
 // calculateGlobalScore calculates the average score over all nodes.
 func calculateGlobalScore(host *portalHost) scoreBreakdown {
-	hostPeriodCost := hostPeriodCostForScore(host.Settings, host.PriceTable)
-	sb := scoreBreakdown{
-		PricesScore:     priceAdjustmentScore(hostPeriodCost),
-		StorageScore:    storageRemainingScore(host.Settings),
-		CollateralScore: collateralScore(host.PriceTable),
-		AgeScore:        ageScore(host.FirstSeen),
-		VersionScore:    versionScore(host.Settings),
-		ContractsScore:  contractsScore(host.Settings),
+	var uploadSectorCost types.Currency
+	var collateral, maxCollateral types.Currency
+	var egressPrice, ingressPrice, storagePrice types.Currency
+	var remainingStorage uint64
+	var version string
+	var acceptingContracts bool
+	if host.V2 {
+		appendCost := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost()
+		uploadCost := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost()
+		uploadSectorCost = appendCost.Add(uploadCost)
+		maxCollateral = host.V2Settings.MaxCollateral
+		collateral = host.V2Settings.Prices.Collateral
+		egressPrice = host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
+		ingressPrice = host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
+		storagePrice = host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
+		remainingStorage = host.V2Settings.RemainingStorage
+		version = fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2])
+		acceptingContracts = host.V2Settings.AcceptingContracts
+	} else {
+		var overflow bool
+		uploadSectorCost = host.PriceTable.AppendSectorCost(contractPeriod).Storage
+		maxCollateral = host.PriceTable.MaxCollateral
+		collateral = host.PriceTable.CollateralCost
+		egressPrice, overflow = downloadPricePerByte(host.PriceTable)
+		if overflow {
+			egressPrice = types.MaxCurrency
+		}
+		ingressPrice, overflow = uploadPricePerByte(host.PriceTable)
+		if overflow {
+			ingressPrice = types.MaxCurrency
+		}
+		storagePrice = host.PriceTable.WriteStoreCost
+		remainingStorage = host.Settings.RemainingStorage
+		version = host.Settings.Version
+		acceptingContracts = host.Settings.AcceptingContracts
 	}
+
+	sb := scoreBreakdown{
+		PricesScore:     priceAdjustmentScore(egressPrice, ingressPrice, storagePrice),
+		StorageScore:    storageRemainingScore(remainingStorage),
+		CollateralScore: collateralScore(uploadSectorCost, maxCollateral, collateral),
+		AgeScore:        ageScore(host.FirstSeen),
+		VersionScore:    versionScore(version),
+		ContractsScore:  contractsScore(acceptingContracts),
+	}
+
 	var us, is, ls, bs float64
 	var count int
 	for _, interactions := range host.Interactions {
 		us += uptimeScore(interactions.Uptime, interactions.Downtime, interactions.ScanHistory)
-		is += interactionScore(interactions.HistoricSuccesses, interactions.HistoricFailures)
+		is += interactionScore(interactions.Successes, interactions.Failures)
 		ls += latencyScore(interactions.ScanHistory)
 		bs += benchmarksScore(interactions.BenchmarkHistory)
 		count++
@@ -91,8 +173,8 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 	return sb
 }
 
-// priceAdjustmentScore computes a score between 0 and 1 for a host given its
-// price settings.
+// priceAdjustmentScore computes a score between 0 and 1 for a host giving its
+// price settings and the pre-defined maximums.
 //   - 0.5 is returned if the host's costs exactly match the settings.
 //   - If the host is cheaper than expected, a linear bonus is applied. The best
 //     score of 1 is reached when the ratio between host cost and expectations is
@@ -100,31 +182,44 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 //   - If the host is more expensive than expected, an exponential malus is applied.
 //     A 2x ratio will already cause the score to drop to 0.16 and a 3x ratio causes
 //     it to drop to 0.05.
-func priceAdjustmentScore(hostCostPerPeriod types.Currency) float64 {
-	ratio := new(big.Rat).SetFrac(hostCostPerPeriod.Big(), hostPeriodBudget.Big())
-	fRatio, _ := ratio.Float64()
-	switch ratio.Cmp(new(big.Rat).SetUint64(1)) {
-	case 0:
-		return 0.5 // ratio is exactly 1 -> score is 0.5
-	case 1:
-		// cost is greater than budget -> score is in range (0; 0.5)
-		//
-		return 1.5 / math.Pow(3, fRatio)
-	case -1:
-		// cost < budget -> score is (0.5; 1]
-		s := 0.44 + 0.06*(1/fRatio)
-		if s > 1.0 {
-			s = 1.0
+func priceAdjustmentScore(dppb, uppb, sppb types.Currency) float64 {
+	priceScore := func(actual, max types.Currency) float64 {
+		threshold := max.Div64(2)
+		if threshold.IsZero() {
+			return 1.0 // no maximum defined
 		}
-		return s
+
+		ratio := new(big.Rat).SetFrac(actual.Big(), threshold.Big())
+		fRatio, _ := ratio.Float64()
+		switch ratio.Cmp(new(big.Rat).SetUint64(1)) {
+		case 0:
+			return 0.5 // ratio is exactly 1 -> score is 0.5
+		case 1:
+			// actual is greater than threshold -> score is in range (0; 0.5)
+			//
+			return 1.5 / math.Pow(3, fRatio)
+		case -1:
+			// actual < threshold -> score is (0.5; 1]
+			s := 0.5 * (1 / fRatio)
+			if s > 1.0 {
+				s = 1.0
+			}
+			return s
+		}
+		panic("unreachable")
 	}
-	panic("unreachable")
+
+	// Compute scores for download, upload and storage and combine them.
+	downloadScore := priceScore(dppb, maxDownloadPrice)
+	uploadScore := priceScore(uppb, maxUploadPrice)
+	storageScore := priceScore(sppb, maxStoragePrice)
+	return (downloadScore + uploadScore + storageScore) / 3.0
 }
 
-func storageRemainingScore(h rhpv2.HostSettings) float64 {
+func storageRemainingScore(remainingStorage uint64) float64 {
 	// hostExpectedStorage is the amount of storage that we expect to be able to
 	// store on this host.
-	hostExpectedStorage := float64(h.RemainingStorage) * 0.25
+	hostExpectedStorage := float64(remainingStorage) * 0.25
 	// The score for the host is the square of the amount of storage we
 	// expected divided by the amount of storage we want. If we expect to be
 	// able to store more data on the host than we need to allocate, the host
@@ -171,9 +266,14 @@ func ageScore(knownSince time.Time) float64 {
 	return weight
 }
 
-func collateralScore(pt rhpv3.HostPriceTable) float64 {
+// collateralScore computes the score a host receives for its collateral
+// settings relative to its prices. The params have the following meaning:
+// 'uploadSectorCost' - the cost of uploading and storing a sector worth of data,
+// 'maxCollateral' - the maximum collateral the host is willing to put up,
+// 'collateralCost' - the amount of collateral the host is willing to put up per byte.
+func collateralScore(uploadSectorCost, maxCollateral, collateralCost types.Currency) float64 {
 	// Ignore hosts which have set their max collateral to 0.
-	if pt.MaxCollateral.IsZero() || pt.CollateralCost.IsZero() {
+	if maxCollateral.IsZero() || collateralCost.IsZero() {
 		return 0
 	}
 
@@ -183,12 +283,12 @@ func collateralScore(pt rhpv3.HostPriceTable) float64 {
 
 	// Compute the cost of storing.
 	numSectors := bytesToSectors(dataPerHost)
-	storageCost := pt.AppendSectorCost(contractPeriod).Storage.Mul64(numSectors)
+	storageCost := uploadSectorCost.Mul64(numSectors)
 
 	// Calculate the expected collateral for the host allocation.
-	expectedCollateral := pt.CollateralCost.Mul64(dataPerHost).Mul64(contractPeriod)
-	if expectedCollateral.Cmp(pt.MaxCollateral) > 0 {
-		expectedCollateral = pt.MaxCollateral
+	expectedCollateral := collateralCost.Mul64(dataPerHost).Mul64(contractPeriod)
+	if expectedCollateral.Cmp(maxCollateral) > 0 {
+		expectedCollateral = maxCollateral
 	}
 
 	// Avoid division by zero.
@@ -286,7 +386,7 @@ func uptimeScore(ut, dt time.Duration, history []portalScan) float64 {
 	return math.Pow(ratio, 200*math.Min(1-ratio, 0.30))
 }
 
-func versionScore(settings rhpv2.HostSettings) float64 {
+func versionScore(version string) float64 {
 	versions := []struct {
 		version string
 		penalty float64
@@ -296,22 +396,11 @@ func versionScore(settings rhpv2.HostSettings) float64 {
 	}
 	weight := 1.0
 	for _, v := range versions {
-		if build.VersionCmp(settings.Version, v.version) < 0 {
+		if build.VersionCmp(version, v.version) < 0 {
 			weight *= v.penalty
 		}
 	}
 	return weight
-}
-
-// contractPriceForScore returns the contract price of the host used for
-// scoring. Since we don't know whether rhpv2 or rhpv3 are used, we return the
-// bigger one for a pesimistic score.
-func contractPriceForScore(settings rhpv2.HostSettings, pt rhpv3.HostPriceTable) types.Currency {
-	cp := settings.ContractPrice
-	if cp.Cmp(pt.ContractPrice) > 0 {
-		cp = pt.ContractPrice
-	}
-	return cp
 }
 
 func bytesToSectors(bytes uint64) uint64 {
@@ -320,60 +409,6 @@ func bytesToSectors(bytes uint64) uint64 {
 		numSectors++
 	}
 	return numSectors
-}
-
-func sectorStorageCost(pt rhpv3.HostPriceTable, duration uint64) types.Currency {
-	asc := pt.BaseCost().Add(pt.AppendSectorCost(duration))
-	return asc.Storage
-}
-
-func sectorUploadCost(pt rhpv3.HostPriceTable, duration uint64) types.Currency {
-	asc := pt.BaseCost().Add(pt.AppendSectorCost(duration))
-	uploadSectorCostRHPv3, _ := asc.Total()
-	return uploadSectorCostRHPv3
-}
-
-func uploadCostForScore(pt rhpv3.HostPriceTable, bytes uint64) types.Currency {
-	uploadSectorCostRHPv3 := sectorUploadCost(pt, contractPeriod)
-	numSectors := bytesToSectors(bytes)
-	return uploadSectorCostRHPv3.Mul64(numSectors)
-}
-
-func downloadCostForScore(pt rhpv3.HostPriceTable, bytes uint64) types.Currency {
-	rsc := pt.BaseCost().Add(pt.ReadSectorCost(rhpv2.SectorSize))
-	downloadSectorCostRHPv3, _ := rsc.Total()
-	numSectors := bytesToSectors(bytes)
-	return downloadSectorCostRHPv3.Mul64(numSectors)
-}
-
-func storageCostForScore(pt rhpv3.HostPriceTable, bytes uint64) types.Currency {
-	storeSectorCostRHPv3 := sectorStorageCost(pt, contractPeriod)
-	numSectors := bytesToSectors(bytes)
-	return storeSectorCostRHPv3.Mul64(numSectors)
-}
-
-func hostPeriodCostForScore(settings rhpv2.HostSettings, pt rhpv3.HostPriceTable) types.Currency {
-	// Compute the individual costs.
-	hostCollateral := rhpv2.ContractFormationCollateral(contractPeriod, dataPerHost, settings)
-	hostContractPrice := contractPriceForScore(settings, pt)
-	hostUploadCost := uploadCostForScore(pt, dataPerHost)
-	hostDownloadCost := downloadCostForScore(pt, dataPerHost)
-	hostStorageCost := storageCostForScore(pt, dataPerHost)
-	siafundFee := hostCollateral.
-		Add(hostContractPrice).
-		Add(hostUploadCost).
-		Add(hostDownloadCost).
-		Add(hostStorageCost).
-		Mul64(39).
-		Div64(1000)
-
-	// Add it all up. We multiply the contract price here since we might refresh
-	// a contract multiple times.
-	return hostContractPrice.Mul64(3).
-		Add(hostUploadCost).
-		Add(hostDownloadCost).
-		Add(hostStorageCost).
-		Add(siafundFee)
 }
 
 // latencyScore calculates a score from the host's latency measurements.
@@ -450,9 +485,86 @@ func benchmarksScore(benchmarks []hostdb.HostBenchmark) float64 {
 
 // contractsScore returns 1 if the host is accepting contracts,
 // 0 otherwise.
-func contractsScore(settings rhpv2.HostSettings) float64 {
-	if settings.AcceptingContracts {
+func contractsScore(acceptingContracts bool) float64 {
+	if acceptingContracts {
 		return 1
 	}
 	return 0
+}
+
+func downloadPricePerByte(pt rhpv3.HostPriceTable) (types.Currency, bool) {
+	sectorDownloadPrice, overflow := sectorReadCostRHPv3(pt)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	return sectorDownloadPrice.Div64(rhpv2.SectorSize), false
+}
+
+func sectorReadCostRHPv3(pt rhpv3.HostPriceTable) (types.Currency, bool) {
+	// Base.
+	base, overflow := pt.ReadLengthCost.Mul64WithOverflow(rhpv2.SectorSize)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	base, overflow = base.AddWithOverflow(pt.ReadBaseCost)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	base, overflow = base.AddWithOverflow(pt.InitBaseCost)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	// Bandwidth.
+	ingress, overflow := pt.UploadBandwidthCost.Mul64WithOverflow(32)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	egress, overflow := pt.DownloadBandwidthCost.Mul64WithOverflow(rhpv2.SectorSize)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	// Total.
+	total, overflow := base.AddWithOverflow(ingress)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	total, overflow = total.AddWithOverflow(egress)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	return total, false
+}
+
+func uploadPricePerByte(pt rhpv3.HostPriceTable) (types.Currency, bool) {
+	sectorUploadPricePerMonth, overflow := sectorUploadCostRHPv3(pt)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	return sectorUploadPricePerMonth.Div64(rhpv2.SectorSize), false
+}
+
+func sectorUploadCostRHPv3(pt rhpv3.HostPriceTable) (types.Currency, bool) {
+	// Write.
+	writeCost, overflow := pt.WriteLengthCost.Mul64WithOverflow(rhpv2.SectorSize)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	writeCost, overflow = writeCost.AddWithOverflow(pt.WriteBaseCost)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	// Bandwidth.
+	ingress, overflow := pt.UploadBandwidthCost.Mul64WithOverflow(rhpv2.SectorSize)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	// Total.
+	total, overflow := writeCost.AddWithOverflow(ingress)
+	if overflow {
+		return types.ZeroCurrency, true
+	}
+	return total, false
 }
