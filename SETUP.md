@@ -184,16 +184,19 @@ $ nano hsdconfig.json
 First, choose a `name` of your hsd node. Fill in the `dbUser` and `dbName` fields with the MySQL user name (`hsuser`) and the database name (`hostscore`). Set the directory to store the `hsd` metadata and log files (here it is `/usr/local/etc/hsd`). You can also change the default port numbers:
 ```
 "HSD Configuration"
-"0.2.0"
+"0.3.0"
 {
-        "gatewayMainnet": ":9981",
-        "gatewayZen": ":9881",
+        "mainnet": ":9981",
+        "zen": ":9881",
+        "anagami": ":9781",
         "api": ":9980",
         "dir": "/usr/local/etc/hsd",
         "dbUser": "hsuser",
         "dbName": "hostscore"
 }
 ```
+If you are not going to run on a specific network, you may omit the corresponding line.
+
 Save and exit. Now copy the file to its new location:
 ```
 $ cp hsdconfig.json /usr/local/etc/hsd
@@ -211,7 +214,8 @@ Output:
 Seed:    belt thought dignity indoor find judge field foot next robot impose layer
 Address: 5ea89aa7dd4a8f7db0bb9d5a7e9f11f2e141db9b964158c20e24462386b3925462b733f2fc44
 ```
-This will be your Mainnet seed. Repeat the same command to generate a Zen seed. Take a note of both seeds as well as of the generated wallet addresses. Fund these addresses with Siacoin on both networks.
+This will be your seed for the first network. Repeat the same command to generate seeds for the other networks, if required.
+Take a note of the seeds as well as of the generated wallet addresses. Fund these addresses with Siacoin on all networks.
 
 The easiest way to run `hsd` is via `systemd`. You need to create a service file first:
 ```
@@ -221,7 +225,11 @@ Enter the following lines. Replace:
 `<user>` with the name of the user that will be running `hsd`,
 `<api_password>` with the `hsd` API password of your choice,
 `<db_password>` with the MySQL user password created earlier,
-`<wallet_seed>` and `<wallet_seed_zen>` with the wallet seeds generated at the previous step,
+`<wallet_seed>`, `<wallet_seed_zen>`, and `<wallet_seed_anagami>` with the wallet seeds generated at the previous step.
+The optional `[network-flags]` allow disabling particular networks. You can use
+`--no-mainnet` to disable Mainnet,
+`--no-zen` to disable Zen, and
+`--no-anagami` to disable Anagami.
 ```
 [Unit]
 Description=hsd
@@ -229,7 +237,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd
+ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd [network-flags]
 TimeoutStopSec=660
 Restart=always
 RestartSec=15
@@ -238,6 +246,7 @@ Environment="HSD_API_PASSWORD=<api_password>"
 Environment="HSD_DB_PASSWORD=<db_password>"
 Environment="HSD_WALLET_SEED=<wallet_seed>"
 Environment="HSD_WALLET_SEED_ZEN=<wallet_seed_zen>"
+Environment="HSD_WALLET_SEED_ANAGAMI=<wallet_seed_anagami>"
 Environment="HSD_CONFIG_DIR=/usr/local/etc/hsd"
 LimitNOFILE=900000
 
@@ -270,6 +279,8 @@ Jan 31 13:59:34 server hsd[1945]: Connecting to Mainnet...
 Jan 31 13:59:34 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
 Jan 31 13:59:34 server hsd[1945]: Connecting to Zen...
 Jan 31 13:59:34 server hsd[1945]: p2p Zen: Listening on [::]:9881
+Jan 31 13:59:34 server hsd[1945]: Connecting to Anagami...
+Jan 31 13:59:34 server hsd[1945]: p2p Anagami: Listening on [::]:9781
 Jan 31 13:59:34 server hsd[1945]: Loading host database...
 Jan 31 13:59:34 server hsd[1945]: api: Listening on [::]:9980
 ```
@@ -281,20 +292,38 @@ $ curl -u "":<api_password> "http://localhost:9980/api/node/status"
 Output:
 {
 	"version": "2.0.0",
-	"heightMainnet": 12080,
-	"heightZen": 16600,
-	"balanceMainnet": {
-		"spendable": "0",
-		"confirmed": "0",
-		"unconfirmed": "0",
-		"immature": "0"
-	},
-	"balanceZen": {
-		"spendable": "0",
-		"confirmed": "0",
-		"unconfirmed": "0",
-		"immature": "0"
-	}
+	"networks": [
+		{
+			"network": "mainnet",
+			"height": 12080,
+			"balance": {
+				"spendable": "0",
+				"confirmed": "0",
+				"unconfirmed": "0",
+				"immature": "0"
+			}
+		},
+		{
+			"network": "zen",
+			"height": 16600,
+			"balance": {
+				"spendable": "0",
+				"confirmed": "0",
+				"unconfirmed": "0",
+				"immature": "0"
+			}
+		},
+		{
+			"network": "anagami",
+			"height": 8840,
+			"balance": {
+				"spendable": "0",
+				"confirmed": "0",
+				"unconfirmed": "0",
+				"immature": "0"
+			}
+		}
+	]
 }
 ```
 To check if the node is synced to the network, enter:
@@ -314,8 +343,8 @@ Once the node is synced, the output will change:
 ```
 Output:
 {
-	"height": 466428,
-	"id": "bid:00000000000000000d826c4eaa3212ef0f92ed837b22b8115ea6c7c40d80648c",
+	"height": 510224,
+	"id": "bid:0000000000000000481f2512ab5cc81a997141054eab07a392def1f3318a7d4f",
 	"synced": true
 }
 ```
