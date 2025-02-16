@@ -19,6 +19,7 @@ import (
 	"github.com/mike76-dev/hostscore/internal/build"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
 )
@@ -56,7 +57,7 @@ type scansResponse struct {
 }
 
 type benchmarksResponse struct {
-	Benchmarks []hostdb.BenchmarkHistory `json:"benchmarks"`
+	Benchmarks []hostdb.BenchmarkHistoryEntry `json:"benchmarks"`
 }
 
 type networkStatus struct {
@@ -147,12 +148,14 @@ type portalHost struct {
 	KnownSince   uint64                      `json:"knownSince"`
 	NetAddress   string                      `json:"netaddress"`
 	Blocked      bool                        `json:"blocked"`
+	V2           bool                        `json:"v2"`
 	Interactions map[string]nodeInteractions `json:"interactions"`
 	IPNets       []string                    `json:"ipNets"`
 	LastIPChange time.Time                   `json:"lastIPChange"`
 	Score        scoreBreakdown              `json:"score"`
-	Settings     rhpv2.HostSettings          `json:"settings"`
-	PriceTable   rhpv3.HostPriceTable        `json:"priceTable"`
+	Settings     rhpv2.HostSettings          `json:"settings,omitempty"`
+	V2Settings   rhpv4.HostSettings          `json:"v2Settings,omitempty"`
+	PriceTable   rhpv3.HostPriceTable        `json:"priceTable,omitempty"`
 	external.IPInfo
 }
 
@@ -176,6 +179,10 @@ const (
 	sortByStoragePrice
 	sortByUploadPrice
 	sortByDownloadPrice
+)
+
+var (
+	networks = []string{"mainnet", "zen", "anagami"}
 )
 
 type portalAPI struct {
@@ -208,8 +215,9 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		nodes:    make(map[string]nodeStatus),
 	}
 
-	api.hosts["mainnet"] = make(map[types.PublicKey]*portalHost)
-	api.hosts["zen"] = make(map[types.PublicKey]*portalHost)
+	for _, network := range networks {
+		api.hosts[network] = make(map[types.PublicKey]*portalHost)
+	}
 
 	api.rl = newRatelimiter(api.stopChan)
 
@@ -284,13 +292,11 @@ func (api *portalAPI) requestStatus() {
 					Version:  status.Version,
 					Networks: make(map[string]networkStatus),
 				}
-				nodes[n].Networks["mainnet"] = networkStatus{
-					Height:  status.Height,
-					Balance: balanceStatus(status.Balance.Siacoins),
-				}
-				nodes[n].Networks["zen"] = networkStatus{
-					Height:  status.HeightZen,
-					Balance: balanceStatus(status.BalanceZen.Siacoins),
+				for _, network := range status.Networks {
+					nodes[n].Networks[network.Network] = networkStatus{
+						Height:  network.Height,
+						Balance: balanceStatus(network.Balance.Confirmed),
+					}
 				}
 				mu.Unlock()
 			}
@@ -373,30 +379,46 @@ func (api *portalAPI) buildHTTPRoutes() {
 	api.mu.Unlock()
 }
 
+func checkNetwork(network string) string {
+	network = strings.ToLower(network)
+	if network == "" {
+		network = "mainnet"
+	}
+
+	for _, n := range networks {
+		if network == n {
+			return network
+		}
+	}
+
+	return ""
+}
+
 func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 	if api.rl.limitExceeded(getRemoteHost(req)) {
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	h := req.FormValue("host")
 	if h == "" {
 		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
+
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(h))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
+
 	host, ok := api.cache.getHost(network, pk)
 	if !ok {
 		host, err = api.getHost(network, pk)
@@ -410,6 +432,7 @@ func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request,
 			return
 		}
 	}
+
 	writeJSON(w, hostResponse{Host: host})
 }
 
@@ -418,14 +441,13 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	query := strings.ToLower(req.FormValue("query"))
 	country := strings.ToUpper(req.FormValue("country"))
 	allHosts := strings.ToLower(req.FormValue("all"))
@@ -433,6 +455,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	if allHosts == "true" {
 		all = true
 	}
+
 	offset, limit := int64(0), int64(-1)
 	var err error
 	off := req.FormValue("offset")
@@ -445,6 +468,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		writeError(w, "invalid offset", http.StatusBadRequest)
 		return
 	}
+
 	lim := req.FormValue("limit")
 	if off == "" {
 		writeError(w, "limit not provided", http.StatusBadRequest)
@@ -455,6 +479,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		writeError(w, "invalid limit", http.StatusBadRequest)
 		return
 	}
+
 	var sortBy sortType
 	sb := strings.ToLower(req.FormValue("sort"))
 	if sb == "" {
@@ -479,6 +504,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 		writeError(w, "invalid sorting type", http.StatusBadRequest)
 		return
 	}
+
 	order := strings.ToLower(req.FormValue("order"))
 	if order == "" {
 		order = "asc"
@@ -529,19 +555,19 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
+
 	err := req.ParseForm()
 	if err != nil {
 		writeError(w, "unable to parse request", http.StatusBadRequest)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	node := strings.ToLower(req.FormValue("node"))
 	if node == "" {
 		node = "global"
@@ -551,6 +577,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		writeError(w, "wrong node", http.StatusBadRequest)
 		return
 	}
+
 	msp := req.FormValue("maxStoragePrice")
 	mup := req.FormValue("maxUploadPrice")
 	mdp := req.FormValue("maxDownloadPrice")
@@ -613,6 +640,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 			return
 		}
 	}
+
 	md := req.FormValue("minContractDuration")
 	var minDuration int64
 	if md != "" {
@@ -622,6 +650,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 			return
 		}
 	}
+
 	ms := req.FormValue("minAvailableStorage")
 	var minStorage int64
 	if ms != "" {
@@ -631,6 +660,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 			return
 		}
 	}
+
 	minVersion := req.FormValue("minVersion")
 	ml := req.FormValue("maxLatency")
 	mus := req.FormValue("minUploadSpeed")
@@ -657,6 +687,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 			return
 		}
 	}
+
 	countries := req.Form["country"]
 	limit := int64(-1)
 	lim := req.FormValue("limit")
@@ -667,6 +698,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 			return
 		}
 	}
+
 	keys, err := api.getHostKeys(
 		network,
 		node,
@@ -690,6 +722,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, keysResponse{Keys: keys})
 }
 
@@ -698,14 +731,13 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	node := strings.ToLower(req.FormValue("node"))
 	if node == "" {
 		node = "global"
@@ -715,17 +747,20 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 		writeError(w, "wrong node", http.StatusBadRequest)
 		return
 	}
+
 	host := req.FormValue("host")
 	if host == "" {
 		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
+
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
+
 	var from, to time.Time
 	to = time.Now()
 	f := req.FormValue("from")
@@ -744,11 +779,13 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 	}
+
 	all := true
 	allScans := strings.ToLower(req.FormValue("all"))
 	if allScans == "false" {
 		all = false
 	}
+
 	limit := int64(-1)
 	lim := req.FormValue("limit")
 	if lim != "" {
@@ -758,6 +795,7 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 			return
 		}
 	}
+
 	scans, err := api.getScans(network, node, pk, all, from, to, limit)
 	if err != nil && errors.Is(err, errHostNotFound) {
 		writeError(w, "host not found", http.StatusBadRequest)
@@ -768,6 +806,7 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, scansResponse{Scans: scans})
 }
 
@@ -776,14 +815,13 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	node := strings.ToLower(req.FormValue("node"))
 	if node == "" {
 		node = "global"
@@ -793,17 +831,20 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 		writeError(w, "wrong node", http.StatusBadRequest)
 		return
 	}
+
 	host := req.FormValue("host")
 	if host == "" {
 		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
+
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
+
 	var from, to time.Time
 	to = time.Now()
 	f := req.FormValue("from")
@@ -822,11 +863,13 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 			return
 		}
 	}
+
 	all := true
 	allBenchmarks := strings.ToLower(req.FormValue("all"))
 	if allBenchmarks == "false" {
 		all = false
 	}
+
 	limit := int64(-1)
 	lim := req.FormValue("limit")
 	if lim != "" {
@@ -836,6 +879,7 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 			return
 		}
 	}
+
 	benchmarks, err := api.getBenchmarks(network, node, pk, all, from, to, limit)
 	if err != nil && errors.Is(err, errHostNotFound) {
 		writeError(w, "host not found", http.StatusBadRequest)
@@ -846,6 +890,7 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, benchmarksResponse{Benchmarks: benchmarks})
 }
 
@@ -864,6 +909,7 @@ func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, req *http.Requ
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
+
 	writeJSON(w, statusResponse{
 		Version: build.ClientVersion,
 		Nodes:   api.nodes,
@@ -875,14 +921,13 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	var hosts hostCount
 	api.mu.RLock()
 	hosts.Total = len(api.hosts[network])
@@ -892,6 +937,7 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 		}
 	}
 	api.mu.RUnlock()
+
 	writeJSON(w, networkHostsResponse{Hosts: hosts})
 }
 
@@ -900,25 +946,26 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	host := req.FormValue("host")
 	if host == "" {
 		writeError(w, "host not provided", http.StatusBadRequest)
 		return
 	}
+
 	var pk types.PublicKey
 	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
 	}
+
 	var from, to time.Time
 	f := req.FormValue("from")
 	if f != "" {
@@ -936,6 +983,7 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 			return
 		}
 	}
+
 	limit := int64(-1)
 	lim := req.FormValue("limit")
 	if lim != "" {
@@ -945,6 +993,7 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 			return
 		}
 	}
+
 	pcs, err := api.getPriceChanges(network, pk, from, to, limit)
 	if err != nil && errors.Is(err, errHostNotFound) {
 		writeError(w, "host not found", http.StatusBadRequest)
@@ -955,6 +1004,7 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, priceChangeResponse{PriceChanges: pcs})
 }
 
@@ -963,14 +1013,13 @@ func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Re
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	writeJSON(w, averagesResponse{Averages: api.averages[network]})
 }
 
@@ -979,14 +1028,13 @@ func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.R
 		writeError(w, "too many requests", http.StatusTooManyRequests)
 		return
 	}
-	network := strings.ToLower(req.FormValue("network"))
+
+	network := checkNetwork(req.FormValue("network"))
 	if network == "" {
-		network = "mainnet"
-	}
-	if network != "mainnet" && network != "zen" {
 		writeError(w, "wrong network", http.StatusBadRequest)
 		return
 	}
+
 	allHosts := strings.ToLower(req.FormValue("all"))
 	var all bool
 	if allHosts == "" || allHosts == "true" {
@@ -997,11 +1045,13 @@ func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.R
 		writeError(w, "wrong all parameter", http.StatusBadRequest)
 		return
 	}
+
 	countries, err := api.getCountries(network, all)
 	if err != nil {
 		writeError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+
 	writeJSON(w, countriesResponse{Countries: countries})
 }
 
