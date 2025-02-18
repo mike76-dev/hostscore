@@ -38,15 +38,15 @@ func calculateFunding(settings rhpv2.HostSettings, txnFee types.Currency) (fundi
 func calculateFundingV2(prices rhpv4.HostPrices, txnFee types.Currency) (funding, collateral types.Currency) {
 	numBenchmarks := contractDuration / (6 * benchmarkInterval / time.Hour)
 	dataSize := benchmarkBatchSize * numBenchmarks
+	numSectors := dataSize / rhpv4.SectorSize
 
-	uploadCost := prices.RPCAppendSectorsCost(uint64(dataSize), contractDuration)
-	downloadCost := prices.RPCReadSectorCost(uint64(dataSize))
+	writeCost := prices.RPCWriteSectorCost(rhpv4.SectorSize)
+	readCost := prices.RPCReadSectorCost(rhpv4.SectorSize)
 
-	contractCost := prices.ContractPrice.Add(txnFee)
-	funding = uploadCost.Add(downloadCost).RenterCost()
-	funding = funding.Add(contractCost)
+	funding = writeCost.RenterCost().Add(readCost.RenterCost()).Mul64(uint64(numSectors))
+	funding = funding.Add(prices.ContractPrice).Add(txnFee)
 
-	collateral = uploadCost.HostRiskedCollateral()
+	collateral = writeCost.HostRiskedCollateral().Add(readCost.HostRiskedCollateral()).Mul64(uint64(numSectors))
 
 	return
 }

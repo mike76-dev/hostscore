@@ -261,10 +261,11 @@ func benchmarkCostV2(host *HostDBEntry) types.Currency {
 		return types.ZeroCurrency
 	}
 
+	numSectors := benchmarkBatchSize / rhpv4.SectorSize
 	prices := host.V2Settings.Prices
-	uploadCost := prices.RPCWriteSectorCost(benchmarkBatchSize)
-	downloadCost := prices.RPCReadSectorCost(benchmarkBatchSize)
-	return uploadCost.Add(downloadCost).RenterCost()
+	writeCost := prices.RPCWriteSectorCost(rhpv4.SectorSize)
+	readCost := prices.RPCReadSectorCost(rhpv4.SectorSize)
+	return writeCost.RenterCost().Add(readCost.RenterCost()).Mul64(uint64(numSectors))
 }
 
 // formContractV1 checks if there is a contract with the host and if that contract is good
@@ -304,12 +305,13 @@ func (hdb *HostDB) formContractV1(host *HostDBEntry) error {
 			return err
 		}
 
-		_, err := hdb.nodes.ChainManager(host.Network).AddPoolTransactions(txnSet)
-		if err != nil {
-			w.ReleaseInputs(txnSet, nil)
-			return utils.AddContext(err, "invalid transaction set")
-		}
-		hdb.nodes.Syncer(host.Network).BroadcastTransactionSet(txnSet)
+		go func() {
+			_, err := hdb.nodes.ChainManager(host.Network).AddPoolTransactions(txnSet)
+			if err != nil {
+				return
+			}
+			hdb.nodes.Syncer(host.Network).BroadcastTransactionSet(txnSet)
+		}()
 
 		host.Revision = rev.Revision
 		hdb.log.Info("successfully formed contract", zap.String("network", host.Network), zap.String("host", host.NetAddress), zap.Stringer("id", rev.Revision.ParentID))
@@ -367,13 +369,14 @@ func (hdb *HostDB) formContractV2(host *HostDBEntry) error {
 				return utils.AddContext(err, "couldn't prepare v2 contract")
 			}
 
-			_, err = cm.AddV2PoolTransactions(res.FormationSet.Basis, res.FormationSet.Transactions)
-			if err != nil {
-				w.ReleaseInputs(res.FormationSet.Transactions)
-				return utils.AddContext(err, "couldn't add v2 transaction set to the pool")
-			}
+			go func() {
+				_, err = cm.AddV2PoolTransactions(res.FormationSet.Basis, res.FormationSet.Transactions)
+				if err != nil {
+					return
+				}
+				hdb.nodes.Syncer(host.Network).BroadcastV2TransactionSet(res.FormationSet.Basis, res.FormationSet.Transactions)
+			}()
 
-			hdb.nodes.Syncer(host.Network).BroadcastV2TransactionSet(res.FormationSet.Basis, res.FormationSet.Transactions)
 			host.V2Revision = types.V2FileContractRevision{
 				Parent: types.V2FileContractElement{
 					ID: res.Contract.ID,
