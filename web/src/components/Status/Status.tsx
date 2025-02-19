@@ -116,6 +116,25 @@ export const Status = (props: StatusProps) => {
 									</td>
 								))}
 							</tr>
+							<tr>
+								<th rowSpan={2}>Anagami:</th>
+								<td>Height</td>
+								{nodes && locations.map(location => (
+									<td key={'height-anagami-' + location.short}>
+										{nodes[location.short].online === true ? nodes[location.short].networks['anagami'].height : ''}
+									</td>
+								))}
+							</tr>
+							<tr>
+								<td>Balance</td>
+								{nodes && locations.map(location => (
+									<td key={'balance-anagami-' + location.short}>
+										{nodes[location.short].online === true &&
+											<div className={'status status-' + getStyle(nodes[location.short].networks['anagami'].balance)}></div>
+										}
+									</td>
+								))}
+							</tr>
 							<tr><td colSpan={locations.length + 2}></td></tr>
 							<tr>
 								<th colSpan={2}>Portal Version:</th>

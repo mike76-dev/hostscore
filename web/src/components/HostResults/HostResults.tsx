@@ -27,9 +27,7 @@ type Results = {
 
 const TTFBTooltip = () => (
 	<div>
-		This is not the Time To First Byte as it is usually meant,
-		but rather the time to download the first data sector
-		(4 MiB) from the host.
+		Time To First Byte
 	</div>
 )
 
@@ -132,7 +130,7 @@ export const HostResults = (props: HostResultsProps) => {
 						))}
 					</tr>
 					<tr>
-						<td>Upload Speed</td>
+						<td>Ingress</td>
 						{results.map(res => (
 							<td key={'upload-' + res.node}>
 								{res.benchmarkCount > 0 ? convertSize(res.upload) + '/s' : 'N/A'}
@@ -140,7 +138,7 @@ export const HostResults = (props: HostResultsProps) => {
 						))}
 					</tr>
 					<tr>
-						<td>Download Speed</td>
+						<td>Egress</td>
 						{results.map(res => (
 							<td key={'download-' + res.node}>
 								{res.benchmarkCount > 0 ? convertSize(res.download) + '/s' : 'N/A'}

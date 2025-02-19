@@ -40,11 +40,11 @@ export const Averages = (props: AveragesProps) => {
 								<td>{toSia(props.averages['tier1'].collateral, true) + '/TB/month'}</td>
 							</tr>
 							<tr>
-								<td>Upload Price</td>
+								<td>Ingress Price</td>
 								<td>{toSia(props.averages['tier1'].uploadPrice, false) + '/TB'}</td>
 							</tr>
 							<tr>
-								<td>Download Price</td>
+								<td>Egress Price</td>
 								<td>{toSia(props.averages['tier1'].downloadPrice, false) + '/TB'}</td>
 							</tr>
 							<tr>
@@ -65,11 +65,11 @@ export const Averages = (props: AveragesProps) => {
 								<td>{toSia(props.averages['tier2'].collateral, true) + '/TB/month'}</td>
 							</tr>
 							<tr>
-								<td>Upload Price</td>
+								<td>Ingress Price</td>
 								<td>{toSia(props.averages['tier2'].uploadPrice, false) + '/TB'}</td>
 							</tr>
 							<tr>
-								<td>Download Price</td>
+								<td>Egress Price</td>
 								<td>{toSia(props.averages['tier2'].downloadPrice, false) + '/TB'}</td>
 							</tr>
 							<tr>
@@ -90,11 +90,11 @@ export const Averages = (props: AveragesProps) => {
 								<td>{toSia(props.averages['tier3'].collateral, true) + '/TB/month'}</td>
 							</tr>
 							<tr>
-								<td>Upload Price</td>
+								<td>Ingress Price</td>
 								<td>{toSia(props.averages['tier3'].uploadPrice, false) + '/TB'}</td>
 							</tr>
 							<tr>
-								<td>Download Price</td>
+								<td>Egress Price</td>
 								<td>{toSia(props.averages['tier3'].downloadPrice, false) + '/TB'}</td>
 							</tr>
 							<tr>

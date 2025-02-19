@@ -31,7 +31,11 @@ export const HostDetails = (props: HostDetailsProps) => {
 	const [host, setHost] = useState<Host>()
 	const [priceChanges, setPriceChanges] = useState<PriceChange[]>([])
 	const { hosts } = props
-	const network = (window.location.pathname.toLowerCase().indexOf('zen') >= 0 ? 'zen' : 'mainnet')
+	const network = (
+		window.location.pathname.toLowerCase().indexOf('anagami') >= 0 ? 'anagami' : (
+			window.location.pathname.toLowerCase().indexOf('zen') >= 0 ? 'zen' : 'mainnet'
+		)
+	)
 	const [loadingHost, setLoadingHost] = useState(false)
 	const [loadingPriceChanges, setLoadingPriceChanges] = useState(false)
 	const [node, setNode] = useState('global')
@@ -107,7 +111,7 @@ export const HostDetails = (props: HostDetailsProps) => {
 				icon={Back}
 				caption="home"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(network === 'mainnet' ? '/' : '/zen/')}}
+				onClick={() => {navigate(network ==='anagami' ? '/anagami' : (network === 'zen' ? '/zen' : '/'))}}
 			/>
 		</div>
 	)

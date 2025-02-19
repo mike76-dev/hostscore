@@ -194,7 +194,7 @@ const PriceChart = (props: PriceChartProps) => {
 		})
 		datasets.push({
 			data: uploadPrice,
-			label: 'Upload Price',
+			label: 'Ingress Price',
 			yAxisID: 'y',
 			borderColor: '#ff0000',
 			backgroundColor: 'transparent',
@@ -206,7 +206,7 @@ const PriceChart = (props: PriceChartProps) => {
 		})
 		datasets.push({
 			data: downloadPrice,
-			label: 'Download Price',
+			label: 'Egress Price',
 			yAxisID: 'y',
 			borderColor: '#0000ff',
 			backgroundColor: 'transparent',
