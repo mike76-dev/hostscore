@@ -379,13 +379,13 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.V2Settings = h.V2Settings
 			host.SiamuxAddresses = append([]string{}, h.SiamuxAddresses...)
 			interactions := host.Interactions[node]
-			interactions.Uptime = h.Uptime
-			interactions.Downtime = h.Downtime
+			interactions.Uptime = max(h.Uptime, interactions.Uptime)
+			interactions.Downtime = max(h.Downtime, interactions.Downtime)
 			interactions.LastSeen = h.LastSeen
 			interactions.ActiveHosts = h.ActiveHosts
 			interactions.HostInteractions = hostdb.HostInteractions{
-				Successes:  h.Interactions.Successes,
-				Failures:   h.Interactions.Failures,
+				Successes:  max(h.Interactions.Successes, interactions.Successes),
+				Failures:   max(h.Interactions.Failures, interactions.Failures),
 				LastUpdate: h.Interactions.LastUpdate,
 			}
 			host.Interactions[node] = interactions
