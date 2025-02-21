@@ -133,6 +133,14 @@ func (s *DBStore) resetChainState() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.tx == nil {
+		var err error
+		s.tx, err = s.db.Begin()
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := s.tx.Exec("DELETE FROM wt_sces WHERE network = ?", s.network)
 	if err != nil {
 		return err
