@@ -471,7 +471,7 @@ func (api *portalAPI) hostsHandler(w http.ResponseWriter, req *http.Request, _ h
 	}
 
 	lim := req.FormValue("limit")
-	if off == "" {
+	if lim == "" {
 		writeError(w, "limit not provided", http.StatusBadRequest)
 		return
 	}
