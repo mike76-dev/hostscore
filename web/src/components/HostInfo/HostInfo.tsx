@@ -279,9 +279,9 @@ export const HostInfo = (props: HostInfoProps) => {
 					<tr><td>First Seen</td><td>{new Date(props.host.firstSeen).toDateString()}</td></tr>
 					<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
 					<tr><td>Uptime</td><td>{uptime}</td></tr>
+					<tr><td>V2 or V1</td><td>{props.host.v2 === true ? 'V2' : 'V1'}</td></tr>
 					<tr><td>Version</td><td>{getVersion(props.host)}</td></tr>
 					<tr><td>Release</td><td>{getRelease(props.host)}</td></tr>
-					<tr><td>V2 or V1</td><td>{props.host.v2 === true ? 'V2' : 'V1'}</td></tr>
 					<tr><td>Accepting Contracts</td><td>{isAcceptingContracts(props.host)}</td></tr>
 					<tr>
 						<td>Max Contract Duration</td>
