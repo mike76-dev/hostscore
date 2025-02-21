@@ -7,9 +7,7 @@ import {
 	useLocations,
 	convertSize,
 	countryByCode,
-	toSia,
-	HostSettings,
-	HostSettingsV2
+	toSia
 } from '../../api'
 import { Sort, Tooltip } from '../'
 
@@ -60,23 +58,23 @@ export const HostsTable = (props: HostsTableProps) => {
 			})
 		}
 		if (!online) return 'bad'
-		if ((host.v2 === true && (host.settings as HostSettingsV2).acceptingContracts === false) || (host.settings as HostSettings).acceptingcontracts === false) return 'medium'
+		if ((host.v2 === true && host.v2Settings.acceptingContracts === false) || host.settings.acceptingcontracts === false) return 'medium'
 		return 'good'
 	}
 	const getStoragePrice = (host: Host): string => {
-		let sp = (host.v2 === true ? (host.settings as HostSettingsV2).prices.storagePrice : (host.settings as HostSettings).storageprice)
+		let sp = (host.v2 === true ? host.v2Settings.prices.storagePrice : host.settings.storageprice)
 		return toSia(sp, true) + '/TB/month'
 	}
 	const getIngressPrice = (host: Host): string => {
-		let ip = (host.v2 === true ? (host.settings as HostSettingsV2).prices.ingressPrice : (host.settings as HostSettings).uploadbandwidthprice)
+		let ip = (host.v2 === true ? host.v2Settings.prices.ingressPrice : host.settings.uploadbandwidthprice)
 		return toSia(ip, false) + '/TB'
 	}
 	const getEgressPrice = (host: Host): string => {
-		let ep = (host.v2 === true ? (host.settings as HostSettingsV2).prices.egressPrice : (host.settings as HostSettings).downloadbandwidthprice)
+		let ep = (host.v2 === true ? host.v2Settings.prices.egressPrice : host.settings.downloadbandwidthprice)
 		return toSia(ep, false) + '/TB'
 	}
-	const getTotalStorage = (host: Host): number => (host.v2 === true ? (host.settings as HostSettingsV2).totalStorage : (host.settings as HostSettings).totalstorage)
-	const getRemainingStorage = (host: Host): number => (host.v2 === true ? (host.settings as HostSettingsV2).remainingStorage : (host.settings as HostSettings).remainingstorage)
+	const getTotalStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.totalStorage : host.settings.totalstorage)
+	const getRemainingStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.remainingStorage : host.settings.remainingstorage)
 	return (
 		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
 			<table>

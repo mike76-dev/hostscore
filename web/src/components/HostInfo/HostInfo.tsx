@@ -3,8 +3,6 @@ import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import {
 	Host,
-	HostSettings,
-	HostSettingsV2,
 	HostScore,
 	NetworkAverages,
 	getFlagEmoji,
@@ -211,49 +209,52 @@ export const HostInfo = (props: HostInfoProps) => {
 	const getAddress = (host: Host): string => (host.v2 ? host.siamuxAddresses[0] : host.netaddress)
 	const getVersion = (host: Host): string => {
 		if (host.v2 === true) {
-			let v = (host.settings as HostSettingsV2).protocolVersion
-			let version = v.join('.')
+			let version = host.v2Settings.protocolVersion.join('.')
 			return version === '0.0.0' ? 'N/A' : version
 		}
-		let version = (host.settings as HostSettings).version
+		let version = host.settings.version
 		return version === '' ? 'N/A' : version
+	}
+	const getRelease = (host: Host): string => {
+		let r = (host.v2 === true) ? host.v2Settings.release : host.settings.release
+		return r === '' ? 'N/A' : r
 	}
 	const isAcceptingContracts = (host: Host): string => {
 		if (host.v2 === true) {
-			return (host.settings as HostSettingsV2).acceptingContracts ? 'Yes' : 'No'
+			return host.v2Settings.acceptingContracts ? 'Yes' : 'No'
 		}
-		return (host.settings as HostSettings).acceptingcontracts ? 'Yes' : 'No'
+		return host.settings.acceptingcontracts ? 'Yes' : 'No'
 	}
 	const getMaxDuration = (host: Host): string => {
-		let d = (host.v2 === true) ? (host.settings as HostSettingsV2).maxContractDuration : (host.settings as HostSettings).maxduration
+		let d = (host.v2 === true) ? host.v2Settings.maxContractDuration : host.settings.maxduration
 		return d === 0 ? 'N/A' : blocksToTime(d)
 	}
 	const getContractPrice = (host: Host): string => {
-		let cp = (host.v2 === true) ? (host.settings as HostSettingsV2).prices.contractPrice : (host.settings as HostSettings).contractprice
+		let cp = (host.v2 === true) ? host.v2Settings.prices.contractPrice : host.settings.contractprice
 		return convertPrice(cp)
 	}
 	const getStoragePrice = (host: Host): string => {
-		let sp = (host.v2 === true) ? (host.settings as HostSettingsV2).prices.storagePrice : (host.settings as HostSettings).storageprice
+		let sp = (host.v2 === true) ? host.v2Settings.prices.storagePrice : host.settings.storageprice
 		return convertPricePerBlock(sp)
 	}
 	const getCollateral = (host: Host): string => {
-		let c = (host.v2 === true) ? (host.settings as HostSettingsV2).prices.collateral : (host.settings as HostSettings).collateral
+		let c = (host.v2 === true) ? host.v2Settings.prices.collateral : host.settings.collateral
 		return convertPricePerBlock(c)
 	}
 	const getIngressPrice = (host: Host): string => {
-		let ip = (host.v2 === true) ? (host.settings as HostSettingsV2).prices.ingressPrice : (host.settings as HostSettings).uploadbandwidthprice
+		let ip = (host.v2 === true) ? host.v2Settings.prices.ingressPrice : host.settings.uploadbandwidthprice
 		return ip === '0' ? '0 H/TB' : convertPrice(ip + '0'.repeat(12)) + '/TB'
 	}
 	const getEgressPrice = (host: Host): string => {
-		let ep = (host.v2 === true) ? (host.settings as HostSettingsV2).prices.egressPrice : (host.settings as HostSettings).downloadbandwidthprice
+		let ep = (host.v2 === true) ? host.v2Settings.prices.egressPrice : host.settings.downloadbandwidthprice
 		return ep === '0' ? '0 H/TB' : convertPrice(ep + '0'.repeat(12)) + '/TB'
 	}
 	const getTotalStorage = (host: Host): string => {
-		let ts = (host.v2 === true) ? (host.settings as HostSettingsV2).totalStorage : (host.settings as HostSettings).totalstorage
+		let ts = (host.v2 === true) ? host.v2Settings.totalStorage : host.settings.totalstorage
 		return convertSize(ts)
 	}
 	const getRemainingStorage = (host: Host): string => {
-		let rs = (host.v2 === true) ? (host.settings as HostSettingsV2).remainingStorage : (host.settings as HostSettings).remainingstorage
+		let rs = (host.v2 === true) ? host.v2Settings.remainingStorage : host.settings.remainingstorage
 		return convertSize(rs)
 	}
 	useEffect(() => {
@@ -279,7 +280,7 @@ export const HostInfo = (props: HostInfoProps) => {
 					<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
 					<tr><td>Uptime</td><td>{uptime}</td></tr>
 					<tr><td>Version</td><td>{getVersion(props.host)}</td></tr>
-					<tr><td>Release</td><td>{props.host.settings.release === '' ? 'N/A' : props.host.settings.release}</td></tr>
+					<tr><td>Release</td><td>{getRelease(props.host)}</td></tr>
 					<tr><td>V2 or V1</td><td>{props.host.v2 === true ? 'V2' : 'V1'}</td></tr>
 					<tr><td>Accepting Contracts</td><td>{isAcceptingContracts(props.host)}</td></tr>
 					<tr>
