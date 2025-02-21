@@ -341,23 +341,47 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		if exists && (count == 0 || pricesChanged(h, *host)) {
 			var cb, spb, upb, dpb bytes.Buffer
 			e := types.NewEncoder(&cb)
-			types.V1Currency(h.Settings.Collateral).EncodeTo(e)
+			if h.V2 {
+				types.V1Currency(h.V2Settings.Prices.Collateral).EncodeTo(e)
+			} else {
+				types.V1Currency(h.Settings.Collateral).EncodeTo(e)
+			}
 			e.Flush()
 			e = types.NewEncoder(&spb)
-			types.V1Currency(h.Settings.StoragePrice).EncodeTo(e)
+			if h.V2 {
+				types.V1Currency(h.V2Settings.Prices.StoragePrice).EncodeTo(e)
+			} else {
+				types.V1Currency(h.Settings.StoragePrice).EncodeTo(e)
+			}
 			e.Flush()
 			e = types.NewEncoder(&upb)
-			types.V1Currency(h.Settings.UploadBandwidthPrice).EncodeTo(e)
+			if h.V2 {
+				types.V1Currency(h.V2Settings.Prices.IngressPrice).EncodeTo(e)
+			} else {
+				types.V1Currency(h.Settings.UploadBandwidthPrice).EncodeTo(e)
+			}
 			e.Flush()
 			e = types.NewEncoder(&dpb)
-			types.V1Currency(h.Settings.DownloadBandwidthPrice).EncodeTo(e)
+			if h.V2 {
+				types.V1Currency(h.V2Settings.Prices.EgressPrice).EncodeTo(e)
+			} else {
+				types.V1Currency(h.Settings.DownloadBandwidthPrice).EncodeTo(e)
+			}
 			e.Flush()
+			var ts, rs uint64
+			if h.V2 {
+				ts = h.V2Settings.TotalStorage
+				rs = h.V2Settings.RemainingStorage
+			} else {
+				ts = h.Settings.TotalStorage
+				rs = h.Settings.RemainingStorage
+			}
 			_, err := priceChangeStmt.Exec(
 				h.Network,
 				h.PublicKey[:],
 				time.Now().Unix(),
-				h.Settings.RemainingStorage,
-				h.Settings.TotalStorage,
+				rs,
+				ts,
 				cb.Bytes(),
 				spb.Bytes(),
 				upb.Bytes(),
