@@ -75,7 +75,7 @@ export const HostsTable = (props: HostsTableProps) => {
 	}
 	const getTotalStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.totalStorage : host.settings.totalstorage)
 	const getRemainingStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.remainingStorage : host.settings.remainingstorage)
-	const getAddress = (host: Host) => (host.v2 === true ? (host.siamuxAddresses[0] || '') : host.settings.netaddress)
+	const getAddress = (host: Host) => (host.v2 === true ? (host.siamuxAddresses[0] || '') : host.netaddress)
 	return (
 		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
 			<table>
