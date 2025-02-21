@@ -923,13 +923,13 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 	rows.Close()
 
 	rows, err = s.tx.Query(`
-		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.settings, s.price_table
+		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.v2, s.settings, s.price_table
 		FROM hdb_scans s
-		WHERE s.network = ?
 		JOIN hdb_hosts h
 		ON s.public_key = h.public_key
 		AND s.network = h.network
-		WHERE s.modified > s.fetched
+		WHERE s.network = ?
+		AND s.modified > s.fetched
 		AND h.modified <= h.fetched
 		ORDER BY s.id ASC
 		LIMIT 1000
@@ -988,11 +988,11 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 	rows, err = s.tx.Query(`
 		SELECT b.id, b.public_key, b.ran_at, b.success, b.upload_speed, b.download_speed, b.ttfb, b.error
 		FROM hdb_benchmarks b
-		WHERE network = ?
 		JOIN hdb_hosts h
 		ON b.public_key = h.public_key
 		AND b.network = h.network
-		WHERE b.modified > b.fetched
+		WHERE b.network = ?
+		AND b.modified > b.fetched
 		AND h.modified <= h.fetched
 		ORDER BY b.id ASC
 		LIMIT 1000
