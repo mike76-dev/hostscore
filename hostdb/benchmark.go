@@ -161,7 +161,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		// Shutting down.
 		return
 	}
-	if err != nil && errors.Is(err, wallet.ErrNotEnoughFunds) {
+	if err != nil && strings.Contains(err.Error(), "not enough funds") {
 		// Not the host's fault.
 		hdb.mu.Lock()
 		delete(hdb.scanMap, host.PublicKey)
