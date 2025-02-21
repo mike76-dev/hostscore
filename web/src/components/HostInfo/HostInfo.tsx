@@ -250,11 +250,11 @@ export const HostInfo = (props: HostInfoProps) => {
 		return ep === '0' ? '0 H/TB' : convertPrice(ep + '0'.repeat(12)) + '/TB'
 	}
 	const getTotalStorage = (host: Host): string => {
-		let ts = (host.v2 === true) ? host.v2Settings.totalStorage : host.settings.totalstorage
+		let ts = (host.v2 === true) ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : host.settings.totalstorage
 		return convertSize(ts)
 	}
 	const getRemainingStorage = (host: Host): string => {
-		let rs = (host.v2 === true) ? host.v2Settings.remainingStorage : host.settings.remainingstorage
+		let rs = (host.v2 === true) ? host.v2Settings.remainingStorage * 4 * 1024 * 1024 : host.settings.remainingstorage
 		return convertSize(rs)
 	}
 	useEffect(() => {

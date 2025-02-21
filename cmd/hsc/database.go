@@ -370,8 +370,8 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			e.Flush()
 			var ts, rs uint64
 			if h.V2 {
-				ts = h.V2Settings.TotalStorage
-				rs = h.V2Settings.RemainingStorage
+				ts = h.V2Settings.TotalStorage * rhpv4.SectorSize
+				rs = h.V2Settings.RemainingStorage * rhpv4.SectorSize
 			} else {
 				ts = h.Settings.TotalStorage
 				rs = h.Settings.RemainingStorage
@@ -656,8 +656,8 @@ func pricesChanged(oh hostdb.HostDBEntry, nh portalHost) bool {
 	var os, ns settings
 	if oh.V2 {
 		os = settings{
-			remainingStorage: oh.V2Settings.RemainingStorage,
-			totalStorage:     oh.V2Settings.TotalStorage,
+			remainingStorage: oh.V2Settings.RemainingStorage * rhpv4.SectorSize,
+			totalStorage:     oh.V2Settings.TotalStorage * rhpv4.SectorSize,
 			storagePrice:     oh.V2Settings.Prices.StoragePrice,
 			collateral:       oh.V2Settings.Prices.Collateral,
 			ingressPrice:     oh.V2Settings.Prices.IngressPrice,
@@ -675,8 +675,8 @@ func pricesChanged(oh hostdb.HostDBEntry, nh portalHost) bool {
 	}
 	if nh.V2 {
 		ns = settings{
-			remainingStorage: nh.V2Settings.RemainingStorage,
-			totalStorage:     nh.V2Settings.TotalStorage,
+			remainingStorage: nh.V2Settings.RemainingStorage * rhpv4.SectorSize,
+			totalStorage:     nh.V2Settings.TotalStorage * rhpv4.SectorSize,
 			storagePrice:     nh.V2Settings.Prices.StoragePrice,
 			collateral:       nh.V2Settings.Prices.Collateral,
 			ingressPrice:     nh.V2Settings.Prices.IngressPrice,
@@ -814,10 +814,21 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				return b.Rank - a.Rank
 			}
 		case sortByTotalStorage:
-			if a.Settings.TotalStorage == b.Settings.TotalStorage {
+			var tsa, tsb uint64
+			if a.V2 {
+				tsa = a.V2Settings.TotalStorage * rhpv4.SectorSize
+			} else {
+				tsa = a.Settings.TotalStorage
+			}
+			if b.V2 {
+				tsb = b.V2Settings.TotalStorage * rhpv4.SectorSize
+			} else {
+				tsb = b.Settings.TotalStorage
+			}
+			if tsa == tsb {
 				return a.ID - b.ID
 			}
-			if a.Settings.TotalStorage > b.Settings.TotalStorage {
+			if tsa > tsb {
 				if asc {
 					return 1
 				} else {
@@ -831,10 +842,25 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				}
 			}
 		case sortByUsedStorage:
-			if a.Settings.TotalStorage-a.Settings.RemainingStorage == b.Settings.TotalStorage-b.Settings.RemainingStorage {
+			var tsa, tsb, rsa, rsb uint64
+			if a.V2 {
+				tsa = a.V2Settings.TotalStorage * rhpv4.SectorSize
+				rsa = a.V2Settings.RemainingStorage * rhpv4.SectorSize
+			} else {
+				tsa = a.Settings.TotalStorage
+				rsa = a.Settings.RemainingStorage
+			}
+			if b.V2 {
+				tsb = b.V2Settings.TotalStorage * rhpv4.SectorSize
+				rsb = b.V2Settings.RemainingStorage * rhpv4.SectorSize
+			} else {
+				tsb = b.Settings.TotalStorage
+				rsb = b.Settings.RemainingStorage
+			}
+			if tsa-rsa == tsb-rsb {
 				return a.ID - b.ID
 			}
-			if a.Settings.TotalStorage-a.Settings.RemainingStorage > b.Settings.TotalStorage-b.Settings.RemainingStorage {
+			if tsa-rsa > tsb-rsb {
 				if asc {
 					return 1
 				} else {
@@ -1885,7 +1911,7 @@ outer:
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.RemainingStorage < minAvailableStorage) || (host.Settings.RemainingStorage < minAvailableStorage) {
+		if (host.V2 && host.V2Settings.RemainingStorage*rhpv4.SectorSize < minAvailableStorage) || (host.Settings.RemainingStorage < minAvailableStorage) {
 			continue
 		}
 

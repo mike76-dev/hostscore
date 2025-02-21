@@ -49,7 +49,7 @@ func calculateScore(host portalHost, node string, scans []portalScan, benchmarks
 		egressPrice = host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 		ingressPrice = host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 		storagePrice = host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
-		remainingStorage = host.V2Settings.RemainingStorage
+		remainingStorage = host.V2Settings.RemainingStorage * rhpv4.SectorSize
 		version = fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2])
 		acceptingContracts = host.V2Settings.AcceptingContracts
 	} else {
@@ -113,7 +113,7 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 		egressPrice = host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 		ingressPrice = host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 		storagePrice = host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
-		remainingStorage = host.V2Settings.RemainingStorage
+		remainingStorage = host.V2Settings.RemainingStorage * rhpv4.SectorSize
 		version = fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2])
 		acceptingContracts = host.V2Settings.AcceptingContracts
 	} else {
