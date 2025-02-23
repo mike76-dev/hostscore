@@ -3,27 +3,20 @@ package api
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/build"
-	"github.com/mike76-dev/hostscore/internal/walletutil"
-	"go.sia.tech/core/consensus"
-	"go.sia.tech/core/types"
-	"go.sia.tech/coreutils/chain"
+	"github.com/mike76-dev/hostscore/internal/utils"
 	"go.sia.tech/coreutils/syncer"
 	"go.sia.tech/jape"
 )
 
 type server struct {
-	cm    *chain.Manager
-	cmZen *chain.Manager
-	s     *syncer.Syncer
-	sZen  *syncer.Syncer
-	w     *walletutil.Wallet
-	hdb   *hostdb.HostDB
+	nodes hostdb.NodeStore
 }
 
 func isSynced(s *syncer.Syncer) bool {
@@ -36,135 +29,99 @@ func isSynced(s *syncer.Syncer) bool {
 	return count >= 5
 }
 
+func (s *server) checkNetwork(jc jape.Context, network *string) error {
+	if err := jc.DecodeForm("network", network); err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	*network = strings.ToLower(*network)
+	if *network == "" {
+		*network = "mainnet"
+	}
+
+	var found bool
+	for _, n := range s.nodes.Networks() {
+		if *network == n {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		err := errors.New("wrong network parameter")
+		jc.Error(err, http.StatusBadRequest)
+		return err
+	}
+
+	return nil
+}
+
 func (s *server) nodeStatusHandler(jc jape.Context) {
-	height := s.cm.TipState().Index.Height
-	heightZen := s.cmZen.TipState().Index.Height
-
-	scos, _, err := s.w.UnspentOutputs("mainnet")
-	if jc.Check("couldn't load Mainnet outputs", err) != nil {
-		return
-	}
-
-	var sc, immature types.Currency
-	for _, sco := range scos {
-		if height >= sco.MaturityHeight {
-			sc = sc.Add(sco.SiacoinOutput.Value)
-		} else {
-			immature = immature.Add(sco.SiacoinOutput.Value)
+	var networks []NetworkStatus
+	for _, network := range s.nodes.Networks() {
+		balance, err := s.nodes.Wallet(network).Balance()
+		if jc.Check(fmt.Sprintf("couldn't fetch %s balance", utils.Capitalize(network)), err) != nil {
+			return
 		}
-	}
 
-	scosZen, _, err := s.w.UnspentOutputs("zen")
-	if jc.Check("couldn't load Zen outputs", err) != nil {
-		return
-	}
-
-	var scZen, immatureZen types.Currency
-	for _, sco := range scosZen {
-		if heightZen >= sco.MaturityHeight {
-			scZen = scZen.Add(sco.SiacoinOutput.Value)
-		} else {
-			immatureZen = immatureZen.Add(sco.SiacoinOutput.Value)
-		}
+		height := s.nodes.ChainManager(network).TipState().Index.Height
+		networks = append(networks, NetworkStatus{
+			Network: network,
+			Height:  height,
+			Balance: balance,
+		})
 	}
 
 	jc.Encode(NodeStatusResponse{
-		Version:   build.NodeVersion,
-		Height:    height,
-		HeightZen: heightZen,
-		Balance: Balance{
-			Siacoins:         sc,
-			ImmatureSiacoins: immature,
-		},
-		BalanceZen: Balance{
-			Siacoins:         scZen,
-			ImmatureSiacoins: immatureZen,
-		},
+		Version:  build.NodeVersion,
+		Networks: networks,
 	})
 }
 
 func (s *server) consensusNetworkHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network == "" || network == "mainnet" {
-		jc.Encode(*s.cm.TipState().Network)
-		return
-	}
-	if network == "zen" {
-		jc.Encode(*s.cmZen.TipState().Network)
-		return
-	}
-	jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+
+	jc.Encode(*s.nodes.ChainManager(network).TipState().Network)
 }
 
 func (s *server) consensusTipHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	var state consensus.State
-	var synced bool
-	if network == "" || network == "mainnet" {
-		network = "Mainnet"
-		state = s.cm.TipState()
-		synced = isSynced(s.s)
-	} else {
-		network = "Zen"
-		state = s.cmZen.TipState()
-		synced = isSynced(s.sZen)
-	}
-	synced = synced && time.Since(state.PrevTimestamps[0]) < 24*time.Hour
-	resp := ConsensusTipResponse{
-		Network: network,
+
+	state := s.nodes.ChainManager(network).TipState()
+	synced := isSynced(s.nodes.Syncer(network)) && time.Since(state.PrevTimestamps[0]) < 24*time.Hour
+
+	jc.Encode(ConsensusTipResponse{
 		Height:  state.Index.Height,
 		BlockID: state.Index.ID,
 		Synced:  synced,
-	}
-	jc.Encode(resp)
+	})
 }
 
 func (s *server) consensusTipStateHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network == "" || network == "mainnet" {
-		jc.Encode(s.cm.TipState())
-		return
-	}
-	if network == "zen" {
-		jc.Encode(s.cmZen.TipState())
-		return
-	}
-	jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
+
+	jc.Encode(s.nodes.ChainManager(network).TipState())
 }
 
 func (s *server) syncerPeersHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
+
 	var peers []GatewayPeer
-	var ps []*syncer.Peer
-	if network == "" || network == "mainnet" {
-		ps = s.s.Peers()
-	} else {
-		ps = s.sZen.Peers()
-	}
+	ps := s.nodes.Syncer(network).Peers()
+
 	for _, p := range ps {
 		peers = append(peers, GatewayPeer{
 			Addr:    p.Addr(),
@@ -172,170 +129,84 @@ func (s *server) syncerPeersHandler(jc jape.Context) {
 			Version: p.Version(),
 		})
 	}
+
 	jc.Encode(peers)
 }
 
 func (s *server) txpoolTransactionsHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	var txns []types.Transaction
-	var v2txns []types.V2Transaction
-	if network == "" || network == "mainnet" {
-		txns = s.cm.PoolTransactions()
-		v2txns = s.cm.V2PoolTransactions()
-	} else {
-		txns = s.cmZen.PoolTransactions()
-		v2txns = s.cmZen.V2PoolTransactions()
-	}
+
 	jc.Encode(TxpoolTransactionsResponse{
-		Transactions:   txns,
-		V2Transactions: v2txns,
+		Transactions:   s.nodes.ChainManager(network).PoolTransactions(),
+		V2Transactions: s.nodes.ChainManager(network).V2PoolTransactions(),
 	})
 }
 
 func (s *server) txpoolFeeHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	if network == "" || network == "mainnet" {
-		jc.Encode(s.cm.RecommendedFee())
-	} else {
-		jc.Encode(s.cmZen.RecommendedFee())
-	}
+
+	jc.Encode(s.nodes.ChainManager(network).RecommendedFee())
 }
 
 func (s *server) walletAddressHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	if network == "" {
-		network = "mainnet"
-	}
-	addr := s.w.Address(network)
-	jc.Encode(addr)
+
+	jc.Encode(s.nodes.Wallet(network).Address())
 }
 
 func (s *server) walletBalanceHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
-		return
-	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	if network == "" {
-		network = "mainnet"
-	}
-
-	scos, sfos, err := s.w.UnspentOutputs(network)
-	if jc.Check("couldn't load outputs", err) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
 	}
 
-	var height uint64
-	if network == "zen" {
-		height = s.cmZen.TipState().Index.Height
-	} else {
-		height = s.cm.TipState().Index.Height
+	balance, err := s.nodes.Wallet(network).Balance()
+	if jc.Check("couldn't fetch balance", err) != nil {
+		return
 	}
 
-	var sc, immature types.Currency
-	var sf uint64
-	for _, sco := range scos {
-		if height >= sco.MaturityHeight {
-			sc = sc.Add(sco.SiacoinOutput.Value)
-		} else {
-			immature = immature.Add(sco.SiacoinOutput.Value)
-		}
-	}
-	for _, sfo := range sfos {
-		sf += sfo.SiafundOutput.Value
-	}
-
-	jc.Encode(WalletBalanceResponse{
-		Network:          strings.ToUpper(string(network[0])) + network[1:],
-		Siacoins:         sc,
-		ImmatureSiacoins: immature,
-		Siafunds:         sf,
-	})
+	jc.Encode(balance)
 }
 
-func (s *server) walletTxpoolHandler(jc jape.Context) {
+func (s *server) walletEventsHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
-	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	if network == "" {
-		network = "mainnet"
 	}
 
-	var txns []types.Transaction
-	if network == "zen" {
-		txns = s.cmZen.PoolTransactions()
-	} else {
-		txns = s.cm.PoolTransactions()
-	}
-
-	pool, err := s.w.Annotate(network, txns)
-	if jc.Check("couldn't annotate pool", err) != nil {
+	events, err := s.nodes.Wallet(network).UnconfirmedEvents()
+	if jc.Check("couldn't load events", err) != nil {
 		return
 	}
-	jc.Encode(pool)
+
+	jc.Encode(events)
 }
 
 func (s *server) walletOutputsHandler(jc jape.Context) {
 	var network string
-	if jc.DecodeForm("network", &network) != nil {
+	if s.checkNetwork(jc, &network) != nil {
 		return
-	}
-	network = strings.ToLower(network)
-	if network != "" && network != "mainnet" && network != "zen" {
-		jc.Error(errors.New("wrong network parameter"), http.StatusBadRequest)
-		return
-	}
-	if network == "" {
-		network = "mainnet"
 	}
 
-	scos, sfos, err := s.w.UnspentOutputs(network)
+	scos, err := s.nodes.Wallet(network).UnspentSiacoinElements()
 	if jc.Check("couldn't load outputs", err) != nil {
 		return
 	}
-	jc.Encode(WalletOutputsResponse{
-		Network:        strings.ToUpper(string(network[0])) + network[1:],
-		SiacoinOutputs: scos,
-		SiafundOutputs: sfos,
-	})
+
+	jc.Encode(scos)
 }
 
 func (s *server) hostDBUpdatesHandler(jc jape.Context) {
-	updates, err := s.hdb.RecentUpdates()
+	updates, err := s.nodes.HostDB().RecentUpdates()
 	if jc.Check("couldn't receive HostDB updates", err) != nil {
 		return
 	}
@@ -353,19 +224,12 @@ func (s *server) hostDBUpdatesConfirmHandler(jc jape.Context) {
 		return
 	}
 
-	jc.Check("couldn't finalize updates", s.hdb.FinalizeUpdates(hostdb.UpdateID(updateID)))
+	jc.Check("couldn't finalize updates", s.nodes.HostDB().FinalizeUpdates(hostdb.UpdateID(updateID)))
 }
 
 // NewServer returns an HTTP handler that serves the hsd API.
-func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *syncer.Syncer, w *walletutil.Wallet, hdb *hostdb.HostDB) http.Handler {
-	srv := server{
-		cm:    cm,
-		cmZen: cmZen,
-		s:     s,
-		sZen:  sZen,
-		w:     w,
-		hdb:   hdb,
-	}
+func NewServer(nodes hostdb.NodeStore) http.Handler {
+	srv := server{nodes}
 	return jape.Mux(map[string]jape.Handler{
 		"GET /node/status": srv.nodeStatusHandler,
 
@@ -380,7 +244,7 @@ func NewServer(cm *chain.Manager, cmZen *chain.Manager, s *syncer.Syncer, sZen *
 
 		"GET    /wallet/address": srv.walletAddressHandler,
 		"GET    /wallet/balance": srv.walletBalanceHandler,
-		"GET    /wallet/txpool":  srv.walletTxpoolHandler,
+		"GET    /wallet/events":  srv.walletEventsHandler,
 		"GET    /wallet/outputs": srv.walletOutputsHandler,
 
 		"GET    /hostdb/updates":         srv.hostDBUpdatesHandler,

@@ -11,49 +11,62 @@ import (
 	"github.com/mike76-dev/hostscore/external"
 	siasync "github.com/mike76-dev/hostscore/internal/sync"
 	"github.com/mike76-dev/hostscore/internal/utils"
-	"github.com/mike76-dev/hostscore/internal/walletutil"
 	"github.com/mike76-dev/hostscore/persist"
+	walletutil "github.com/mike76-dev/hostscore/wallet"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
 	"go.sia.tech/coreutils/syncer"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"lukechampine.com/frand"
 )
+
+// NodeStore defines the interface for accessing the node components.
+type NodeStore interface {
+	ChainManager(network string) *chain.Manager
+	Syncer(network string) *syncer.Syncer
+	Wallet(network string) *walletutil.WalletManager
+	HostDB() *HostDB
+	Networks() []string
+}
 
 // A HostDBEntry represents one host entry in the HostDB. It
 // aggregates the host's external settings and metrics with its public key.
 type HostDBEntry struct {
-	ID            int                        `json:"id"`
-	Network       string                     `json:"network"`
-	PublicKey     types.PublicKey            `json:"publicKey"`
-	FirstSeen     time.Time                  `json:"firstSeen"`
-	KnownSince    uint64                     `json:"knownSince"`
-	NetAddress    string                     `json:"netaddress"`
-	Blocked       bool                       `json:"blocked"`
-	Uptime        time.Duration              `json:"uptime"`
-	Downtime      time.Duration              `json:"downtime"`
-	ScanHistory   []HostScan                 `json:"scanHistory"`
-	LastBenchmark HostBenchmark              `json:"lastBenchmark"`
-	Interactions  HostInteractions           `json:"interactions"`
-	LastSeen      time.Time                  `json:"lastSeen"`
-	IPNets        []string                   `json:"ipNets"`
-	ActiveHosts   int                        `json:"activeHosts"`
-	LastIPChange  time.Time                  `json:"lastIPChange"`
-	Revision      types.FileContractRevision `json:"-"`
-	Settings      rhpv2.HostSettings         `json:"settings"`
-	PriceTable    rhpv3.HostPriceTable       `json:"priceTable"`
+	ID              int                          `json:"id"`
+	Network         string                       `json:"network"`
+	PublicKey       types.PublicKey              `json:"publicKey"`
+	FirstSeen       time.Time                    `json:"firstSeen"`
+	KnownSince      uint64                       `json:"knownSince"`
+	NetAddress      string                       `json:"netaddress"`
+	Blocked         bool                         `json:"blocked"`
+	V2              bool                         `json:"v2"`
+	Uptime          time.Duration                `json:"uptime"`
+	Downtime        time.Duration                `json:"downtime"`
+	ScanHistory     []HostScan                   `json:"scanHistory"`
+	LastBenchmark   HostBenchmark                `json:"lastBenchmark"`
+	Interactions    HostInteractions             `json:"interactions"`
+	LastSeen        time.Time                    `json:"lastSeen"`
+	IPNets          []string                     `json:"ipNets"`
+	ActiveHosts     int                          `json:"activeHosts"`
+	LastIPChange    time.Time                    `json:"lastIPChange"`
+	Revision        types.FileContractRevision   `json:"-"`
+	V2Revision      types.V2FileContractRevision `json:"-"`
+	Settings        rhpv2.HostSettings           `json:"settings,omitempty"`
+	V2Settings      rhpv4.HostSettings           `json:"v2Settings,omitempty"`
+	PriceTable      rhpv3.HostPriceTable         `json:"priceTable,omitempty"`
+	SiamuxAddresses []string                     `json:"siamuxAddresses"`
 	external.IPInfo
 }
 
-// HostInteractions combines historic and recent interactions.
+// HostInteractions summarizes the historic interactions with the host.
 type HostInteractions struct {
-	HistoricSuccesses float64 `json:"historicSuccessfulInteractions"`
-	HistoricFailures  float64 `json:"historicFailedInteractions"`
-	RecentSuccesses   float64 `json:"recentSuccessfulInteractions"`
-	RecentFailures    float64 `json:"recentFailedInteractions"`
-	LastUpdate        uint64  `json:"-"`
+	Successes  float64 `json:"successes"`
+	Failures   float64 `json:"failures"`
+	LastUpdate uint64  `json:"-"`
 }
 
 // A HostScan contains all information measured during a host scan.
@@ -63,12 +76,14 @@ type HostScan struct {
 	Success    bool                 `json:"success"`
 	Latency    time.Duration        `json:"latency"`
 	Error      string               `json:"error"`
-	Settings   rhpv2.HostSettings   `json:"settings"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable"`
+	V2         bool                 `json:"v2"`
+	Settings   rhpv2.HostSettings   `json:"settings,omitempty"`
+	V2Settings rhpv4.HostSettings   `json:"v2Settings,omitempty"`
+	PriceTable rhpv3.HostPriceTable `json:"priceTable,omitempty"`
 }
 
-// ScanHistory combines the scan history with the host's public key.
-type ScanHistory struct {
+// ScanHistoryEntry combines the scan history with the host's public key.
+type ScanHistoryEntry struct {
 	HostScan
 	PublicKey types.PublicKey `json:"publicKey"`
 	Network   string          `json:"network"`
@@ -86,8 +101,8 @@ type HostBenchmark struct {
 	TTFB          time.Duration `json:"ttfb"`
 }
 
-// BenchmarkHistory combines the benchmark history with the host's public key.
-type BenchmarkHistory struct {
+// BenchmarkHistoryEntry combines the benchmark history with the host's public key.
+type BenchmarkHistoryEntry struct {
 	HostBenchmark
 	PublicKey types.PublicKey `json:"publicKey"`
 	Network   string          `json:"network"`
@@ -99,25 +114,19 @@ type UpdateID = [8]byte
 
 // HostUpdates represents a batch of updates sent to the client.
 type HostUpdates struct {
-	ID         UpdateID           `json:"id"`
-	Hosts      []HostDBEntry      `json:"hosts"`
-	Scans      []ScanHistory      `json:"scans"`
-	Benchmarks []BenchmarkHistory `json:"benchmarks"`
+	ID         UpdateID                `json:"id"`
+	Hosts      []HostDBEntry           `json:"hosts"`
+	Scans      []ScanHistoryEntry      `json:"scans"`
+	Benchmarks []BenchmarkHistoryEntry `json:"benchmarks"`
 }
 
 // The HostDB is a database of hosts.
 type HostDB struct {
-	syncer         *syncer.Syncer
-	syncerZen      *syncer.Syncer
-	cm             *chain.Manager
-	cmZen          *chain.Manager
-	s              *hostDBStore
-	sZen           *hostDBStore
-	unsubscribe    func()
-	unsubscribeZen func()
-	w              *walletutil.Wallet
-	log            *zap.Logger
-	closeFn        func()
+	nodes        NodeStore
+	stores       map[string]*hostDBStore
+	unsubscribes map[string]func()
+	log          *zap.Logger
+	closeFn      func()
 
 	tg siasync.ThreadGroup
 	mu sync.Mutex
@@ -137,26 +146,36 @@ func (hdb *HostDB) RecentUpdates() (HostUpdates, error) {
 	var id UpdateID
 	frand.Read(id[:])
 
-	updates, err := hdb.s.getRecentUpdates(id)
-	if err != nil {
-		return HostUpdates{}, err
+	var hosts []HostDBEntry
+	var scans []ScanHistoryEntry
+	var benchmarks []BenchmarkHistoryEntry
+
+	for _, store := range hdb.stores {
+		updates, err := store.getRecentUpdates(id)
+		if err != nil {
+			return HostUpdates{}, err
+		}
+
+		hosts = append(hosts, updates.Hosts...)
+		scans = append(scans, updates.Scans...)
+		benchmarks = append(benchmarks, updates.Benchmarks...)
 	}
 
-	updatesZen, err := hdb.sZen.getRecentUpdates(id)
-	if err != nil {
-		return HostUpdates{}, err
-	}
-
-	updates.Hosts = append(updates.Hosts, updatesZen.Hosts...)
-	updates.Scans = append(updates.Scans, updatesZen.Scans...)
-	updates.Benchmarks = append(updates.Benchmarks, updatesZen.Benchmarks...)
-
-	return updates, nil
+	return HostUpdates{
+		ID:         id,
+		Hosts:      hosts,
+		Scans:      scans,
+		Benchmarks: benchmarks,
+	}, nil
 }
 
 // FinalizeUpdates updates the timestamps after the client confirms the data receipt.
 func (hdb *HostDB) FinalizeUpdates(id UpdateID) error {
-	return utils.ComposeErrors(hdb.s.finalizeUpdates(id), hdb.sZen.finalizeUpdates(id))
+	var err error
+	for _, store := range hdb.stores {
+		err = utils.ComposeErrors(err, store.finalizeUpdates(id))
+	}
+	return err
 }
 
 // Close shuts down HostDB.
@@ -164,10 +183,12 @@ func (hdb *HostDB) Close() {
 	if err := hdb.tg.Stop(); err != nil {
 		hdb.log.Error("unable to stop threads", zap.Error(err))
 	}
-	hdb.unsubscribe()
-	hdb.unsubscribeZen()
-	hdb.s.close()
-	hdb.sZen.close()
+
+	for network := range hdb.stores {
+		hdb.unsubscribes[network]()
+		hdb.stores[network].close()
+	}
+
 	hdb.closeFn()
 }
 
@@ -206,9 +227,9 @@ func syncStore(store *hostDBStore, cm *chain.Manager, index types.ChainIndex) er
 }
 
 // NewHostDB returns a new HostDB.
-func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, syncer *syncer.Syncer, syncerZen *syncer.Syncer, w *walletutil.Wallet) (*HostDB, <-chan error) {
+func NewHostDB(db *sql.DB, dir string, nodes NodeStore, networks []string) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
-	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"))
+	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"), zapcore.InfoLevel)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -219,28 +240,13 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 		return nil, errChan
 	}
 
-	store, tip, err := newHostDBStore(db, l, "mainnet", domains)
-	if err != nil {
-		errChan <- err
-		return nil, errChan
-	}
-	storeZen, tipZen, err := newHostDBStore(db, l, "zen", domains)
-	if err != nil {
-		errChan <- err
-		return nil, errChan
-	}
-
 	hdb := &HostDB{
-		syncer:    syncer,
-		syncerZen: syncerZen,
-		cm:        cm,
-		cmZen:     cmZen,
-		w:         w,
-		s:         store,
-		sZen:      storeZen,
-		log:       l,
-		closeFn:   closeFn,
-		scanMap:   make(map[types.PublicKey]bool),
+		nodes:        nodes,
+		stores:       make(map[string]*hostDBStore),
+		unsubscribes: make(map[string]func()),
+		log:          l,
+		closeFn:      closeFn,
+		scanMap:      make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
 			maxContractPrice:     maxContractPrice,
 			maxUploadPrice:       maxUploadPriceSC,
@@ -251,63 +257,45 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 		},
 		blockedDomains: domains,
 	}
-	hdb.s.hdb = hdb
-	hdb.sZen.hdb = hdb
 
-	// Subscribe in a goroutine to prevent blocking.
-	go func() {
-		for hdb.cm.Tip().Height <= tip.Height {
-			time.Sleep(5 * time.Second)
-		}
-		if err := syncStore(hdb.s, hdb.cm, tip); err != nil {
-			index, _ := hdb.cm.BestIndex(tip.Height - 1)
-			if err := syncStore(hdb.s, hdb.cm, index); err != nil {
-				l.Fatal("failed to subscribe to chain manager", zap.String("network", "mainnet"), zap.Error(err))
-			}
+	for _, network := range networks {
+		store, tip, err := newHostDBStore(db, l, network, domains)
+		if err != nil {
+			errChan <- err
+			return nil, errChan
 		}
 
-		reorgChan := make(chan types.ChainIndex, 1)
-		hdb.unsubscribe = hdb.cm.OnReorg(func(index types.ChainIndex) {
-			select {
-			case reorgChan <- index:
-			default:
-			}
-		})
+		store.hdb = hdb
+		hdb.stores[network] = store
 
-		for range reorgChan {
-			lastTip := hdb.s.tip
-			if err := syncStore(hdb.s, hdb.cm, lastTip); err != nil {
-				l.Error("failed to sync store", zap.String("network", "mainnet"), zap.Error(err))
+		// Subscribe in a goroutine to prevent blocking.
+		go func() {
+			for hdb.nodes.ChainManager(network).Tip().Height <= tip.Height {
+				time.Sleep(5 * time.Second)
 			}
-		}
-	}()
+			if err := syncStore(store, hdb.nodes.ChainManager(network), tip); err != nil {
+				index, _ := hdb.nodes.ChainManager(network).BestIndex(tip.Height - 1)
+				if err := syncStore(store, hdb.nodes.ChainManager(network), index); err != nil {
+					l.Fatal("failed to subscribe to chain manager", zap.String("network", network), zap.Error(err))
+				}
+			}
 
-	go func() {
-		for hdb.cmZen.Tip().Height <= tipZen.Height {
-			time.Sleep(5 * time.Second)
-		}
-		if err := syncStore(hdb.sZen, hdb.cmZen, tipZen); err != nil {
-			index, _ := hdb.cmZen.BestIndex(tipZen.Height - 1)
-			if err := syncStore(hdb.sZen, hdb.cmZen, index); err != nil {
-				l.Fatal("failed to subscribe to chain manager", zap.String("network", "zen"), zap.Error(err))
-			}
-		}
+			reorgChan := make(chan types.ChainIndex, 1)
+			hdb.unsubscribes[network] = hdb.nodes.ChainManager(network).OnReorg(func(index types.ChainIndex) {
+				select {
+				case reorgChan <- index:
+				default:
+				}
+			})
 
-		reorgChan := make(chan types.ChainIndex, 1)
-		hdb.unsubscribeZen = hdb.cmZen.OnReorg(func(index types.ChainIndex) {
-			select {
-			case reorgChan <- index:
-			default:
+			for range reorgChan {
+				lastTip := store.tip
+				if err := syncStore(store, hdb.nodes.ChainManager(network), lastTip); err != nil {
+					l.Error("failed to sync store", zap.String("network", network), zap.Error(err))
+				}
 			}
-		})
-
-		for range reorgChan {
-			lastTip := hdb.sZen.tip
-			if err := syncStore(hdb.sZen, hdb.cmZen, lastTip); err != nil {
-				l.Error("failed to sync store", zap.String("network", "zen"), zap.Error(err))
-			}
-		}
-	}()
+		}()
+	}
 
 	// Fetch SC rate.
 	go hdb.updateSCRate()
@@ -323,13 +311,7 @@ func NewHostDB(db *sql.DB, dir string, cm *chain.Manager, cmZen *chain.Manager, 
 
 // online returns if the HostDB is online.
 func (hdb *HostDB) online(network string) bool {
-	if network == "zen" {
-		return len(hdb.syncerZen.Peers()) > 0
-	}
-	if network == "mainnet" {
-		return len(hdb.syncer.Peers()) > 0
-	}
-	panic("wrong network provided")
+	return len(hdb.nodes.Syncer(network).Peers()) > 0
 }
 
 // updateSCRate periodically fetches the SC exchange rate.
@@ -389,13 +371,7 @@ func isSynced(s *syncer.Syncer) bool {
 
 // synced returns true if HostDB is synced to the blockchain.
 func (hdb *HostDB) synced(network string) bool {
-	if network == "zen" {
-		return isSynced(hdb.syncerZen) && time.Since(hdb.cmZen.TipState().PrevTimestamps[0]) < 24*time.Hour
-	}
-	if network == "mainnet" {
-		return isSynced(hdb.syncer) && time.Since(hdb.cm.TipState().PrevTimestamps[0]) < 24*time.Hour
-	}
-	panic("wrong network provided")
+	return isSynced(hdb.nodes.Syncer(network)) && time.Since(hdb.nodes.ChainManager(network).TipState().PrevTimestamps[0]) < 24*time.Hour
 }
 
 // pruneOldRecords periodically cleans the database from old scans and benchmarks.
@@ -413,12 +389,10 @@ func (hdb *HostDB) pruneOldRecords() {
 		case <-time.After(24 * time.Hour):
 		}
 
-		if err := hdb.s.pruneOldRecords(); err != nil {
-			hdb.log.Error("couldn't prune old records", zap.String("network", "mainnet"), zap.Error(err))
-		}
-
-		if err := hdb.sZen.pruneOldRecords(); err != nil {
-			hdb.log.Error("couldn't prune old records", zap.String("network", "zen"), zap.Error(err))
+		for network, store := range hdb.stores {
+			if err := store.pruneOldRecords(); err != nil {
+				hdb.log.Error("couldn't prune old records", zap.String("network", network), zap.Error(err))
+			}
 		}
 	}
 }

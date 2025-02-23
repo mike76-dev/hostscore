@@ -58,9 +58,24 @@ export const HostsTable = (props: HostsTableProps) => {
 			})
 		}
 		if (!online) return 'bad'
-		if (host.settings.acceptingcontracts === false) return 'medium'
+		if ((host.v2 === true && host.v2Settings.acceptingContracts === false) || (host.v2 === false && host.settings.acceptingcontracts === false)) return 'medium'
 		return 'good'
 	}
+	const getStoragePrice = (host: Host): string => {
+		let sp = (host.v2 === true ? host.v2Settings.prices.storagePrice : host.settings.storageprice)
+		return toSia(sp, true) + '/TB/month'
+	}
+	const getIngressPrice = (host: Host): string => {
+		let ip = (host.v2 === true ? host.v2Settings.prices.ingressPrice : host.settings.uploadbandwidthprice)
+		return toSia(ip, false) + '/TB'
+	}
+	const getEgressPrice = (host: Host): string => {
+		let ep = (host.v2 === true ? host.v2Settings.prices.egressPrice : host.settings.downloadbandwidthprice)
+		return toSia(ep, false) + '/TB'
+	}
+	const getTotalStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : host.settings.totalstorage)
+	const getRemainingStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.remainingStorage * 4 * 1024 * 1024 : host.settings.remainingstorage)
+	const getAddress = (host: Host) => (host.v2 === true ? (host.siamuxAddresses[0] || '') : host.netaddress)
 	return (
 		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
 			<table>
@@ -150,14 +165,14 @@ export const HostsTable = (props: HostsTableProps) => {
 									to={newLocation(host)}
 									tabIndex={1}
 								>
-									{host.netaddress}
+									{getAddress(host)}
 								</Link>
 							</td>
-							<td style={{textAlign: 'center'}}>{toSia(host.settings.storageprice, true) + '/TB/month'}</td>
-							<td style={{textAlign: 'center'}}>{toSia(host.settings.uploadbandwidthprice, false) + '/TB'}</td>
-							<td style={{textAlign: 'center'}}>{toSia(host.settings.downloadbandwidthprice, false) + '/TB'}</td>
-							<td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage - host.settings.remainingstorage)}</td>
-							<td style={{textAlign: 'center'}}>{convertSize(host.settings.totalstorage)}</td>
+							<td style={{textAlign: 'center'}}>{getStoragePrice(host)}</td>
+							<td style={{textAlign: 'center'}}>{getIngressPrice(host)}</td>
+							<td style={{textAlign: 'center'}}>{getEgressPrice(host)}</td>
+							<td style={{textAlign: 'center'}}>{convertSize(getTotalStorage(host) - getRemainingStorage(host))}</td>
+							<td style={{textAlign: 'center'}}>{convertSize(getTotalStorage(host))}</td>
 							<td>{countryByCode(host.country)}</td>
 							<td>
 								<div className={'hosts-table-status hosts-table-status-' + hostStatus(host)}></div>

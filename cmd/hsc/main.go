@@ -17,6 +17,7 @@ import (
 	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/persist"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/term"
 )
 
@@ -96,7 +97,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	logger, closeFn, err := persist.NewFileLogger(filepath.Join(*dir, "hsc.log"))
+	logger, closeFn, err := persist.NewFileLogger(filepath.Join(*dir, "hsc.log"), zapcore.WarnLevel)
 	if err != nil {
 		log.Fatal(err)
 	}

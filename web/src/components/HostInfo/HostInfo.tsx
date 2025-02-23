@@ -80,7 +80,7 @@ const CollateralTooltip = (props: TooltipProps) => (
 
 const UploadPriceTooltip = (props: TooltipProps) => (
 	<div>
-		<div>Average upload prices:</div>
+		<div>Average ingress prices:</div>
 		<div className="host-info-tooltip-row">
 			<span>Tier 1:</span>
 			<span>{toSia(props.averages['tier1'].uploadPrice, false) + '/TB'}</span>
@@ -102,7 +102,7 @@ const UploadPriceTooltip = (props: TooltipProps) => (
 
 const DownloadPriceTooltip = (props: TooltipProps) => (
 	<div>
-		<div>Average download prices:</div>
+		<div>Average egress prices:</div>
 		<div className="host-info-tooltip-row">
 			<span>Tier 1:</span>
 			<span>{toSia(props.averages['tier1'].downloadPrice, false) + '/TB'}</span>
@@ -206,8 +206,59 @@ export const HostInfo = (props: HostInfoProps) => {
 	}
 	const { online, lastSeen, uptime, activeHosts, score } = interactions()
 	const [scoreExpanded, toggleScore] = useState(false)
+	const getAddress = (host: Host): string => (host.v2 ? host.siamuxAddresses[0] : host.netaddress)
+	const getVersion = (host: Host): string => {
+		if (host.v2 === true) {
+			let version = host.v2Settings.protocolVersion.join('.')
+			return version === '0.0.0' ? 'N/A' : version
+		}
+		let version = host.settings.version
+		return version === '' ? 'N/A' : version
+	}
+	const getRelease = (host: Host): string => {
+		let r = (host.v2 === true) ? host.v2Settings.release : host.settings.release
+		return r === '' ? 'N/A' : r
+	}
+	const isAcceptingContracts = (host: Host): string => {
+		if (host.v2 === true) {
+			return host.v2Settings.acceptingContracts ? 'Yes' : 'No'
+		}
+		return host.settings.acceptingcontracts ? 'Yes' : 'No'
+	}
+	const getMaxDuration = (host: Host): string => {
+		let d = (host.v2 === true) ? host.v2Settings.maxContractDuration : host.settings.maxduration
+		return d === 0 ? 'N/A' : blocksToTime(d)
+	}
+	const getContractPrice = (host: Host): string => {
+		let cp = (host.v2 === true) ? host.v2Settings.prices.contractPrice : host.settings.contractprice
+		return convertPrice(cp)
+	}
+	const getStoragePrice = (host: Host): string => {
+		let sp = (host.v2 === true) ? host.v2Settings.prices.storagePrice : host.settings.storageprice
+		return convertPricePerBlock(sp)
+	}
+	const getCollateral = (host: Host): string => {
+		let c = (host.v2 === true) ? host.v2Settings.prices.collateral : host.settings.collateral
+		return convertPricePerBlock(c)
+	}
+	const getIngressPrice = (host: Host): string => {
+		let ip = (host.v2 === true) ? host.v2Settings.prices.ingressPrice : host.settings.uploadbandwidthprice
+		return ip === '0' ? '0 H/TB' : convertPrice(ip + '0'.repeat(12)) + '/TB'
+	}
+	const getEgressPrice = (host: Host): string => {
+		let ep = (host.v2 === true) ? host.v2Settings.prices.egressPrice : host.settings.downloadbandwidthprice
+		return ep === '0' ? '0 H/TB' : convertPrice(ep + '0'.repeat(12)) + '/TB'
+	}
+	const getTotalStorage = (host: Host): string => {
+		let ts = (host.v2 === true) ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : host.settings.totalstorage
+		return convertSize(ts)
+	}
+	const getRemainingStorage = (host: Host): string => {
+		let rs = (host.v2 === true) ? host.v2Settings.remainingStorage * 4 * 1024 * 1024 : host.settings.remainingstorage
+		return convertSize(rs)
+	}
 	useEffect(() => {
-		let network = (location.pathname.indexOf('/zen') === 0) ? 'zen' : 'mainnet'
+		let network = location.pathname.indexOf('/anagami') === 0 ? 'anagami' : (location.pathname.indexOf('/zen') === 0 ? 'zen' : 'mainnet')
 		getAverages(network)
 		.then(data => {
 			if (data && data.averages) {
@@ -222,19 +273,20 @@ export const HostInfo = (props: HostInfoProps) => {
 					<tr><td>ID</td><td>{props.host.id}</td></tr>
 					<tr><td>Rank</td><td>{props.host.rank}</td></tr>
 					<tr><td>Public Key</td><td className="host-info-small">{props.host.publicKey}</td></tr>
-					<tr><td>Address</td><td>{props.host.netaddress}</td></tr>
+					<tr><td>Address</td><td>{getAddress(props.host)}</td></tr>
 					<tr><td>Location</td><td>{getFlagEmoji(props.host.country)}</td></tr>
 					<tr><td>Online</td><td>{online ? 'Yes' : 'No'}</td></tr>
 					<tr><td>First Seen</td><td>{new Date(props.host.firstSeen).toDateString()}</td></tr>
 					<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
 					<tr><td>Uptime</td><td>{uptime}</td></tr>
-					<tr><td>Version</td><td>{props.host.settings.version === '' ? 'N/A' : props.host.settings.version}</td></tr>
-					<tr><td>Release</td><td>{props.host.settings.release === '' ? 'N/A' : props.host.settings.release}</td></tr>
-					<tr><td>Accepting Contracts</td><td>{props.host.settings.acceptingcontracts ? 'Yes' : 'No'}</td></tr>
+					<tr><td>V2 or V1</td><td>{props.host.v2 === true ? 'V2' : 'V1'}</td></tr>
+					<tr><td>Version</td><td>{getVersion(props.host)}</td></tr>
+					<tr><td>Release</td><td>{getRelease(props.host)}</td></tr>
+					<tr><td>Accepting Contracts</td><td>{isAcceptingContracts(props.host)}</td></tr>
 					<tr>
 						<td>Max Contract Duration</td>
 						<td>
-							{props.host.settings.maxduration === 0 ? 'N/A' : blocksToTime(props.host.settings.maxduration)}
+							{getMaxDuration(props.host)}
 							{averages['tier1'] &&
 								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
 									<ContractDurationTooltip averages={averages}/>
@@ -242,11 +294,11 @@ export const HostInfo = (props: HostInfoProps) => {
 							}
 						</td>
 					</tr>
-					<tr><td>Contract Price</td><td>{convertPrice(props.host.settings.contractprice)}</td></tr>
+					<tr><td>Contract Price</td><td>{getContractPrice(props.host)}</td></tr>
 					<tr>
 						<td>Storage Price</td>
 						<td>
-							{convertPricePerBlock(props.host.settings.storageprice)}
+							{getStoragePrice(props.host)}
 							{averages['tier1'] &&
 								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
 									<StoragePriceTooltip averages={averages}/>
@@ -257,7 +309,7 @@ export const HostInfo = (props: HostInfoProps) => {
 					<tr>
 						<td>Collateral</td>
 						<td>
-							{convertPricePerBlock(props.host.settings.collateral)}
+							{getCollateral(props.host)}
 							{averages['tier1'] &&
 								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
 									<CollateralTooltip averages={averages}/>
@@ -266,9 +318,9 @@ export const HostInfo = (props: HostInfoProps) => {
 						</td>
 					</tr>
 					<tr>
-						<td>Upload Price</td>
+						<td>Ingress Price</td>
 						<td>
-							{props.host.settings.uploadbandwidthprice === '0' ? '0 H/TB' : convertPrice(props.host.settings.uploadbandwidthprice + '0'.repeat(12)) + '/TB'}
+							{getIngressPrice(props.host)}
 							{averages['tier1'] &&
 								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
 									<UploadPriceTooltip averages={averages}/>
@@ -277,9 +329,9 @@ export const HostInfo = (props: HostInfoProps) => {
 						</td>
 					</tr>
 					<tr>
-						<td>Download Price</td>
+						<td>Egress Price</td>
 						<td>
-							{props.host.settings.downloadbandwidthprice === '0' ? '0 H/TB' : convertPrice(props.host.settings.downloadbandwidthprice + '0'.repeat(12)) + '/TB'}
+							{getEgressPrice(props.host)}
 							{averages['tier1'] &&
 								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
 									<DownloadPriceTooltip averages={averages}/>
@@ -287,8 +339,8 @@ export const HostInfo = (props: HostInfoProps) => {
 							}
 						</td>
 					</tr>
-					<tr><td>Total Storage</td><td>{convertSize(props.host.settings.totalstorage)}</td></tr>
-					<tr><td>Remaining Storage</td><td>{convertSize(props.host.settings.remainingstorage)}</td></tr>
+					<tr><td>Total Storage</td><td>{getTotalStorage(props.host)}</td></tr>
+					<tr><td>Remaining Storage</td><td>{getRemainingStorage(props.host)}</td></tr>
 					<tr><td>Active Hosts in Subnet</td><td>{activeHosts}</td></tr>
 					<tr>
 						<td className={'host-info-score' + (scoreExpanded ? ' host-info-score-expanded' : '')}>

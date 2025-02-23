@@ -7,6 +7,7 @@ import (
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
+	rhpv4 "go.sia.tech/coreutils/rhp/v4"
 )
 
 // dial is a helper function, which connects to the specified address.
@@ -64,6 +65,34 @@ func WithTransportV3(ctx context.Context, siamuxAddr string, hostKey types.Publi
 		}
 	}()
 	t, err := rhpv3.NewRenterTransport(conn, hostKey)
+	if err != nil {
+		return err
+	}
+	defer t.Close()
+	return fn(t)
+}
+
+// WithTransportV4 creates a transport and calls an RHP4 RPC.
+func WithTransportV4(ctx context.Context, addr string, hostKey types.PublicKey, fn func(rhpv4.TransportClient) error) (err error) {
+	conn, err := dial(ctx, addr)
+	if err != nil {
+		return err
+	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			conn.Close()
+		}
+	}()
+	defer func() {
+		close(done)
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		}
+	}()
+	t, err := rhpv4.UpgradeConnSiamux(ctx, conn, hostKey)
 	if err != nil {
 		return err
 	}

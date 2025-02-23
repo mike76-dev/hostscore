@@ -58,8 +58,7 @@ const topics: Topic[] = [
 					</p>
 					<p>
 						For the purpose of scoring all hosts under exactly the same
-						conditions, HostScore assumes storing 1 TiB of data for one month
-						for the price of 1 KS.
+						conditions, HostScore assumes storing 1 TiB of data for one month.
 					</p>
 				</>,
 				link: 'how-is-the-score-calculated-prices'

@@ -10,6 +10,8 @@ import (
 	"github.com/mike76-dev/hostscore/rhp"
 	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv3 "go.sia.tech/core/rhp/v3"
+	rhpv4 "go.sia.tech/core/rhp/v4"
+	rhpv4utils "go.sia.tech/coreutils/rhp/v4"
 	"go.uber.org/zap"
 )
 
@@ -23,9 +25,11 @@ const (
 
 // queueScan will add a host to the queue to be scanned.
 func (hdb *HostDB) queueScan(host *HostDBEntry) {
-	if host.Network != "mainnet" && host.Network != "zen" {
+	store, ok := hdb.stores[host.Network]
+	if !ok {
 		panic("wrong host network")
 	}
+
 	// If this entry is already in the scan pool, can return immediately.
 	hdb.mu.Lock()
 	_, exists := hdb.scanMap[host.PublicKey]
@@ -33,13 +37,9 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 		hdb.mu.Unlock()
 		return
 	}
+
 	// Put the entry in the scan list.
-	var interval time.Duration
-	if host.Network == "zen" {
-		interval = hdb.sZen.calculateScanInterval(host)
-	} else {
-		interval = hdb.s.calculateScanInterval(host)
-	}
+	interval := store.calculateScanInterval(host)
 	toBenchmark := len(host.ScanHistory) > 0 && time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) < interval
 	hdb.scanMap[host.PublicKey] = toBenchmark
 	if toBenchmark {
@@ -47,13 +47,15 @@ func (hdb *HostDB) queueScan(host *HostDBEntry) {
 	} else {
 		hdb.scanList = append(hdb.scanList, host)
 	}
+
 	hdb.mu.Unlock()
 }
 
 // scanHost will connect to a host and grab the settings and the price
 // table as well as adjust the info.
 func (hdb *HostDB) scanHost(host *HostDBEntry) {
-	if host.Network != "mainnet" && host.Network != "zen" {
+	store, ok := hdb.stores[host.Network]
+	if !ok {
 		panic("wrong host network")
 	}
 
@@ -66,11 +68,9 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		host.LastIPChange = time.Now()
 	}
 
-	// Update historic interactions of the host if necessary.
-	hdb.updateHostHistoricInteractions(host)
-
 	var settings rhpv2.HostSettings
 	var pt rhpv3.HostPriceTable
+	var v2Settings rhpv4.HostSettings
 	var latency time.Duration
 	var success bool
 	var errMsg string
@@ -88,25 +88,37 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		}()
 		defer close(connCloseChan)
 
-		// Initiate RHP2 protocol.
 		start = time.Now()
-		err := rhp.WithTransportV2(ctx, host.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
-			var err error
-			settings, err = rhp.RPCSettings(ctx, t)
-			return err
-		})
-		latency = time.Since(start)
-		if err == nil {
-			success = true
-
-			// Initiate RHP3 protocol.
-			err = rhp.WithTransportV3(ctx, settings.SiamuxAddr(), host.PublicKey, func(t *rhpv3.Transport) error {
+		var err error
+		if host.V2 {
+			// Initiate RHP4 protocol.
+			err = rhp.WithTransportV4(ctx, host.SiamuxAddresses[0], host.PublicKey, func(t rhpv4utils.TransportClient) error {
 				var err error
-				pt, err = rhp.RPCPriceTable(ctx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
-					return nil, nil
-				})
+				v2Settings, err = rhpv4utils.RPCSettings(ctx, t)
 				return err
 			})
+			latency = time.Since(start)
+			success = err == nil
+		} else {
+			// Initiate RHP2 protocol.
+			err = rhp.WithTransportV2(ctx, host.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
+				var err error
+				settings, err = rhp.RPCSettings(ctx, t)
+				return err
+			})
+			latency = time.Since(start)
+			if err == nil {
+				success = true
+
+				// Initiate RHP3 protocol.
+				err = rhp.WithTransportV3(ctx, settings.SiamuxAddr(), host.PublicKey, func(t *rhpv3.Transport) error {
+					var err error
+					pt, err = rhp.RPCPriceTable(ctx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
+						return nil, nil
+					})
+					return err
+				})
+			}
 		}
 
 		return err
@@ -116,10 +128,13 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		return
 	}
 	if err == nil {
-		hdb.IncrementSuccessfulInteractions(host)
+		host.Interactions.Successes++
 	} else {
 		errMsg = err.Error()
-		hdb.IncrementFailedInteractions(host)
+		// If we are offline it probably wasn't the host's fault.
+		if hdb.online(host.Network) {
+			host.Interactions.Failures++
+		}
 	}
 
 	scan := HostScan{
@@ -127,17 +142,14 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		Success:    success,
 		Latency:    latency,
 		Error:      errMsg,
+		V2:         host.V2,
 		Settings:   settings,
+		V2Settings: v2Settings,
 		PriceTable: pt,
 	}
 
 	// Update the host database.
-	if host.Network == "zen" {
-		err = hdb.sZen.updateScanHistory(host, scan)
-	} else {
-		err = hdb.s.updateScanHistory(host, scan)
-	}
-	if err != nil {
+	if err := store.updateScanHistory(host, scan); err != nil {
 		hdb.log.Error("couldn't update scan history", zap.Error(err))
 	}
 
@@ -158,7 +170,14 @@ func (hdb *HostDB) scanHosts() {
 	defer hdb.tg.Done()
 
 	for {
-		if hdb.synced("mainnet") || hdb.synced("zen") {
+		var synced bool
+		for network := range hdb.stores {
+			if hdb.synced(network) {
+				synced = true
+				break
+			}
+		}
+		if synced {
 			break
 		}
 		select {
@@ -169,11 +188,10 @@ func (hdb *HostDB) scanHosts() {
 	}
 
 	for {
-		if hdb.synced("mainnet") {
-			hdb.s.getHostsForScan()
-		}
-		if hdb.synced("zen") {
-			hdb.sZen.getHostsForScan()
+		for network, store := range hdb.stores {
+			if hdb.synced(network) {
+				store.getHostsForScan()
+			}
 		}
 
 		for len(hdb.scanList) > 0 {

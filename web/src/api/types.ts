@@ -61,6 +61,27 @@ export type HostPriceTable = {
 	registryentriestotal: number
 }
 
+export type HostPrices = {
+	contractPrice: string,
+	collateral: string,
+	storagePrice: string,
+	ingressPrice: string,
+	egressPrice: string,
+	freeSectorPrice: string
+}
+
+export type HostSettingsV2 = {
+	protocolVersion: number[],
+	release: string,
+	walletAddress: string,
+	acceptingContracts: boolean,
+	maxCollateral: string,
+	maxContractDuration: number,
+	remainingStorage: number,
+	totalStorage: number,
+	prices: HostPrices
+}
+
 export type HostScan = {
 	timestamp: string,
 	success: boolean,
@@ -105,10 +126,8 @@ export type HostInteractions = {
 	lastSeen: string,
 	activeHosts: number,
 	score: HostScore,
-	historicSuccessfulInteractions: number,
-	historicFailedInteractions: number,
-	recentSuccessfulInteractions: number,
-	recentFailedInteractions: number
+	successes: number,
+	failures: number
 }
 
 export type Host = {
@@ -119,12 +138,15 @@ export type Host = {
 	knownSince: number,
 	netaddress: string,
 	blocked: boolean,
+	v2: boolean,
 	interactions: { [node: string]: HostInteractions },
 	ipNets: string[],
 	lastIPChange: string,
 	score: HostScore,
 	settings: HostSettings,
 	priceTable: HostPriceTable,
+	v2Settings:  HostSettingsV2,
+	siamuxAddresses: string[],
 	ip: string,
 	hostname: string,
 	city: string,
