@@ -56,7 +56,6 @@ CREATE TABLE interactions (
 	failures           DOUBLE NOT NULL,
 	last_update        BIGINT UNSIGNED NOT NULL,
 	PRIMARY KEY (network, node, public_key),
-	FOREIGN KEY (public_key) REFERENCES hosts(public_key),
 	INDEX idx_interactions (network, public_key)
 );
 
@@ -70,7 +69,6 @@ CREATE TABLE scans (
 	latency    DOUBLE NOT NULL,
 	error      TEXT NOT NULL,
 	PRIMARY KEY (id),
-	FOREIGN KEY (public_key) REFERENCES hosts(public_key),
 	INDEX idx_scans (network, node, public_key, ran_at)
 );
 
@@ -85,8 +83,7 @@ CREATE TABLE benchmarks (
 	download_speed DOUBLE NOT NULL,
 	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
-	PRIMARY KEY (id),
-	FOREIGN KEY (public_key) REFERENCES hosts(public_key)
+	PRIMARY KEY (id)
 );
 
 CREATE TABLE price_changes (
@@ -100,8 +97,7 @@ CREATE TABLE price_changes (
 	storage_price     TINYBLOB NOT NULL,
 	upload_price      TINYBLOB NOT NULL,
 	download_price    TINYBLOB NOT NULL,
-	PRIMARY KEY (id),
-	FOREIGN KEY (public_key) REFERENCES hosts(public_key)
+	PRIMARY KEY (id)
 );
 
 CREATE TABLE locations (
