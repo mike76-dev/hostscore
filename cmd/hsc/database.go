@@ -782,8 +782,8 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		api.mu.RLock()
 		allHosts := api.hosts[network]
 		for _, key := range keys {
-			host := allHosts[key]
-			if (all || isOnline(*host)) && (query == "" || strings.Contains(getAddress(*host), query)) {
+			host, ok := allHosts[key]
+			if ok && (all || isOnline(*host)) && (query == "" || strings.Contains(getAddress(*host), query)) {
 				hosts = append(hosts, *host)
 			}
 		}
