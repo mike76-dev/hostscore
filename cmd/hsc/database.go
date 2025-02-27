@@ -730,6 +730,7 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 	info, lastFetched, err := api.getLocation(pk, network, addr)
 	if err != nil {
 		api.log.Debug("couldn't get host location", zap.String("host", addr))
+		return host, nil
 	} else if host.LastIPChange.After(lastFetched) {
 		newInfo, err := external.FetchIPInfo(addr, api.token)
 		if err != nil {
@@ -745,9 +746,9 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 				api.log.Debug("empty host location received", zap.String("host", addr))
 			}
 		}
-		host.IPInfo = info
 	}
 
+	host.IPInfo = info
 	return
 }
 
@@ -946,6 +947,7 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		info, lastFetched, err := api.getLocation(hosts[i].PublicKey, network, addr)
 		if err != nil {
 			api.log.Debug("couldn't get host location", zap.String("host", addr))
+			continue
 		} else if hosts[i].LastIPChange.After(lastFetched) {
 			newInfo, err := external.FetchIPInfo(addr, api.token)
 			if err != nil {
@@ -961,8 +963,9 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 					api.log.Debug("empty host location received", zap.String("host", addr))
 				}
 			}
-			hosts[i].IPInfo = info
 		}
+
+		hosts[i].IPInfo = info
 	}
 
 	return
