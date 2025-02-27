@@ -56,7 +56,8 @@ CREATE TABLE interactions (
 	failures           DOUBLE NOT NULL,
 	last_update        BIGINT UNSIGNED NOT NULL,
 	PRIMARY KEY (network, node, public_key),
-	INDEX idx_interactions (network, public_key)
+	INDEX idx_interactions (network, public_key),
+	INDEX idx_interactions_pk (public_key)
 );
 
 CREATE TABLE scans (
@@ -69,7 +70,9 @@ CREATE TABLE scans (
 	latency    DOUBLE NOT NULL,
 	error      TEXT NOT NULL,
 	PRIMARY KEY (id),
-	INDEX idx_scans (network, node, public_key, ran_at)
+	INDEX idx_scans (network, node, public_key, ran_at),
+	INDEX idx_scans_pk (public_key),
+	INDEX idx_scans_npk (network, public_key)
 );
 
 CREATE TABLE benchmarks (
@@ -83,7 +86,9 @@ CREATE TABLE benchmarks (
 	download_speed DOUBLE NOT NULL,
 	ttfb           DOUBLE NOT NULL,
 	error          TEXT NOT NULL,
-	PRIMARY KEY (id)
+	PRIMARY KEY (id),
+	INDEX idx_benchmarks_pk (public_key),
+	INDEX idx_benchmarks_npk (network, public_key)
 );
 
 CREATE TABLE price_changes (
@@ -97,7 +102,9 @@ CREATE TABLE price_changes (
 	storage_price     TINYBLOB NOT NULL,
 	upload_price      TINYBLOB NOT NULL,
 	download_price    TINYBLOB NOT NULL,
-	PRIMARY KEY (id)
+	PRIMARY KEY (id),
+	INDEX idx_price_changes_pk (public_key),
+	INDEX idx_price_changes_npk (network, public_key)
 );
 
 CREATE TABLE locations (
@@ -113,5 +120,7 @@ CREATE TABLE locations (
 	zip        TEXT NOT NULL,
 	time_zone  TEXT NOT NULL,
 	fetched_at BIGINT NOT NULL,
-	PRIMARY KEY (network, public_key)
+	PRIMARY KEY (network, public_key),
+	INDEX idx_locations_pk (public_key),
+	INDEX idx_locations_npk (network, public_key)
 );
