@@ -8,6 +8,7 @@ import (
 	rhpv3 "go.sia.tech/core/rhp/v3"
 	"go.sia.tech/core/types"
 	rhpv4 "go.sia.tech/coreutils/rhp/v4"
+	"go.sia.tech/coreutils/rhp/v4/siamux"
 )
 
 // dial is a helper function, which connects to the specified address.
@@ -92,7 +93,7 @@ func WithTransportV4(ctx context.Context, addr string, hostKey types.PublicKey, 
 			err = ctx.Err()
 		}
 	}()
-	t, err := rhpv4.UpgradeConnSiamux(ctx, conn, hostKey)
+	t, err := siamux.Upgrade(ctx, conn, hostKey)
 	if err != nil {
 		return err
 	}
