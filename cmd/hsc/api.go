@@ -414,7 +414,10 @@ func (api *portalAPI) hostsHostHandler(w http.ResponseWriter, req *http.Request,
 	}
 
 	var pk types.PublicKey
-	err := pk.UnmarshalText([]byte("ed25519:" + h))
+	if !strings.HasPrefix(h, "ed25519:") {
+		h = "ed25519:" + h
+	}
+	err := pk.UnmarshalText([]byte(h))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
@@ -756,7 +759,10 @@ func (api *portalAPI) hostsScansHandler(w http.ResponseWriter, req *http.Request
 	}
 
 	var pk types.PublicKey
-	err := pk.UnmarshalText([]byte("ed25519:" + host))
+	if !strings.HasPrefix(host, "ed25519:") {
+		host = "ed25519:" + host
+	}
+	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
@@ -840,7 +846,10 @@ func (api *portalAPI) hostsBenchmarksHandler(w http.ResponseWriter, req *http.Re
 	}
 
 	var pk types.PublicKey
-	err := pk.UnmarshalText([]byte("ed25519:" + host))
+	if !strings.HasPrefix(host, "ed25519:") {
+		host = "ed25519:" + host
+	}
+	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
@@ -961,7 +970,10 @@ func (api *portalAPI) hostsChangesHandler(w http.ResponseWriter, req *http.Reque
 	}
 
 	var pk types.PublicKey
-	err := pk.UnmarshalText([]byte("ed25519:" + host))
+	if !strings.HasPrefix(host, "ed25519:") {
+		host = "ed25519:" + host
+	}
+	err := pk.UnmarshalText([]byte(host))
 	if err != nil {
 		writeError(w, "invalid public key", http.StatusBadRequest)
 		return
