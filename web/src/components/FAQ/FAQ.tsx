@@ -170,8 +170,9 @@ const topics: Topic[] = [
 						earlier versions automatically get a score of 0.
 					</p>
 					<p>
-						In the future, the scoring algorithm will probably be modified
-						to differentiate between the releases of <code>hostd</code>.
+						V2 hosts, which are already live on the Anagami network, will soon start
+						appearing on the Zen and the Mainnet networks, automatically receive the
+						version of 2.0.0 and the score of 1.0.
 					</p>
 				</>,
 				link: 'how-is-the-score-calculated-version'
