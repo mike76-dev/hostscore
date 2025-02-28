@@ -50,7 +50,7 @@ func calculateScore(host portalHost, node string, scans []portalScan, benchmarks
 		ingressPrice = host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 		storagePrice = host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
 		remainingStorage = host.V2Settings.RemainingStorage * rhpv4.SectorSize
-		version = fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2])
+		version = "2.0.0"
 		acceptingContracts = host.V2Settings.AcceptingContracts
 	} else {
 		var overflow bool
