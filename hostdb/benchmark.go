@@ -88,6 +88,9 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 
 		// Check if we have a contract with this host and if it has enough money in it.
 		if host.V2 && height >= allowHeight {
+			if err := hdb.fetchSettingsV2(host); err != nil {
+				return err
+			}
 			if err := hdb.formContractV2(host); err != nil {
 				return err
 			}
@@ -332,6 +335,29 @@ func (hdb *HostDB) formContractV1(host *HostDBEntry) error {
 	}
 
 	return nil
+}
+
+// fetchSettingsV2 retrieves the latest settings from the host.
+func (hdb *HostDB) fetchSettingsV2(host *HostDBEntry) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	go func() {
+		select {
+		case <-hdb.tg.StopChan():
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+
+	return rhp.WithTransportV4(ctx, host.SiamuxAddresses[0], host.PublicKey, func(t rhpv4utils.TransportClient) error {
+		v2Settings, err := rhpv4utils.RPCSettings(ctx, t)
+		if err != nil {
+			return err
+		}
+
+		host.V2Settings = v2Settings
+		return nil
+	})
 }
 
 // formContractV2 checks if there is a contract with the host and if that contract is good
