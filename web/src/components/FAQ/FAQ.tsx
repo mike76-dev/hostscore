@@ -334,7 +334,7 @@ export const FAQ = (props: FAQProps) => {
 				icon={Back}
 				caption="home"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
+				onClick={() => {navigate(network === 'anagami' ? '/anagami' : (network === 'zen' ? '/zen' : '/'))}}
 			/>
 		</div>
 	)
