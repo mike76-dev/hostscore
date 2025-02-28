@@ -89,5 +89,9 @@ export const toSia = (value: string, perBlock: boolean) => {
 	if (price < 10) return price.toFixed(1) + ' SC'
 	if (price < 1e3) return price.toFixed(0) + ' SC'
 	if (price < 1e4) return (price / 1000).toFixed(1) + ' KS'
-	return (price / 1000).toFixed(0) + ' KS'
+	if (price < 1e6) return (price / 1000).toFixed(0) + ' KS'
+	if (price < 1e7) return (price / 1e6).toFixed(1) + ' MS'
+	if (price < 1e9) return (price / 1e6).toFixed(0) + ' MS'
+	if (price < 1e10) return (price / 1e9).toFixed(1) + ' GS'
+	return (price / 1e9).toFixed(0) + ' GS'
 }
