@@ -114,7 +114,10 @@ func checkPriceGougingHS(hs rhpv2.HostSettings, limits hostDBPriceLimits) error 
 		return fmt.Errorf("base RPC price exceeds limit: %v > %v", hs.BaseRPCPrice, limits.maxBaseRPCPrice)
 	}
 
-	maxBaseRPCPrice := hs.DownloadBandwidthPrice.Mul64(maxBaseRPCPriceVsBandwidth)
+	maxBaseRPCPrice, overflow := hs.DownloadBandwidthPrice.Mul64WithOverflow(maxBaseRPCPriceVsBandwidth)
+	if overflow {
+		return fmt.Errorf("download price too high: %v", hs.DownloadBandwidthPrice)
+	}
 	if hs.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
 		return fmt.Errorf("base RPC price too high: %v > %v", hs.BaseRPCPrice, maxBaseRPCPrice)
 	}
@@ -128,7 +131,10 @@ func checkPriceGougingHS(hs rhpv2.HostSettings, limits hostDBPriceLimits) error 
 		return fmt.Errorf("sector access price exceeds limit: %v > %v", hs.SectorAccessPrice, limits.maxSectorAccessPrice)
 	}
 
-	maxSectorAccessPrice := hs.DownloadBandwidthPrice.Mul64(maxSectorAccessPriceVsBandwidth)
+	maxSectorAccessPrice, overflow := hs.DownloadBandwidthPrice.Mul64WithOverflow(maxSectorAccessPriceVsBandwidth)
+	if overflow {
+		return fmt.Errorf("download price too high: %v", hs.DownloadBandwidthPrice)
+	}
 	if hs.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
 		return fmt.Errorf("sector access price too high: %v > %v", hs.SectorAccessPrice, maxSectorAccessPrice)
 	}
