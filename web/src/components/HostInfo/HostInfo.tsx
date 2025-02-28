@@ -209,8 +209,7 @@ export const HostInfo = (props: HostInfoProps) => {
 	const getAddress = (host: Host): string => (host.v2 ? host.siamuxAddresses[0] : host.netaddress)
 	const getVersion = (host: Host): string => {
 		if (host.v2 === true) {
-			let version = host.v2Settings.protocolVersion.join('.')
-			return version === '0.0.0' ? 'N/A' : version
+			return '2.0.0'
 		}
 		let version = host.settings.version
 		return version === '' ? 'N/A' : version
