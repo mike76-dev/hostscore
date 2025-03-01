@@ -824,9 +824,9 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 						PublicKey:  at.PublicKey,
 						FirstSeen:  cau.Block.Timestamp,
 						KnownSince: cau.State.Index.Height,
-						V2:         true,
 					}
 				}
+				host.V2 = true
 				host.SiamuxAddresses = extractAddresses(ha)
 				ipNets, err := utils.LookupIPNets(ha[0].Address)
 				if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
