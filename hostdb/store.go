@@ -728,10 +728,12 @@ func (s *hostDBStore) isSynced() bool {
 
 // updateChainState applies the chain manager updates.
 func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bool) error {
-	extractAddresses := func(addrs []chain.NetAddress) []string {
+	extractSiamuxAddresses := func(addrs []chain.NetAddress) []string {
 		var res []string
 		for _, na := range addrs {
-			res = append(res, na.Address)
+			if na.Protocol == "siamux" {
+				res = append(res, na.Address)
+			}
 		}
 		return res
 	}
@@ -808,11 +810,12 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 					// Empty announcement.
 					continue
 				}
-				if err := utils.IsValid(ha[0].Address); err != nil {
+				addrs := extractSiamuxAddresses(ha)
+				if err := utils.IsValid(addrs[0]); err != nil {
 					// Invalid netaddress.
 					continue
 				}
-				if utils.IsLocal(ha[0].Address) {
+				if utils.IsLocal(addrs[0]) {
 					// Local netaddress.
 					continue
 				}
@@ -827,8 +830,8 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 					}
 				}
 				host.V2 = true
-				host.SiamuxAddresses = extractAddresses(ha)
-				ipNets, err := utils.LookupIPNets(ha[0].Address)
+				host.SiamuxAddresses = addrs
+				ipNets, err := utils.LookupIPNets(addrs[0])
 				if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
 					host.IPNets = ipNets
 					host.LastIPChange = cau.Block.Timestamp
