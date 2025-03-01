@@ -56,6 +56,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 
 	limits := hdb.priceLimits
 	allowHeight := hdb.nodes.ChainManager(host.Network).TipState().Network.HardforkV2.AllowHeight
+	requireHeight := hdb.nodes.ChainManager(host.Network).TipState().Network.HardforkV2.RequireHeight
 	height := hdb.nodes.ChainManager(host.Network).Tip().Height
 
 	timestamp := time.Now()
@@ -94,8 +95,12 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			if err := hdb.formContractV2(host); err != nil {
 				return err
 			}
-		} else if err := hdb.formContractV1(host); err != nil {
-			return err
+		} else if height < requireHeight {
+			if err := hdb.formContractV1(host); err != nil {
+				return err
+			}
+		} else {
+			return errors.New("V1 hosts not allowed anymore")
 		}
 
 		// Use the channel to prevent other threads from running benchmarks
