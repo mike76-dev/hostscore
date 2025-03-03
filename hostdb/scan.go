@@ -2,6 +2,7 @@ package hostdb
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strings"
 	"time"
@@ -68,6 +69,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		host.LastIPChange = time.Now()
 	}
 
+	state := hdb.nodes.ChainManager(host.Network).TipState()
 	var settings rhpv2.HostSettings
 	var pt rhpv3.HostPriceTable
 	var v2Settings rhpv4.HostSettings
@@ -99,7 +101,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 			})
 			latency = time.Since(start)
 			success = err == nil
-		} else {
+		} else if state.Index.Height < state.Network.HardforkV2.RequireHeight {
 			// Initiate RHP2 protocol.
 			err = rhp.WithTransportV2(ctx, host.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
 				var err error
@@ -119,6 +121,8 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 					return err
 				})
 			}
+		} else {
+			return errors.New("V1 hosts not allowed")
 		}
 
 		return err
