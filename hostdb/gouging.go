@@ -32,9 +32,9 @@ const (
 
 var (
 	maxContractPrice   = types.Siacoins(1)                                // 1 SC
-	maxUploadPriceSC   = types.Siacoins(1000)                             // 1 KS/TB
-	maxDownloadPriceSC = types.Siacoins(3000)                             // 3 KS/TB
-	maxStoragePriceSC  = types.Siacoins(1000).Div64(1e12).Div64(30 * 144) // 1 KS/TB/month
+	maxUploadPriceSC   = types.Siacoins(1500)                             // 1.5 KS/TB
+	maxDownloadPriceSC = types.Siacoins(4500)                             // 4.5 KS/TB
+	maxStoragePriceSC  = types.Siacoins(1500).Div64(1e12).Div64(30 * 144) // 1.5 KS/TB/month
 
 	maxBaseRPCPriceSC      = types.Siacoins(1).Div64(100) // 10 mS
 	maxSectorAccessPriceSC = types.Siacoins(1).Div64(100) // 10 mS
