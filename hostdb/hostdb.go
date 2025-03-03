@@ -334,18 +334,28 @@ func (hdb *HostDB) updateSCRate() {
 				hdb.mu.Lock()
 				if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > maxUploadPriceUSD {
 					hdb.priceLimits.maxUploadPrice = utils.FromFloat(maxUploadPriceUSD / rate)
+				} else {
+					hdb.priceLimits.maxUploadPrice = maxUploadPriceSC
 				}
 				if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > maxDownloadPriceUSD {
 					hdb.priceLimits.maxDownloadPrice = utils.FromFloat(maxDownloadPriceUSD / rate)
+				} else {
+					hdb.priceLimits.maxDownloadPrice = maxDownloadPriceSC
 				}
 				if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > maxDownloadPriceUSD {
 					hdb.priceLimits.maxStoragePrice = utils.FromFloat(maxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
+				} else {
+					hdb.priceLimits.maxStoragePrice = maxStoragePriceSC
 				}
 				if hdb.priceLimits.maxBaseRPCPrice.Siacoins()*rate > maxBaseRPCPriceUSD {
 					hdb.priceLimits.maxBaseRPCPrice = utils.FromFloat(maxBaseRPCPriceUSD / rate)
+				} else {
+					hdb.priceLimits.maxBaseRPCPrice = maxBaseRPCPriceSC
 				}
 				if hdb.priceLimits.maxSectorAccessPrice.Siacoins()*rate > maxSectorAccessPriceUSD {
 					hdb.priceLimits.maxSectorAccessPrice = utils.FromFloat(maxSectorAccessPriceUSD / rate)
+				} else {
+					hdb.priceLimits.maxSectorAccessPrice = maxSectorAccessPriceSC
 				}
 				hdb.mu.Unlock()
 			}
