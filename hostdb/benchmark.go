@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	benchmarkInterval  = 2 * time.Hour
-	benchmarkBatchSize = 1 << 26 // 64 MiB
+	benchmarkInterval        = 2 * time.Hour
+	benchmarkBatchSize       = 1 << 26 // 64 MiB
+	revisionSubmissionBuffer = 144
 )
 
 type signer struct {
@@ -382,7 +383,7 @@ func (hdb *HostDB) formContractV2(host *HostDBEntry) error {
 	height := hdb.nodes.ChainManager(host.Network).Tip().Height
 	addr := host.SiamuxAddresses[0]
 	rev := host.V2Revision.Revision
-	if rev.ProofHeight <= height || rev.RenterOutput.Value.Cmp(benchmarkCostV2(host)) < 0 {
+	if rev.ProofHeight <= height+revisionSubmissionBuffer || rev.RenterOutput.Value.Cmp(benchmarkCostV2(host)) < 0 {
 		// Form a new contract.
 		if err := rhp.WithTransportV4(ctx, addr, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 			cm := hdb.nodes.ChainManager(host.Network)
