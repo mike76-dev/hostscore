@@ -9,7 +9,7 @@ info:
   license:
     name: MIT License
     url: https://opensource.org/license/mit/
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: https://api.hostscore.info/v1
 tags:
@@ -36,6 +36,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
         - name: all
           in: query
           description: Indicates whether to retrieve all hosts or online only
@@ -139,6 +140,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
             example: zen
         - name: node
           in: query
@@ -221,6 +223,7 @@ paths:
             enum:
               - '1.5.9'
               - '1.6.0'
+              - '2.0.0'
             example: '1.6.0'
         - name: maxLatency
           in: query
@@ -299,6 +302,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
         - name: host
           in: query
           description: Public key of the host
@@ -336,6 +340,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
         - name: node
           in: query
           description: The node, which performed the scans
@@ -423,6 +428,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
         - name: node
           in: query
           description: The node, which performed the benchmarks
@@ -510,6 +516,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
         - name: host
           in: query
           description: Public key of the host
@@ -574,6 +581,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
       responses:
         '200':
           description: Successful operation
@@ -606,6 +614,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
       responses:
         '200':
           description: Successful operation
@@ -634,6 +643,7 @@ paths:
             enum:
               - mainnet
               - zen
+              - anagami
         - name: all
           in: query
           description: Indicates whether to retrieve the countries of all hosts or online only
@@ -710,6 +720,9 @@ components:
         blocked:
           type: boolean
           example: false
+        v2:
+          type: boolean
+          example: false
         interactions:
           type: object
           additionalProperties:
@@ -727,8 +740,15 @@ components:
           $ref: '#/components/schemas/HostScore'
         settings:
           $ref: '#/components/schemas/HostSettings'
+        v2Settings:
+          $ref: '#/components/schemas/HostV2Settings'
         priceTable:
           $ref: '#/components/schemas/HostPriceTable'
+        siamuxAddresses:
+          type: array
+          items:
+            type: string
+            example: ''
         ip:
           type: string
           example: '23.26.250.110'
@@ -785,22 +805,14 @@ components:
           example: 1
         score:
           $ref: '#/components/schemas/HostScore'
-        historicSuccessfulInteractions:
+        successes:
           type: number
           format: double
           example: 260.71007253190993
-        historicFailedInteractions:
+        failures:
           type: number
           format: double
           example: 31.6612005668226
-        recentSuccessfulInteractions:
-          type: number
-          format: double
-          example: 1
-        recentFailedInteractions:
-          type: number
-          format: double
-          example: 0
     HostScore:
       type: object
       properties:
@@ -974,6 +986,71 @@ components:
         siamuxport:
           type: string
           example: '9973'
+    HostV2Settings:
+      type: object
+      properties:
+        acceptingContracts:
+          type: boolean
+          example: false
+        maxCollateral:
+          type: string
+          example: ''
+        maxContractDuration:
+          type: integer
+          format: int64
+          example: 0
+        protocolVersion:
+          type: array
+          items:
+            type: integer
+            format: int32
+            example: 0
+        prices:
+          type: object
+          properties:
+            collateral:
+              type: string
+              example: ''
+            contractPrice:
+              type: string
+              example: ''
+            egressPrice:
+              type: string
+              example: ''
+            freeSectorPrice:
+              type: string
+              example: ''
+            ingressPrice:
+              type: string
+              example: ''
+            signature:
+              type: string
+              example: ''
+            storagePrice:
+              type: string
+              example: ''
+            tipHeight:
+              type: integer
+              format: int64
+              example: 0
+            validUntil:
+              type: string
+              format: date-time
+              example: '0000-00-00T00:00:00Z'
+        release:
+          type: string
+          example: ''
+        remainingStorage:
+          type: integer
+          format: int64
+          example: 0
+        totalStorage:
+          type: integer
+          format: int64
+          example: 0
+        walletAddress:
+          type: string
+          example: ''
     HostPriceTable:
       type: object
       properties:
