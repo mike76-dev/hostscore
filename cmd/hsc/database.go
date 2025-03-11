@@ -1917,7 +1917,7 @@ outer:
 			continue
 		}
 
-		if minVersion != "" && ((host.V2 && build.VersionCmp(fmt.Sprintf("%d.%d.%d", host.V2Settings.ProtocolVersion[0], host.V2Settings.ProtocolVersion[1], host.V2Settings.ProtocolVersion[2]), minVersion) < 0) || build.VersionCmp(host.Settings.Version, minVersion) < 0) {
+		if minVersion != "" && ((host.V2 && build.VersionCmp("2.0.0", minVersion) < 0) || build.VersionCmp(host.Settings.Version, minVersion) < 0) {
 			continue
 		}
 
