@@ -75,7 +75,6 @@ export const HostsTable = (props: HostsTableProps) => {
 	}
 	const getTotalStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : host.settings.totalstorage)
 	const getRemainingStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.remainingStorage * 4 * 1024 * 1024 : host.settings.remainingstorage)
-	const getAddress = (host: Host) => (host.v2 === true ? (host.siamuxAddresses[0] || '') : host.netaddress)
 	return (
 		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
 			<table>
@@ -165,7 +164,7 @@ export const HostsTable = (props: HostsTableProps) => {
 									to={newLocation(host)}
 									tabIndex={1}
 								>
-									{getAddress(host)}
+									{host.netaddress}
 								</Link>
 							</td>
 							<td style={{textAlign: 'center'}}>{getStoragePrice(host)}</td>

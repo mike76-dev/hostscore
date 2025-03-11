@@ -297,7 +297,7 @@ func (hdb *HostDB) formContractV1(host *HostDBEntry) error {
 		var rev rhpv2.ContractRevision
 		var txnSet []types.Transaction
 		w := hdb.nodes.Wallet(host.Network)
-		if err := rhp.WithTransportV2(ctx, host.Settings.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
+		if err := rhp.WithTransportV2(ctx, host.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
 			renterTxnSet, err := hdb.prepareContractFormation(host)
 			if err != nil {
 				return utils.AddContext(err, "couldn't prepare contract")
@@ -355,7 +355,7 @@ func (hdb *HostDB) fetchSettingsV2(host *HostDBEntry) error {
 		}
 	}()
 
-	return rhp.WithTransportV4(ctx, host.SiamuxAddresses[0], host.PublicKey, func(t rhpv4utils.TransportClient) error {
+	return rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 		v2Settings, err := rhpv4utils.RPCSettings(ctx, t)
 		if err != nil {
 			return err
@@ -381,11 +381,10 @@ func (hdb *HostDB) formContractV2(host *HostDBEntry) error {
 	}()
 
 	height := hdb.nodes.ChainManager(host.Network).Tip().Height
-	addr := host.SiamuxAddresses[0]
 	rev := host.V2Revision.Revision
 	if rev.ProofHeight <= height+revisionSubmissionBuffer || rev.RenterOutput.Value.Cmp(benchmarkCostV2(host)) < 0 {
 		// Form a new contract.
-		if err := rhp.WithTransportV4(ctx, addr, host.PublicKey, func(t rhpv4utils.TransportClient) error {
+		if err := rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 			cm := hdb.nodes.ChainManager(host.Network)
 			w := signer{hdb.nodes.Wallet(host.Network)}
 			renterFunds, hostCollateral := calculateFundingV2(host.V2Settings.Prices, cm.RecommendedFee().Mul64(2048))
@@ -423,7 +422,7 @@ func (hdb *HostDB) formContractV2(host *HostDBEntry) error {
 		hdb.log.Info("successfully formed v2 contract", zap.String("network", host.Network), zap.String("host", host.NetAddress), zap.Stringer("id", host.V2Revision.Parent.ID))
 	} else {
 		// Fetch the latest revision.
-		if err := rhp.WithTransportV4(ctx, addr, host.PublicKey, func(t rhpv4utils.TransportClient) error {
+		if err := rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 			res, err := rhpv4utils.RPCLatestRevision(ctx, t, host.V2Revision.Parent.ID)
 			if err != nil {
 				return utils.AddContext(err, "unable to get latest v2 revision")
@@ -539,14 +538,13 @@ func (hdb *HostDB) fundAccountV2(host *HostDBEntry) (err error) {
 
 	cm := hdb.nodes.ChainManager(host.Network)
 	w := signer{hdb.nodes.Wallet(host.Network)}
-	addr := host.SiamuxAddresses[0]
 	key := hdb.nodes.Wallet(host.Network).Key()
 	rev := rhpv4utils.ContractRevision{
 		ID:       host.V2Revision.Parent.ID,
 		Revision: host.V2Revision.Revision,
 	}
 
-	return rhp.WithTransportV4(ctx, addr, host.PublicKey, func(t rhpv4utils.TransportClient) error {
+	return rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 		// Fetch the latest settings.
 		settings, err := rhpv4utils.RPCSettings(ctx, t)
 		if err != nil {
@@ -632,14 +630,13 @@ func (hdb *HostDB) runUploadBenchmarkV2(host *HostDBEntry) (roots []types.Hash25
 		}
 	}()
 
-	addr := host.SiamuxAddresses[0]
 	numSectors := benchmarkBatchSize / rhpv2.SectorSize
 	var data [rhpv4.SectorSize]byte
 	roots = make([]types.Hash256, numSectors)
 	key := hdb.nodes.Wallet(host.Network).Key()
 	account := rhpv4.Account(key.PublicKey())
 	start := time.Now()
-	if err := rhp.WithTransportV4(ctx, addr, host.PublicKey, func(t rhpv4utils.TransportClient) error {
+	if err := rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 		for i := 0; i < numSectors; i++ {
 			frand.Read(data[:256])
 			res, err := rhpv4utils.RPCWriteSector(ctx, t, host.V2Settings.Prices, account.Token(key, host.PublicKey), bytes.NewReader(data[:]), uint64(len(data)))
@@ -709,13 +706,12 @@ func (hdb *HostDB) runDownloadBenchmarkV2(host *HostDBEntry, roots []types.Hash2
 		}
 	}()
 
-	addr := host.SiamuxAddresses[0]
 	numSectors := benchmarkBatchSize / rhpv2.SectorSize
 	var data [rhpv4.SectorSize]byte
 	key := hdb.nodes.Wallet(host.Network).Key()
 	account := rhpv4.Account(key.PublicKey())
 	start := time.Now()
-	if err := rhp.WithTransportV4(ctx, addr, host.PublicKey, func(t rhpv4utils.TransportClient) error {
+	if err := rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 		for i := 0; i < numSectors; i++ {
 			tw := newTTFBWriter(bytes.NewBuffer(data[:]))
 			_, err := rhpv4utils.RPCReadSector(ctx, t, host.V2Settings.Prices, account.Token(key, host.PublicKey), tw, roots[i], 0, rhpv4.SectorSize)

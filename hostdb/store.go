@@ -831,6 +831,7 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 				}
 				host.V2 = true
 				host.SiamuxAddresses = addrs
+				host.NetAddress = addrs[0]
 				ipNets, err := utils.LookupIPNets(addrs[0])
 				if err == nil && !utils.EqualIPNets(ipNets, host.IPNets) {
 					host.IPNets = ipNets

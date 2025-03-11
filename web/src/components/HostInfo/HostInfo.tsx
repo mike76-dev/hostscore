@@ -206,7 +206,6 @@ export const HostInfo = (props: HostInfoProps) => {
 	}
 	const { online, lastSeen, uptime, activeHosts, score } = interactions()
 	const [scoreExpanded, toggleScore] = useState(false)
-	const getAddress = (host: Host): string => (host.v2 ? host.siamuxAddresses[0] : host.netaddress)
 	const getVersion = (host: Host): string => {
 		if (host.v2 === true) {
 			return '2.0.0'
@@ -272,7 +271,7 @@ export const HostInfo = (props: HostInfoProps) => {
 					<tr><td>ID</td><td>{props.host.id}</td></tr>
 					<tr><td>Rank</td><td>{props.host.rank}</td></tr>
 					<tr><td>Public Key</td><td className="host-info-small">{props.host.publicKey}</td></tr>
-					<tr><td>Address</td><td>{getAddress(props.host)}</td></tr>
+					<tr><td>Address</td><td>{props.host.netaddress}</td></tr>
 					<tr><td>Location</td><td>{getFlagEmoji(props.host.country)}</td></tr>
 					<tr><td>Online</td><td>{online ? 'Yes' : 'No'}</td></tr>
 					<tr><td>First Seen</td><td>{new Date(props.host.firstSeen).toDateString()}</td></tr>

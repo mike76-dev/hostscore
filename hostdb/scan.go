@@ -94,7 +94,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		var err error
 		if host.V2 {
 			// Initiate RHP4 protocol.
-			err = rhp.WithTransportV4(ctx, host.SiamuxAddresses[0], host.PublicKey, func(t rhpv4utils.TransportClient) error {
+			err = rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 				var err error
 				v2Settings, err = rhpv4utils.RPCSettings(ctx, t)
 				return err
