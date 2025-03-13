@@ -170,7 +170,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		// Shutting down.
 		return
 	}
-	if err != nil && strings.Contains(err.Error(), "not enough funds") {
+	if err != nil && strings.Contains(err.Error(), "not enough funds") && !strings.Contains(err.Error(), "not enough funds (5)") {
 		// Not the host's fault.
 		hdb.mu.Lock()
 		delete(hdb.scanMap, host.PublicKey)
@@ -563,9 +563,10 @@ func (hdb *HostDB) fundAccountV2(host *HostDBEntry) (err error) {
 		}
 
 		// Fund the account.
-		upload := settings.Prices.RPCAppendSectorsCost(benchmarkBatchSize/rhpv4.SectorSize, host.V2Revision.Revision.ExpirationHeight-cm.Tip().Height)
-		download := settings.Prices.RPCReadSectorCost(benchmarkBatchSize)
-		amount := upload.Add(download).RenterCost()
+		numSectors := benchmarkBatchSize / rhpv4.SectorSize
+		upload := settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize)
+		download := settings.Prices.RPCReadSectorCost(rhpv4.SectorSize)
+		amount := upload.Add(download).RenterCost().Mul64(uint64(numSectors))
 		if amount.Cmp(balance) <= 0 {
 			return nil
 		}
