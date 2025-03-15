@@ -4,7 +4,7 @@
 	align-items: center;
 	height: 20rem;
 	min-height: 20rem;
-	margin-top: 1rem;
+	margin-bottom: 1rem;
 	border: 1px solid var(--borderLight);
 	width: 100%;
 }

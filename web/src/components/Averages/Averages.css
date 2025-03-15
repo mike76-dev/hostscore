@@ -1,6 +1,5 @@
 .averages-container {
 	margin-left: 2rem;
-	margin-top: 1rem;
 	padding: 0.5rem;
 	border: 1px solid var(--borderLight);
 	flex-grow: 1;

@@ -81,15 +81,15 @@ export const HostDetails = (props: HostDetailsProps) => {
 							node={node}
 							setNode={setNode}
 						/>
-						<HostInfo
-							darkMode={props.darkMode}
-							host={host}
-							node={node}
-						/>
 						<HostMap
 							darkMode={props.darkMode}
 							network={network}
 							host={host}
+						/>
+						<HostInfo
+							darkMode={props.darkMode}
+							host={host}
+							node={node}
 						/>
 					</div>
 					<div className="host-details-subcontainer">
