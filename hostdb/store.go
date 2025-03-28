@@ -29,6 +29,8 @@ type hostDBStore struct {
 
 	activeHostsCache map[types.PublicKey][]string
 
+	v2Contracts map[types.FileContractID]types.V2FileContractElement
+
 	mu sync.Mutex
 
 	tip           types.ChainIndex
@@ -45,6 +47,7 @@ func newHostDBStore(db *sql.DB, logger *zap.Logger, network string, domains *blo
 		hosts:            make(map[types.PublicKey]*HostDBEntry),
 		blockedHosts:     make(map[types.PublicKey]struct{}),
 		activeHostsCache: make(map[types.PublicKey][]string),
+		v2Contracts:      make(map[types.FileContractID]types.V2FileContractElement),
 	}
 	err := s.load(domains)
 	if err != nil {
@@ -76,6 +79,7 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 		if (host.V2Revision.Parent.ID != types.FileContractID{}) {
 			host.V2Revision.EncodeTo(e)
 			e.Flush()
+			s.v2Contracts[host.V2Revision.Parent.ID] = host.V2Revision.Parent
 		}
 		e = types.NewEncoder(&settings)
 		if (host.V2Settings != rhpv4.HostSettings{}) {
@@ -509,6 +513,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			d := types.NewBufDecoder(rev)
 			if v2 {
 				host.V2Revision.DecodeFrom(d)
+				if (host.V2Revision.Parent.ID != types.FileContractID{}) {
+					s.v2Contracts[host.V2Revision.Parent.ID] = host.V2Revision.Parent
+				}
 			} else {
 				host.Revision.DecodeFrom(d)
 			}
@@ -858,6 +865,25 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 		s.tx, err = s.db.Begin()
 		if err != nil {
 			return utils.AddContext(err, "couldn't start transaction")
+		}
+	}
+
+	// Submit contract expirations, if needed.
+	if mayCommit {
+		var res []types.V2FileContractResolution
+		for id, fce := range s.v2Contracts {
+			if fce.V2FileContract.ExpirationHeight <= s.tip.Height {
+				res = append(res, types.V2FileContractResolution{
+					Parent:     fce,
+					Resolution: &types.V2FileContractExpiration{},
+				})
+				delete(s.v2Contracts, id)
+			}
+		}
+
+		if len(res) > 0 {
+			txn := types.V2Transaction{FileContractResolutions: res}
+			s.hdb.nodes.Syncer(s.network).BroadcastV2TransactionSet(s.tip, []types.V2Transaction{txn})
 		}
 	}
 
