@@ -22,7 +22,7 @@ import (
 )
 
 // scanPruneThreshold determines how old a scan record needs to be to get pruned.
-const scanPruneThreshold = 14 * 24 * time.Hour
+const scanPruneThreshold = 7 * 24 * time.Hour
 
 // scanPruneInterval determines how often old scan records get pruned.
 const scanPruneInterval = time.Hour
@@ -2018,7 +2018,7 @@ func (api *portalAPI) pruneOldScans() {
 		_, err := api.db.Exec(`
 			DELETE FROM scans
 			WHERE ran_at < ?
-			LIMIT 100000
+			LIMIT 1000000
 		`, time.Now().Unix()-int64(scanPruneThreshold.Seconds()))
 		if err != nil {
 			api.log.Error("unable to prune old scans", zap.Error(err))
