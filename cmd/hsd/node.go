@@ -171,12 +171,12 @@ func newNode(db *sql.DB, name, seed, dir, p2p string, network *consensus.Network
 		return nil, err
 	}
 
-	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesis)
+	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "cm.log"), zapcore.ErrorLevel)
 	if err != nil {
 		return nil, err
 	}
 
-	cmLogger, cmCloseFn, err := persist.NewFileLogger(filepath.Join(dir, "cm.log"), zapcore.ErrorLevel)
+	dbstore, tipState, err := chain.NewDBStore(bdb, network, genesis, chain.NewZapMigrationLogger(cmLogger))
 	if err != nil {
 		return nil, err
 	}

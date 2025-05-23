@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -152,6 +153,10 @@ func (s *DBStore) resetChainState() error {
 
 func (s *DBStore) getSiacoinElements() (sces []types.SiacoinElement) {
 	for _, sce := range s.sces {
+		sce.StateElement = types.StateElement{
+			LeafIndex:   sce.StateElement.LeafIndex,
+			MerkleProof: slices.Clone(sce.StateElement.MerkleProof),
+		}
 		sces = append(sces, sce)
 	}
 
