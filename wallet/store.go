@@ -130,6 +130,21 @@ func (s *DBStore) WalletEvents(int, int) ([]wallet.Event, error) {
 	return nil, nil
 }
 
+// LockUTXOs implements wallet.SingleAddressStore.
+func (s *DBStore) LockUTXOs(_ []types.SiacoinOutputID, _ time.Time) error {
+	return nil
+}
+
+// LockedUTXOs implements wallet.SingleAddressStore.
+func (s *DBStore) LockedUTXOs(_ time.Time) ([]types.SiacoinOutputID, error) {
+	return nil, nil
+}
+
+// ReleaseUTXOs implements wallet.SingleAddressStore.
+func (s *DBStore) ReleaseUTXOs(_ []types.SiacoinOutputID) error {
+	return nil
+}
+
 func (s *DBStore) resetChainState() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
