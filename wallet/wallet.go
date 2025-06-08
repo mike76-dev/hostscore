@@ -44,7 +44,7 @@ type WalletManager struct {
 func NewWallet(store *DBStore, cm *chain.Manager, syncer *syncer.Syncer, log *zap.Logger) (*WalletManager, error) {
 	tip, _ := store.Tip()
 	w, err := wallet.NewSingleAddressWallet(
-		store.key, cm, store,
+		store.key, cm, store, syncer,
 		wallet.WithLogger(log),
 		wallet.WithDefragThreshold(defragThreshold),
 		wallet.WithMaxDefragUTXOs(maxDefragUTXOs),
@@ -167,7 +167,8 @@ func (wm *WalletManager) Key() types.PrivateKey {
 
 // UnspentSiacoinElements returns the wallet's unspent siacoin outputs.
 func (wm *WalletManager) UnspentSiacoinElements() ([]types.SiacoinElement, error) {
-	return wm.wallet.UnspentSiacoinElements()
+	_, utxos, err := wm.store.UnspentSiacoinElements()
+	return utxos, err
 }
 
 // Balance returns the balance of the wallet.
@@ -207,6 +208,11 @@ func (wm *WalletManager) ReleaseInputs(v1txns []types.Transaction, v2txns []type
 	wm.wallet.ReleaseInputs(v1txns, v2txns)
 }
 
+// RecommendedFee returns the recommended transaction fee.
+func (wm *WalletManager) RecommendedFee() types.Currency {
+	return wm.chain.RecommendedFee()
+}
+
 // synced returns true if the wallet is synced to the blockchain.
 func (wm *WalletManager) synced() bool {
 	isSynced := func(s *syncer.Syncer) bool {
@@ -229,7 +235,7 @@ func (wm *WalletManager) performWalletMaintenance() {
 			return
 		}
 
-		utxos, err := wm.wallet.UnspentSiacoinElements()
+		_, utxos, err := wm.store.UnspentSiacoinElements()
 		if err != nil {
 			wm.log.Error("couldn't get unspent outputs", zap.String("network", wm.store.network), zap.Error(err))
 			return

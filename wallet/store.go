@@ -109,7 +109,7 @@ func (s *DBStore) Tip() (types.ChainIndex, error) {
 }
 
 // UnspentSiacoinElements implements wallet.SingleAddressStore.
-func (s *DBStore) UnspentSiacoinElements() (utxos []types.SiacoinElement, err error) {
+func (s *DBStore) UnspentSiacoinElements() (index types.ChainIndex, utxos []types.SiacoinElement, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -117,7 +117,7 @@ func (s *DBStore) UnspentSiacoinElements() (utxos []types.SiacoinElement, err er
 		utxos = append(utxos, sce)
 	}
 
-	return
+	return s.tip, utxos, err
 }
 
 // WalletEventCount implements wallet.SingleAddressStore.

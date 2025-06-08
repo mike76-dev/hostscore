@@ -48,6 +48,10 @@ func (s signer) ReleaseInputs(txns []types.V2Transaction) {
 	s.w.ReleaseInputs(nil, txns)
 }
 
+func (s signer) RecommendedFee() types.Currency {
+	return s.w.RecommendedFee()
+}
+
 // benchmarkHost runs an up/download benchmark on a host.
 func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	store, ok := hdb.stores[host.Network]
