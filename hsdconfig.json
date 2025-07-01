@@ -1,9 +1,8 @@
 "HSD Configuration"
-"0.3.0"
+"0.4.0"
 {
         "mainnet": ":9981",
         "zen": ":9881",
-        "anagami": ":9781",
         "api": ":9980",
         "dir": "/usr/local/etc/hsd",
         "dbUser": "hsuser",
