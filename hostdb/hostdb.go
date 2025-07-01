@@ -13,8 +13,6 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/persist"
 	walletutil "github.com/mike76-dev/hostscore/wallet"
-	rhpv2 "go.sia.tech/core/rhp/v2"
-	rhpv3 "go.sia.tech/core/rhp/v3"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -55,9 +53,7 @@ type HostDBEntry struct {
 	LastIPChange    time.Time                    `json:"lastIPChange"`
 	Revision        types.FileContractRevision   `json:"-"`
 	V2Revision      types.V2FileContractRevision `json:"-"`
-	Settings        rhpv2.HostSettings           `json:"settings,omitempty"`
 	V2Settings      rhpv4.HostSettings           `json:"v2Settings,omitempty"`
-	PriceTable      rhpv3.HostPriceTable         `json:"priceTable,omitempty"`
 	SiamuxAddresses []string                     `json:"siamuxAddresses"`
 	external.IPInfo
 }
@@ -71,15 +67,12 @@ type HostInteractions struct {
 
 // A HostScan contains all information measured during a host scan.
 type HostScan struct {
-	ID         int64                `json:"-"`
-	Timestamp  time.Time            `json:"timestamp"`
-	Success    bool                 `json:"success"`
-	Latency    time.Duration        `json:"latency"`
-	Error      string               `json:"error"`
-	V2         bool                 `json:"v2"`
-	Settings   rhpv2.HostSettings   `json:"settings,omitempty"`
-	V2Settings rhpv4.HostSettings   `json:"v2Settings,omitempty"`
-	PriceTable rhpv3.HostPriceTable `json:"priceTable,omitempty"`
+	ID         int64              `json:"-"`
+	Timestamp  time.Time          `json:"timestamp"`
+	Success    bool               `json:"success"`
+	Latency    time.Duration      `json:"latency"`
+	Error      string             `json:"error"`
+	V2Settings rhpv4.HostSettings `json:"v2Settings,omitempty"`
 }
 
 // ScanHistoryEntry combines the scan history with the host's public key.
@@ -248,12 +241,10 @@ func NewHostDB(db *sql.DB, dir string, nodes NodeStore, networks []string) (*Hos
 		closeFn:      closeFn,
 		scanMap:      make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
-			maxContractPrice:     maxContractPrice,
-			maxUploadPrice:       maxUploadPriceSC,
-			maxDownloadPrice:     maxDownloadPriceSC,
-			maxStoragePrice:      maxStoragePriceSC,
-			maxBaseRPCPrice:      maxBaseRPCPriceSC,
-			maxSectorAccessPrice: maxSectorAccessPriceSC,
+			maxContractPrice: maxContractPrice,
+			maxUploadPrice:   maxUploadPriceSC,
+			maxDownloadPrice: maxDownloadPriceSC,
+			maxStoragePrice:  maxStoragePriceSC,
 		},
 		blockedDomains: domains,
 	}
@@ -346,16 +337,6 @@ func (hdb *HostDB) updateSCRate() {
 					hdb.priceLimits.maxStoragePrice = utils.FromFloat(maxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
 				} else {
 					hdb.priceLimits.maxStoragePrice = maxStoragePriceSC
-				}
-				if hdb.priceLimits.maxBaseRPCPrice.Siacoins()*rate > maxBaseRPCPriceUSD {
-					hdb.priceLimits.maxBaseRPCPrice = utils.FromFloat(maxBaseRPCPriceUSD / rate)
-				} else {
-					hdb.priceLimits.maxBaseRPCPrice = maxBaseRPCPriceSC
-				}
-				if hdb.priceLimits.maxSectorAccessPrice.Siacoins()*rate > maxSectorAccessPriceUSD {
-					hdb.priceLimits.maxSectorAccessPrice = utils.FromFloat(maxSectorAccessPriceUSD / rate)
-				} else {
-					hdb.priceLimits.maxSectorAccessPrice = maxSectorAccessPriceSC
 				}
 				hdb.mu.Unlock()
 			}
