@@ -28,7 +28,6 @@ CREATE TABLE hosts (
 	contracts_score    DOUBLE NOT NULL,
 	total_score        DOUBLE NOT NULL,
 	settings           BLOB,
-	price_table        BLOB,
 	siamux_addresses   TEXT NOT NULL,
 	PRIMARY KEY (id, network)
 );
