@@ -72,7 +72,8 @@ CREATE TABLE scans (
 	PRIMARY KEY (id),
 	INDEX idx_scans (network, node, public_key, ran_at),
 	INDEX idx_scans_pk (public_key),
-	INDEX idx_scans_npk (network, public_key)
+	INDEX idx_scans_npk (network, public_key),
+	INDEX idx_scans_ra (ran_at)
 );
 
 CREATE TABLE benchmarks (
