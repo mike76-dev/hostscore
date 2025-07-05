@@ -14,8 +14,6 @@ import (
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/internal/utils"
-	rhpv2 "go.sia.tech/core/rhp/v2"
-	rhpv3 "go.sia.tech/core/rhp/v3"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
@@ -61,10 +59,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			contracts_score,
 			total_score,
 			settings,
-			price_table,
 			siamux_addresses
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -74,7 +71,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			ip_nets = new.ip_nets,
 			last_ip_change = new.last_ip_change,
 			settings = new.settings,
-			price_table = new.price_table,
 			siamux_addresses = new.siamux_addresses
 	`)
 	if err != nil {
@@ -241,22 +237,11 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	defer updateScoreStmt.Close()
 
 	for _, host := range updates.Hosts {
-		var settings, pt bytes.Buffer
+		var settings bytes.Buffer
 		if host.V2 {
 			e := types.NewEncoder(&settings)
 			if (host.V2Settings != rhpv4.HostSettings{}) {
 				host.V2Settings.EncodeTo(e)
-				e.Flush()
-			}
-		} else {
-			e := types.NewEncoder(&settings)
-			if (host.Settings != rhpv2.HostSettings{}) {
-				utils.EncodeSettings(&host.Settings, e)
-				e.Flush()
-			}
-			e = types.NewEncoder(&pt)
-			if (host.PriceTable != rhpv3.HostPriceTable{}) {
-				utils.EncodePriceTable(&host.PriceTable, e)
 				e.Flush()
 			}
 		}
@@ -283,7 +268,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			0,
 			0,
 			settings.Bytes(),
-			pt.Bytes(),
 			strings.Join(host.SiamuxAddresses, ","),
 		)
 		if err != nil {
@@ -343,38 +327,27 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			e := types.NewEncoder(&cb)
 			if h.V2 {
 				types.V1Currency(h.V2Settings.Prices.Collateral).EncodeTo(e)
-			} else {
-				types.V1Currency(h.Settings.Collateral).EncodeTo(e)
 			}
 			e.Flush()
 			e = types.NewEncoder(&spb)
 			if h.V2 {
 				types.V1Currency(h.V2Settings.Prices.StoragePrice).EncodeTo(e)
-			} else {
-				types.V1Currency(h.Settings.StoragePrice).EncodeTo(e)
 			}
 			e.Flush()
 			e = types.NewEncoder(&upb)
 			if h.V2 {
 				types.V1Currency(h.V2Settings.Prices.IngressPrice).EncodeTo(e)
-			} else {
-				types.V1Currency(h.Settings.UploadBandwidthPrice).EncodeTo(e)
 			}
 			e.Flush()
 			e = types.NewEncoder(&dpb)
 			if h.V2 {
 				types.V1Currency(h.V2Settings.Prices.EgressPrice).EncodeTo(e)
-			} else {
-				types.V1Currency(h.Settings.DownloadBandwidthPrice).EncodeTo(e)
 			}
 			e.Flush()
 			var ts, rs uint64
 			if h.V2 {
 				ts = h.V2Settings.TotalStorage * rhpv4.SectorSize
 				rs = h.V2Settings.RemainingStorage * rhpv4.SectorSize
-			} else {
-				ts = h.Settings.TotalStorage
-				rs = h.Settings.RemainingStorage
 			}
 			_, err := priceChangeStmt.Exec(
 				h.Network,
@@ -398,8 +371,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			host.V2 = h.V2
 			host.IPNets = h.IPNets
 			host.LastIPChange = h.LastIPChange
-			host.Settings = h.Settings
-			host.PriceTable = h.PriceTable
 			host.V2Settings = h.V2Settings
 			host.SiamuxAddresses = append([]string{}, h.SiamuxAddresses...)
 			interactions := host.Interactions[node]
@@ -425,8 +396,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				Interactions:    make(map[string]nodeInteractions),
 				IPNets:          h.IPNets,
 				LastIPChange:    h.LastIPChange,
-				Settings:        h.Settings,
-				PriceTable:      h.PriceTable,
 				V2Settings:      h.V2Settings,
 				SiamuxAddresses: append([]string{}, h.SiamuxAddresses...),
 			}
@@ -663,15 +632,6 @@ func pricesChanged(oh hostdb.HostDBEntry, nh portalHost) bool {
 			ingressPrice:     oh.V2Settings.Prices.IngressPrice,
 			egressPrice:      oh.V2Settings.Prices.EgressPrice,
 		}
-	} else {
-		os = settings{
-			remainingStorage: oh.Settings.RemainingStorage,
-			totalStorage:     oh.Settings.TotalStorage,
-			storagePrice:     oh.Settings.StoragePrice,
-			collateral:       oh.Settings.Collateral,
-			ingressPrice:     oh.Settings.UploadBandwidthPrice,
-			egressPrice:      oh.Settings.DownloadBandwidthPrice,
-		}
 	}
 	if nh.V2 {
 		ns = settings{
@@ -681,15 +641,6 @@ func pricesChanged(oh hostdb.HostDBEntry, nh portalHost) bool {
 			collateral:       nh.V2Settings.Prices.Collateral,
 			ingressPrice:     nh.V2Settings.Prices.IngressPrice,
 			egressPrice:      nh.V2Settings.Prices.EgressPrice,
-		}
-	} else {
-		ns = settings{
-			remainingStorage: nh.Settings.RemainingStorage,
-			totalStorage:     nh.Settings.TotalStorage,
-			storagePrice:     nh.Settings.StoragePrice,
-			collateral:       nh.Settings.Collateral,
-			ingressPrice:     nh.Settings.UploadBandwidthPrice,
-			egressPrice:      nh.Settings.DownloadBandwidthPrice,
 		}
 	}
 	if ns.remainingStorage != os.remainingStorage || ns.totalStorage != os.totalStorage {
@@ -818,13 +769,9 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 			var tsa, tsb uint64
 			if a.V2 {
 				tsa = a.V2Settings.TotalStorage * rhpv4.SectorSize
-			} else {
-				tsa = a.Settings.TotalStorage
 			}
 			if b.V2 {
 				tsb = b.V2Settings.TotalStorage * rhpv4.SectorSize
-			} else {
-				tsb = b.Settings.TotalStorage
 			}
 			if tsa == tsb {
 				return a.ID - b.ID
@@ -847,16 +794,10 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 			if a.V2 {
 				tsa = a.V2Settings.TotalStorage * rhpv4.SectorSize
 				rsa = a.V2Settings.RemainingStorage * rhpv4.SectorSize
-			} else {
-				tsa = a.Settings.TotalStorage
-				rsa = a.Settings.RemainingStorage
 			}
 			if b.V2 {
 				tsb = b.V2Settings.TotalStorage * rhpv4.SectorSize
 				rsb = b.V2Settings.RemainingStorage * rhpv4.SectorSize
-			} else {
-				tsb = b.Settings.TotalStorage
-				rsb = b.Settings.RemainingStorage
 			}
 			if tsa-rsa == tsb-rsb {
 				return a.ID - b.ID
@@ -875,10 +816,17 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				}
 			}
 		case sortByStoragePrice:
-			if a.Settings.StoragePrice.Cmp(b.Settings.StoragePrice) == 0 {
+			var spa, spb types.Currency
+			if a.V2 {
+				spa = a.V2Settings.Prices.StoragePrice
+			}
+			if b.V2 {
+				spb = b.V2Settings.Prices.StoragePrice
+			}
+			if spa.Cmp(spb) == 0 {
 				return a.ID - b.ID
 			}
-			if a.Settings.StoragePrice.Cmp(b.Settings.StoragePrice) > 0 {
+			if spa.Cmp(spb) > 0 {
 				if asc {
 					return 1
 				} else {
@@ -892,10 +840,17 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				}
 			}
 		case sortByUploadPrice:
-			if a.Settings.UploadBandwidthPrice.Cmp(b.Settings.UploadBandwidthPrice) == 0 {
+			var upa, upb types.Currency
+			if a.V2 {
+				upa = a.V2Settings.Prices.IngressPrice
+			}
+			if b.V2 {
+				upb = b.V2Settings.Prices.IngressPrice
+			}
+			if upa.Cmp(upb) == 0 {
 				return a.ID - b.ID
 			}
-			if a.Settings.UploadBandwidthPrice.Cmp(b.Settings.UploadBandwidthPrice) > 0 {
+			if upa.Cmp(upb) > 0 {
 				if asc {
 					return 1
 				} else {
@@ -909,10 +864,17 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 				}
 			}
 		case sortByDownloadPrice:
-			if a.Settings.DownloadBandwidthPrice.Cmp(b.Settings.DownloadBandwidthPrice) == 0 {
+			var dpa, dpb types.Currency
+			if a.V2 {
+				dpa = a.V2Settings.Prices.EgressPrice
+			}
+			if b.V2 {
+				dpb = b.V2Settings.Prices.EgressPrice
+			}
+			if dpa.Cmp(dpb) == 0 {
 				return a.ID - b.ID
 			}
-			if a.Settings.DownloadBandwidthPrice.Cmp(b.Settings.DownloadBandwidthPrice) > 0 {
+			if dpa.Cmp(dpb) > 0 {
 				if asc {
 					return 1
 				} else {
@@ -1240,7 +1202,6 @@ func (api *portalAPI) load() error {
 			contracts_score,
 			total_score,
 			settings,
-			price_table,
 			siamux_addresses
 		FROM hosts
 	`)
@@ -1262,7 +1223,7 @@ func (api *portalAPI) load() error {
 		var ks uint64
 		var blocked, v2 bool
 		var ps, ss, cs, is, us, as, vs, ls, bs, cons, ts float64
-		var settings, pt []byte
+		var settings []byte
 		if err := rows.Scan(
 			&id,
 			&network,
@@ -1286,7 +1247,6 @@ func (api *portalAPI) load() error {
 			&cons,
 			&ts,
 			&settings,
-			&pt,
 			&smux,
 		); err != nil {
 			rows.Close()
@@ -1318,24 +1278,12 @@ func (api *portalAPI) load() error {
 			Interactions:    make(map[string]nodeInteractions),
 			SiamuxAddresses: strings.Split(smux, ","),
 		}
-		if len(settings) > 0 {
+		if v2 && len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
-			if v2 {
-				host.V2Settings.DecodeFrom(d)
-			} else {
-				utils.DecodeSettings(&host.Settings, d)
-			}
+			host.V2Settings.DecodeFrom(d)
 			if err := d.Err(); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode host settings")
-			}
-		}
-		if len(pt) > 0 {
-			d := types.NewBufDecoder(pt)
-			utils.DecodePriceTable(&host.PriceTable, d)
-			if err := d.Err(); err != nil {
-				rows.Close()
-				return utils.AddContext(err, "couldn't decode host price table")
 			}
 		}
 
@@ -1716,14 +1664,8 @@ func calculateTiers(sortedHosts []portalHost) map[string]networkAverages {
 				tier.UploadPrice = tier.UploadPrice.Add(host.V2Settings.Prices.IngressPrice)
 				tier.DownloadPrice = tier.DownloadPrice.Add(host.V2Settings.Prices.EgressPrice)
 				tier.ContractDuration += host.V2Settings.MaxContractDuration
-			} else {
-				tier.StoragePrice = tier.StoragePrice.Add(host.Settings.StoragePrice)
-				tier.Collateral = tier.Collateral.Add(host.Settings.Collateral)
-				tier.UploadPrice = tier.UploadPrice.Add(host.Settings.UploadBandwidthPrice)
-				tier.DownloadPrice = tier.DownloadPrice.Add(host.Settings.DownloadBandwidthPrice)
-				tier.ContractDuration += host.Settings.MaxDuration
+				count++
 			}
-			count++
 		}
 		if count > 0 {
 			tier.StoragePrice = tier.StoragePrice.Div64(uint64(count))
@@ -1845,8 +1787,6 @@ func (api *portalAPI) getHostKeys(
 	maxDownloadPrice types.Currency,
 	maxContractPrice types.Currency,
 	minContractDuration uint64,
-	maxBaseRPCPrice types.Currency,
-	maxSectorAccessPrice types.Currency,
 	minAvailableStorage uint64,
 	minVersion string,
 	maxLatency time.Duration,
@@ -1881,43 +1821,39 @@ outer:
 			continue
 		}
 
-		if (host.V2 && !host.V2Settings.AcceptingContracts) || !host.Settings.AcceptingContracts {
+		if !host.V2 {
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.Prices.StoragePrice.Cmp(maxStoragePrice) > 0) || (host.Settings.StoragePrice.Cmp(maxStoragePrice) > 0) {
+		if !host.V2Settings.AcceptingContracts {
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.Prices.IngressPrice.Cmp(maxUploadPrice) > 0) || (host.Settings.UploadBandwidthPrice.Cmp(maxUploadPrice) > 0) {
+		if host.V2Settings.Prices.StoragePrice.Cmp(maxStoragePrice) > 0 {
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.Prices.EgressPrice.Cmp(maxDownloadPrice) > 0) || (host.Settings.DownloadBandwidthPrice.Cmp(maxDownloadPrice) > 0) {
+		if host.V2Settings.Prices.IngressPrice.Cmp(maxUploadPrice) > 0 {
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.Prices.ContractPrice.Cmp(maxContractPrice) > 0) || (host.Settings.ContractPrice.Cmp(maxContractPrice) > 0) {
+		if host.V2Settings.Prices.EgressPrice.Cmp(maxDownloadPrice) > 0 {
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.MaxContractDuration < minContractDuration) || (host.Settings.MaxDuration < minContractDuration) {
+		if host.V2Settings.Prices.ContractPrice.Cmp(maxContractPrice) > 0 {
 			continue
 		}
 
-		if !host.V2 && host.Settings.BaseRPCPrice.Cmp(maxBaseRPCPrice) > 0 {
+		if host.V2Settings.MaxContractDuration < minContractDuration {
 			continue
 		}
 
-		if !host.V2 && host.Settings.SectorAccessPrice.Cmp(maxSectorAccessPrice) > 0 {
+		if host.V2Settings.RemainingStorage*rhpv4.SectorSize < minAvailableStorage {
 			continue
 		}
 
-		if (host.V2 && host.V2Settings.RemainingStorage*rhpv4.SectorSize < minAvailableStorage) || (host.Settings.RemainingStorage < minAvailableStorage) {
-			continue
-		}
-
-		if minVersion != "" && ((host.V2 && build.VersionCmp("2.0.0", minVersion) < 0) || build.VersionCmp(host.Settings.Version, minVersion) < 0) {
+		if minVersion != "" && build.VersionCmp("2.0.0", minVersion) < 0 {
 			continue
 		}
 

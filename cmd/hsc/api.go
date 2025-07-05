@@ -17,8 +17,6 @@ import (
 	"github.com/mike76-dev/hostscore/external"
 	"github.com/mike76-dev/hostscore/hostdb"
 	"github.com/mike76-dev/hostscore/internal/build"
-	rhpv2 "go.sia.tech/core/rhp/v2"
-	rhpv3 "go.sia.tech/core/rhp/v3"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.uber.org/zap"
@@ -153,9 +151,7 @@ type portalHost struct {
 	IPNets          []string                    `json:"ipNets"`
 	LastIPChange    time.Time                   `json:"lastIPChange"`
 	Score           scoreBreakdown              `json:"score"`
-	Settings        rhpv2.HostSettings          `json:"settings,omitempty"`
 	V2Settings      rhpv4.HostSettings          `json:"v2Settings,omitempty"`
-	PriceTable      rhpv3.HostPriceTable        `json:"priceTable,omitempty"`
 	SiamuxAddresses []string                    `json:"siamuxAddresses"`
 	external.IPInfo
 }
@@ -183,7 +179,7 @@ const (
 )
 
 var (
-	networks = []string{"mainnet", "zen", "anagami"}
+	networks = []string{"mainnet", "zen"}
 )
 
 type portalAPI struct {
@@ -586,10 +582,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 	mup := req.FormValue("maxUploadPrice")
 	mdp := req.FormValue("maxDownloadPrice")
 	mcp := req.FormValue("maxContractPrice")
-	mbrp := req.FormValue("maxBaseRPCPrice")
-	msap := req.FormValue("maxSectorAccessPrice")
-	var maxStoragePrice, maxUploadPrice, maxDownloadPrice types.Currency
-	var maxContractPrice, maxBasePrice, maxSectorPrice types.Currency
+	var maxStoragePrice, maxUploadPrice, maxDownloadPrice, maxContractPrice types.Currency
 	if msp == "" {
 		maxStoragePrice = types.MaxCurrency
 	} else {
@@ -623,24 +616,6 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		maxContractPrice, err = types.ParseCurrency(mcp)
 		if err != nil {
 			writeError(w, "invalid max contract price", http.StatusBadRequest)
-			return
-		}
-	}
-	if mbrp == "" {
-		maxBasePrice = types.MaxCurrency
-	} else {
-		maxBasePrice, err = types.ParseCurrency(mbrp)
-		if err != nil {
-			writeError(w, "invalid max base RPC price", http.StatusBadRequest)
-			return
-		}
-	}
-	if msap == "" {
-		maxSectorPrice = types.MaxCurrency
-	} else {
-		maxSectorPrice, err = types.ParseCurrency(msap)
-		if err != nil {
-			writeError(w, "invalid max sector access price", http.StatusBadRequest)
 			return
 		}
 	}
@@ -711,8 +686,6 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		maxDownloadPrice,
 		maxContractPrice,
 		uint64(minDuration),
-		maxBasePrice,
-		maxSectorPrice,
 		uint64(minStorage),
 		minVersion,
 		time.Duration(maxLatency),

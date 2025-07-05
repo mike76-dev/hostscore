@@ -132,10 +132,6 @@ func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]s
 			network, genesisBlock = chain.TestnetZen()
 			bootstrap = syncer.ZenBootstrapPeers
 			gatewayAddr = config.GatewayZen
-		case "anagami":
-			network, genesisBlock = chain.TestnetAnagami()
-			bootstrap = syncer.AnagamiBootstrapPeers
-			gatewayAddr = config.GatewayAnagami
 		}
 
 		node, err := newNode(db, name, seed, dir, gatewayAddr, network, genesisBlock, bootstrap)

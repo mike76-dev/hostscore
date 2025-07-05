@@ -18,7 +18,6 @@ import (
 var defaultConfig = persist.HSDConfig{
 	GatewayMainnet: ":9981",
 	GatewayZen:     ":9881",
-	GatewayAnagami: ":9781",
 	APIAddr:        ":9980",
 	Dir:            ".",
 	DBUser:         "",
@@ -70,9 +69,6 @@ func getWalletSeed(network string) string {
 	case "ZEN":
 		title = "Zen"
 		env += "_ZEN"
-	case "ANAGAMI":
-		title = "Anagami"
-		env += "_ANAGAMI"
 	case "":
 		name = "MAINNET"
 		title = "Mainnet"
@@ -134,28 +130,24 @@ func main() {
 
 	var gatewayMainnet,
 		gatewayZen,
-		gatewayAnagami,
 		apiAddr,
 		dir,
 		dbUser,
 		dbName string
 
 	var disableMainnet,
-		disableZen,
-		disableAnagami bool
+		disableZen bool
 
 	rootCmd := flagg.Root
 	rootCmd.Usage = flagg.SimpleUsage(rootCmd, rootUsage)
 	rootCmd.StringVar(&gatewayMainnet, "addr-mainnet", "", "Mainnet p2p address to listen on")
 	rootCmd.StringVar(&gatewayZen, "addr-zen", "", "Zen p2p address to listen on")
-	rootCmd.StringVar(&gatewayAnagami, "addr-anagami", "", "Anagami p2p address to listen on")
 	rootCmd.StringVar(&apiAddr, "api-addr", "", "address to serve API on")
 	rootCmd.StringVar(&dir, "dir", "", "directory to store node state in")
 	rootCmd.StringVar(&dbUser, "db-user", "", "username for accessing the database")
 	rootCmd.StringVar(&dbName, "db-name", "", "name of MYSQL database")
 	rootCmd.BoolVar(&disableMainnet, "no-mainnet", false, "disable Mainnet")
 	rootCmd.BoolVar(&disableZen, "no-zen", false, "disable Zen")
-	rootCmd.BoolVar(&disableAnagami, "no-anagami", false, "disable Anagami")
 	versionCmd := flagg.New("version", versionUsage)
 	seedCmd := flagg.New("seed", seedUsage)
 
@@ -181,9 +173,6 @@ func main() {
 		if gatewayZen != "" {
 			config.GatewayZen = gatewayZen
 		}
-		if gatewayAnagami != "" {
-			config.GatewayAnagami = gatewayAnagami
-		}
 		if apiAddr != "" {
 			config.APIAddr = apiAddr
 		}
@@ -202,11 +191,8 @@ func main() {
 		if disableZen {
 			config.GatewayZen = ""
 		}
-		if disableAnagami {
-			config.GatewayAnagami = ""
-		}
 
-		if disableMainnet && disableZen && disableAnagami {
+		if disableMainnet && disableZen {
 			// All networks disabled, exiting.
 			log.Fatalln("All networks disabled")
 		}
@@ -230,9 +216,6 @@ func main() {
 		}
 		if !disableZen {
 			seeds["zen"] = getWalletSeed("zen")
-		}
-		if !disableAnagami {
-			seeds["anagami"] = getWalletSeed("anagami")
 		}
 
 		// Create the directory if it does not yet exist.

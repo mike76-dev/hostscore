@@ -19,7 +19,6 @@ const configFilename = "hsdconfig.json"
 type HSDConfig struct {
 	GatewayMainnet string `json:"mainnet,omitempty"`
 	GatewayZen     string `json:"zen,omitempty"`
-	GatewayAnagami string `json:"anagami,omitempty"`
 	APIAddr        string `json:"api"`
 	Dir            string `json:"dir"`
 	DBUser         string `json:"dbUser"`
@@ -36,7 +35,7 @@ type hsdMetadata = struct {
 // metadata contains the actual values.
 var metadata = hsdMetadata{
 	Header:  "HSD Configuration",
-	Version: "0.3.0",
+	Version: "0.4.0",
 }
 
 // Load loads the configuration from disk.
@@ -62,7 +61,7 @@ func (hsdc *HSDConfig) Save(dir string) error {
 }
 
 // loadJSON will try to read a persisted json object from a file.
-func loadJSON(meta hsdMetadata, object interface{}, filename string) error {
+func loadJSON(meta hsdMetadata, object any, filename string) error {
 	// Open the file.
 	file, err := os.Open(filename)
 	if os.IsNotExist(err) {
@@ -109,7 +108,7 @@ func loadJSON(meta hsdMetadata, object interface{}, filename string) error {
 }
 
 // saveJSON will save a json object to disk.
-func saveJSON(meta hsdMetadata, object interface{}, filename string) error {
+func saveJSON(meta hsdMetadata, object any, filename string) error {
 	// Write the metadata to the buffer.
 	buf := new(bytes.Buffer)
 	enc := json.NewEncoder(buf)

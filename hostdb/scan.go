@@ -9,8 +9,6 @@ import (
 
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/rhp"
-	rhpv2 "go.sia.tech/core/rhp/v2"
-	rhpv3 "go.sia.tech/core/rhp/v3"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	rhpv4utils "go.sia.tech/coreutils/rhp/v4"
 	"go.uber.org/zap"
@@ -69,9 +67,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		host.LastIPChange = time.Now()
 	}
 
-	state := hdb.nodes.ChainManager(host.Network).TipState()
-	var settings rhpv2.HostSettings
-	var pt rhpv3.HostPriceTable
 	var v2Settings rhpv4.HostSettings
 	var latency time.Duration
 	var success bool
@@ -101,26 +96,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 			})
 			latency = time.Since(start)
 			success = err == nil
-		} else if state.Index.Height < state.Network.HardforkV2.RequireHeight {
-			// Initiate RHP2 protocol.
-			err = rhp.WithTransportV2(ctx, host.NetAddress, host.PublicKey, func(t *rhpv2.Transport) error {
-				var err error
-				settings, err = rhp.RPCSettings(ctx, t)
-				return err
-			})
-			latency = time.Since(start)
-			if err == nil {
-				success = true
-
-				// Initiate RHP3 protocol.
-				err = rhp.WithTransportV3(ctx, settings.SiamuxAddr(), host.PublicKey, func(t *rhpv3.Transport) error {
-					var err error
-					pt, err = rhp.RPCPriceTable(ctx, t, func(pt rhpv3.HostPriceTable) (rhpv3.PaymentMethod, error) {
-						return nil, nil
-					})
-					return err
-				})
-			}
 		} else {
 			return errors.New("V1 hosts not allowed")
 		}
@@ -146,10 +121,7 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		Success:    success,
 		Latency:    latency,
 		Error:      errMsg,
-		V2:         host.V2,
-		Settings:   settings,
 		V2Settings: v2Settings,
-		PriceTable: pt,
 	}
 
 	// Update the host database.

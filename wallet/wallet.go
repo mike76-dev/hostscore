@@ -181,17 +181,6 @@ func (wm *WalletManager) UnconfirmedEvents() ([]wallet.Event, error) {
 	return wm.wallet.UnconfirmedEvents()
 }
 
-// FundTransaction adds siacoin inputs worth at least amount to the provided
-// transaction. If necessary, a change output will also be added.
-func (wm *WalletManager) FundTransaction(txn *types.Transaction, amount types.Currency, useUnconfirmed bool) ([]types.Hash256, error) {
-	return wm.wallet.FundTransaction(txn, amount, useUnconfirmed)
-}
-
-// SignTransaction adds a signature to each of the specified inputs.
-func (wm *WalletManager) SignTransaction(txn *types.Transaction, toSign []types.Hash256, cf types.CoveredFields) {
-	wm.wallet.SignTransaction(txn, toSign, cf)
-}
-
 // FundV2Transaction adds siacoin inputs worth at least amount to the provided
 // transaction. If necessary, a change output will also be added.
 func (wm *WalletManager) FundV2Transaction(txn *types.V2Transaction, amount types.Currency, useUnconfirmed bool) (types.ChainIndex, []int, error) {
@@ -230,8 +219,7 @@ func (wm *WalletManager) synced() bool {
 // performWalletMaintenance performs the wallet maintenance periodically.
 func (wm *WalletManager) performWalletMaintenance() {
 	redistribute := func() {
-		if relevantTransactions(wm.chain.PoolTransactions(), wm.store.addr) ||
-			relevantV2Transactions(wm.chain.V2PoolTransactions(), wm.store.addr) {
+		if relevantV2Transactions(wm.chain.V2PoolTransactions(), wm.store.addr) {
 			return
 		}
 
@@ -250,53 +238,29 @@ func (wm *WalletManager) performWalletMaintenance() {
 		balance := wallet.SumOutputs(utxos)
 		fee := wm.chain.RecommendedFee()
 
-		if state := wm.chain.TipState(); state.Index.Height < state.Network.HardforkV2.AllowHeight {
-			txns, toSign, err := wm.wallet.Redistribute(numOutputs, outputValue, fee)
-			if err != nil {
-				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", outputValue), zap.Stringer("balance", balance), zap.Error(err))
-				return
-			}
-
-			if len(txns) == 0 {
-				return
-			}
-
-			for i := 0; i < len(txns); i++ {
-				wm.SignTransaction(&txns[i], toSign[i], types.CoveredFields{WholeTransaction: true})
-			}
-
-			_, err = wm.chain.AddPoolTransactions(txns)
-			if err != nil {
-				wm.log.Error("failed to broadcast v1 transactions", zap.String("network", wm.store.network), zap.Error(err))
-				wm.ReleaseInputs(txns, nil)
-				return
-			}
-
-			wm.syncer.BroadcastTransactionSet(txns)
-		} else {
-			txns, toSign, err := wm.wallet.RedistributeV2(numOutputs, outputValue, fee)
-			if err != nil {
-				wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", outputValue), zap.Stringer("balance", balance), zap.Error(err))
-				return
-			}
-
-			if len(txns) == 0 {
-				return
-			}
-
-			for i := 0; i < len(txns); i++ {
-				wm.SignV2Inputs(&txns[i], toSign[i])
-			}
-
-			_, err = wm.chain.AddV2PoolTransactions(state.Index, txns)
-			if err != nil {
-				wm.log.Error("failed to broadcast v2 transactions", zap.String("network", wm.store.network), zap.Error(err))
-				wm.ReleaseInputs(nil, txns)
-				return
-			}
-
-			wm.syncer.BroadcastV2TransactionSet(state.Index, txns)
+		state := wm.chain.TipState()
+		txns, toSign, err := wm.wallet.RedistributeV2(numOutputs, outputValue, fee)
+		if err != nil {
+			wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", outputValue), zap.Stringer("balance", balance), zap.Error(err))
+			return
 		}
+
+		if len(txns) == 0 {
+			return
+		}
+
+		for i := 0; i < len(txns); i++ {
+			wm.SignV2Inputs(&txns[i], toSign[i])
+		}
+
+		_, err = wm.chain.AddV2PoolTransactions(state.Index, txns)
+		if err != nil {
+			wm.log.Error("failed to broadcast v2 transactions", zap.String("network", wm.store.network), zap.Error(err))
+			wm.ReleaseInputs(nil, txns)
+			return
+		}
+
+		wm.syncer.BroadcastV2TransactionSet(state.Index, txns)
 	}
 
 	if err := wm.tg.Add(); err != nil {
@@ -326,17 +290,6 @@ func (wm *WalletManager) performWalletMaintenance() {
 			redistribute()
 		}
 	}
-}
-
-// relevantTransactions returns true if there is at least one relevant
-// transaction in the v1 transaction set.
-func relevantTransactions(txnSet []types.Transaction, addr types.Address) bool {
-	for _, txn := range txnSet {
-		if wallet.IsRelevantTransaction(txn, addr) {
-			return true
-		}
-	}
-	return false
 }
 
 // relevantV2Transactions returns true if there is at least one relevant
