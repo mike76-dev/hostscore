@@ -640,7 +640,6 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		}
 	}
 
-	minVersion := req.FormValue("minVersion")
 	ml := req.FormValue("maxLatency")
 	mus := req.FormValue("minUploadSpeed")
 	mds := req.FormValue("minDownloadSpeed")
@@ -687,7 +686,6 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		maxContractPrice,
 		uint64(minDuration),
 		uint64(minStorage),
-		minVersion,
 		time.Duration(maxLatency),
 		float64(minUploadSpeed),
 		float64(minDownloadSpeed),

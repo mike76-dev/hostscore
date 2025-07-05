@@ -12,7 +12,6 @@ import (
 
 	"github.com/mike76-dev/hostscore/external"
 	"github.com/mike76-dev/hostscore/hostdb"
-	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/internal/utils"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
@@ -1788,7 +1787,6 @@ func (api *portalAPI) getHostKeys(
 	maxContractPrice types.Currency,
 	minContractDuration uint64,
 	minAvailableStorage uint64,
-	minVersion string,
 	maxLatency time.Duration,
 	minUploadSpeed float64,
 	minDownloadSpeed float64,
@@ -1850,10 +1848,6 @@ outer:
 		}
 
 		if host.V2Settings.RemainingStorage*rhpv4.SectorSize < minAvailableStorage {
-			continue
-		}
-
-		if minVersion != "" && build.VersionCmp("2.0.0", minVersion) < 0 {
 			continue
 		}
 
