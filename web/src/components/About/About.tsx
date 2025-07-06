@@ -55,7 +55,7 @@ export const About = (props: AboutProps) => {
 				icon={Back}
 				caption="home"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(network === 'anagami' ? '/anagami' : (network === 'zen' ? '/zen' : '/'))}}
+				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
 			/>
 		</div>
 	)

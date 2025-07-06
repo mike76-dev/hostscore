@@ -24,9 +24,7 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	}, [])
 	useEffect(() => {
 		if (excludedPaths.includes(location.pathname)) return
-		if (location.pathname.indexOf('/anagami') === 0) {
-			switchNetwork('anagami')
-		} else if (location.pathname.indexOf('/zen') === 0) {
+		if (location.pathname.indexOf('/zen') === 0) {
 			switchNetwork('zen')
 		} else switchNetwork('mainnet')
 	}, [location, excludedPaths])
@@ -46,14 +44,13 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 				className="network-selector-select"
 				onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
 					props.switchNetwork(event.target.value)
-					navigate(event.target.value === 'anagami' ? '/anagami' : (event.target.value === 'zen' ? '/zen' : '/'))
+					navigate(event.target.value === 'zen' ? '/zen' : '/')
 				}}
 				value={network}
 				tabIndex={1}
 			>
 				<option value="mainnet">Mainnet</option>
 				<option value="zen">Zen</option>
-				<option value="anagami">Anagami</option>
 			</select>
 			<div className="network-selector-text">
 				{network !== '' && 'Online hosts: ' + onlineHosts}
