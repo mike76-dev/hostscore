@@ -20,9 +20,9 @@ var (
 )
 
 var (
-	maxUploadPrice   = types.Siacoins(1000)                             // 1 KS/TB
-	maxDownloadPrice = types.Siacoins(3000)                             // 3 KS/TB
-	maxStoragePrice  = types.Siacoins(1000).Div64(1e12).Div64(30 * 144) // 1 KS/TB/month
+	maxUploadPrice   = types.Siacoins(500)                             // 500 SC/TB
+	maxDownloadPrice = types.Siacoins(1000)                            // 1 KS/TB
+	maxStoragePrice  = types.Siacoins(500).Div64(1e12).Div64(30 * 144) // 500 SC/TB/month
 )
 
 // calculateScore calculates the total host's score.
