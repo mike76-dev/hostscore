@@ -10,11 +10,11 @@ This guide will assume that you use Ubuntu Server 22.04 LTS. If you run any othe
 
 ## Downloading Binaries
 
-Log into your server and download the binaries. This guide assumes that you will use the version `2.0.0` for an x86 CPU:
+Log into your server and download the binaries. This guide assumes that you will use the version `2.1.0` for an x86 CPU:
 ```
 mkdir ~/hostscore
 cd ~/hostscore
-wget -q https://github.com/mike76-dev/hostscore/releases/download/v2.0.0-hsd/hostscore_linux_amd64.zip
+wget -q https://github.com/mike76-dev/hostscore/releases/download/v2.1.0-hsd/hostscore_linux_amd64.zip
 unzip hostscore_linux_amd64.zip
 rm hostscore_linux_amd64.zip
 ```
@@ -184,11 +184,10 @@ $ nano hsdconfig.json
 First, choose a `name` of your hsd node. Fill in the `dbUser` and `dbName` fields with the MySQL user name (`hsuser`) and the database name (`hostscore`). Set the directory to store the `hsd` metadata and log files (here it is `/usr/local/etc/hsd`). You can also change the default port numbers:
 ```
 "HSD Configuration"
-"0.3.0"
+"0.4.0"
 {
         "mainnet": ":9981",
         "zen": ":9881",
-        "anagami": ":9781",
         "api": ":9980",
         "dir": "/usr/local/etc/hsd",
         "dbUser": "hsuser",
@@ -225,11 +224,10 @@ Enter the following lines. Replace:
 `<user>` with the name of the user that will be running `hsd`,
 `<api_password>` with the `hsd` API password of your choice,
 `<db_password>` with the MySQL user password created earlier,
-`<wallet_seed>`, `<wallet_seed_zen>`, and `<wallet_seed_anagami>` with the wallet seeds generated at the previous step.
+`<wallet_seed>` and `<wallet_seed_zen>` with the wallet seeds generated at the previous step.
 The optional `[network-flags]` allow disabling particular networks. You can use
-`--no-mainnet` to disable Mainnet,
-`--no-zen` to disable Zen, and
-`--no-anagami` to disable Anagami.
+`--no-mainnet` to disable Mainnet and
+`--no-zen` to disable Zen.
 ```
 [Unit]
 Description=hsd
@@ -246,7 +244,6 @@ Environment="HSD_API_PASSWORD=<api_password>"
 Environment="HSD_DB_PASSWORD=<db_password>"
 Environment="HSD_WALLET_SEED=<wallet_seed>"
 Environment="HSD_WALLET_SEED_ZEN=<wallet_seed_zen>"
-Environment="HSD_WALLET_SEED_ANAGAMI=<wallet_seed_anagami>"
 Environment="HSD_CONFIG_DIR=/usr/local/etc/hsd"
 LimitNOFILE=900000
 
@@ -271,7 +268,7 @@ Jan 31 13:59:34 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
 Jan 31 13:59:34 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
 Jan 31 13:59:34 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
 Jan 31 13:59:34 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
-Jan 31 13:59:34 server hsd[1945]: hsd v2.0.0
+Jan 31 13:59:34 server hsd[1945]: hsd v2.1.0
 Jan 31 13:59:34 server hsd[1945]: Git Revision 047f00c
 Jan 31 13:59:34 server hsd[1945]: Loading...
 Jan 31 13:59:34 server hsd[1945]: Connecting to the SQL database...
@@ -279,8 +276,6 @@ Jan 31 13:59:34 server hsd[1945]: Connecting to Mainnet...
 Jan 31 13:59:34 server hsd[1945]: p2p Mainnet: Listening on [::]:9981
 Jan 31 13:59:34 server hsd[1945]: Connecting to Zen...
 Jan 31 13:59:34 server hsd[1945]: p2p Zen: Listening on [::]:9881
-Jan 31 13:59:34 server hsd[1945]: Connecting to Anagami...
-Jan 31 13:59:34 server hsd[1945]: p2p Anagami: Listening on [::]:9781
 Jan 31 13:59:34 server hsd[1945]: Loading host database...
 Jan 31 13:59:34 server hsd[1945]: api: Listening on [::]:9980
 ```
@@ -306,16 +301,6 @@ Output:
 		{
 			"network": "zen",
 			"height": 16600,
-			"balance": {
-				"spendable": "0",
-				"confirmed": "0",
-				"unconfirmed": "0",
-				"immature": "0"
-			}
-		},
-		{
-			"network": "anagami",
-			"height": 8840,
 			"balance": {
 				"spendable": "0",
 				"confirmed": "0",
