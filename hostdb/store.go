@@ -570,7 +570,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		if host.V2 {
 			if (host.V2Settings == rhpv4.HostSettings{}) {
 				var settings []byte
-				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network, true).Scan(&settings)
+				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network).Scan(&settings)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return utils.AddContext(err, "couldn't load host settings")
 				}
