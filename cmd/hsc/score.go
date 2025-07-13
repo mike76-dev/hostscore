@@ -20,8 +20,8 @@ var (
 )
 
 var (
-	maxUploadPrice   = types.Siacoins(500)                             // 500 SC/TB
-	maxDownloadPrice = types.Siacoins(1000)                            // 1 KS/TB
+	maxUploadPrice   = types.Siacoins(500).Div64(1e12)                 // 500 SC/TB
+	maxDownloadPrice = types.Siacoins(1000).Div64(1e12)                // 1 KS/TB
 	maxStoragePrice  = types.Siacoins(500).Div64(1e12).Div64(30 * 144) // 500 SC/TB/month
 )
 
