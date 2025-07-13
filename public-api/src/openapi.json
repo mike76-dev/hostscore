@@ -1,1818 +1,1514 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "HostScore API",
-    "description": "This is the specification of HostScore API.\n\nThe API requests are rate limited to 10 requests/second. Callers that surpass\nthe rate limit will receive an error response with a `429` HTTP status code.",
-    "license": {
-      "name": "MIT License",
-      "url": "https://opensource.org/license/mit/"
+    "openapi": "3.0.3",
+    "info": {
+        "title": "HostScore API",
+        "description": "This is the specification of HostScore API.\n\nThe API requests are rate limited to 10 requests/second. Callers that surpass\nthe rate limit will receive an error response with a `429` HTTP status code.",
+        "license": {
+            "name": "MIT License",
+            "url": "https://opensource.org/license/mit/"
+        },
+        "version": "2.0.0"
     },
-    "version": "1.1.0"
-  },
-  "servers": [
-    {
-      "url": "https://api.hostscore.info/v1"
-    }
-  ],
-  "tags": [
-    {
-      "name": "hosts",
-      "description": "Information about the hosts on the Sia network"
-    },
-    {
-      "name": "network",
-      "description": "Information about the network"
-    },
-    {
-      "name": "service",
-      "description": "Information about the HostScore service"
-    }
-  ],
-  "paths": {
-    "/hosts": {
-      "get": {
-        "tags": [
-          "hosts"
-        ],
-        "description": "Retrieve a paginated list of hosts",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          },
-          {
-            "name": "all",
-            "in": "query",
-            "description": "Indicates whether to retrieve all hosts or online only",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          {
-            "name": "country",
-            "in": "query",
-            "description": "The country that the hosts can be located in",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "us"
-            }
-          },
-          {
-            "name": "query",
-            "in": "query",
-            "description": "Optional search substring",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "siahost"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "description": "Criterion for sorting the hosts",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "rank",
-              "enum": [
-                "id",
-                "rank",
-                "totalStorage",
-                "usedStorage",
-                "storagePrice",
-                "uploadPrice",
-                "downloadPrice"
-              ]
-            }
-          },
-          {
-            "name": "order",
-            "in": "query",
-            "description": "Order for sorting the hosts",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "asc",
-              "enum": [
-                "asc",
-                "desc"
-              ]
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "description": "Index of the page, starting from 0",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "example": 0
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of results per page",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "maximum": 50,
-              "example": 10
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "hosts": {
-                      "description": "A list of hosts",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Host"
-                      }
-                    },
-                    "more": {
-                      "description": "An indicator if more results are available",
-                      "type": "boolean",
-                      "example": true
-                    },
-                    "total": {
-                      "description": "The total number of results without pagination",
-                      "type": "integer",
-                      "format": "int32",
-                      "example": 519
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          }
+    "servers": [
+        {
+            "url": "https://api.hostscore.info/v2"
         }
-      }
-    },
-    "/hosts/keys": {
-      "get": {
-        "tags": [
-          "hosts"
-        ],
-        "description": "Retrieve a list of host public keys based on certain criteria",
-        "parameters": [
-          {
+    ],
+    "tags": [
+        {
+            "name": "hosts",
+            "description": "Information about the hosts on the Sia network"
+        },
+        {
             "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ],
-              "example": "zen"
+            "description": "Information about the network"
+        },
+        {
+            "name": "service",
+            "description": "Information about the HostScore service"
+        }
+    ],
+    "paths": {
+        "/hosts": {
+            "get": {
+                "tags": [
+                    "hosts"
+                ],
+                "description": "Retrieve a paginated list of hosts",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "all",
+                        "in": "query",
+                        "description": "Indicates whether to retrieve all hosts or online only",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    },
+                    {
+                        "name": "country",
+                        "in": "query",
+                        "description": "The country that the hosts can be located in",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "us"
+                        }
+                    },
+                    {
+                        "name": "query",
+                        "in": "query",
+                        "description": "Optional search substring",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "siahost"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "description": "Criterion for sorting the hosts",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "rank",
+                            "enum": [
+                                "id",
+                                "rank",
+                                "totalStorage",
+                                "usedStorage",
+                                "storagePrice",
+                                "uploadPrice",
+                                "downloadPrice"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "order",
+                        "in": "query",
+                        "description": "Order for sorting the hosts",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "asc",
+                            "enum": [
+                                "asc",
+                                "desc"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "description": "Index of the page, starting from 0",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "example": 0
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Maximum number of results per page",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "maximum": 50,
+                            "example": 10
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "hosts": {
+                                            "description": "A list of hosts",
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Host"
+                                            }
+                                        },
+                                        "more": {
+                                            "description": "An indicator if more results are available",
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "total": {
+                                            "description": "The total number of results without pagination",
+                                            "type": "integer",
+                                            "format": "int32",
+                                            "example": 519
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    }
+                }
             }
-          },
-          {
-            "name": "node",
-            "in": "query",
-            "description": "The node, which the measurements are relative to",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "global",
-              "enum": [
-                "global",
-                "europe",
-                "east-us",
-                "asia"
-              ],
-              "example": "europe"
+        },
+        "/hosts/keys": {
+            "get": {
+                "tags": [
+                    "hosts"
+                ],
+                "description": "Retrieve a list of host public keys based on certain criteria",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ],
+                            "example": "zen"
+                        }
+                    },
+                    {
+                        "name": "node",
+                        "in": "query",
+                        "description": "The node, which the measurements are relative to",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "global",
+                            "enum": [
+                                "global",
+                                "europe",
+                                "east-us",
+                                "asia"
+                            ],
+                            "example": "europe"
+                        }
+                    },
+                    {
+                        "name": "maxStoragePrice",
+                        "in": "query",
+                        "description": "Maximum storage price per byte per block",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "23148148148"
+                        }
+                    },
+                    {
+                        "name": "maxUploadPrice",
+                        "in": "query",
+                        "description": "Maximum upload price in per byte",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "10000000000000"
+                        }
+                    },
+                    {
+                        "name": "maxDownloadPrice",
+                        "in": "query",
+                        "description": "Maximum download price per byte",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "500000000000000"
+                        }
+                    },
+                    {
+                        "name": "maxContractPrice",
+                        "in": "query",
+                        "description": "Maximum contract formation price",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "1000000000000"
+                        }
+                    },
+                    {
+                        "name": "minContractDuration",
+                        "in": "query",
+                        "description": "Minimum contract duration in blocks",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 13104
+                        }
+                    },
+                    {
+                        "name": "minAvailableStorage",
+                        "in": "query",
+                        "description": "Minimum available storage in bytes",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 1000000000000
+                        }
+                    },
+                    {
+                        "name": "maxLatency",
+                        "in": "query",
+                        "description": "Maximum latency of a host in nanoseconds",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 100000000
+                        }
+                    },
+                    {
+                        "name": "minUploadSpeed",
+                        "in": "query",
+                        "description": "Minimum upload speed in bytes/second",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 5000000
+                        }
+                    },
+                    {
+                        "name": "minDownloadSpeed",
+                        "in": "query",
+                        "description": "Minimum download speed in bytes/second",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "example": 10000000
+                        }
+                    },
+                    {
+                        "name": "country",
+                        "in": "query",
+                        "description": "The country that the hosts can be located in; repeated params\nare supported",
+                        "required": false,
+                        "explode": true,
+                        "style": "form",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "example": "de"
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Maximum number of results",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "example": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "keys": {
+                                            "description": "A list of host public keys",
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    }
+                }
             }
-          },
-          {
-            "name": "maxStoragePrice",
-            "in": "query",
-            "description": "Maximum storage price per byte per block",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "23148148148"
+        },
+        "/hosts/host": {
+            "get": {
+                "tags": [
+                    "hosts"
+                ],
+                "description": "Retrieve the information about a specific host",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "host",
+                        "in": "query",
+                        "description": "Public key of the host",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "host": {
+                                            "$ref": "#/components/schemas/Host"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    }
+                }
             }
-          },
-          {
-            "name": "maxUploadPrice",
-            "in": "query",
-            "description": "Maximum upload price in per byte",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "10000000000000"
+        },
+        "/hosts/scans": {
+            "get": {
+                "tags": [
+                    "hosts"
+                ],
+                "description": "Retrieve a list of host scans, sorted by timestamp, from the most\nrecent to the oldest",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "node",
+                        "in": "query",
+                        "description": "The node, which performed the scans",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "global",
+                            "enum": [
+                                "global",
+                                "europe",
+                                "east-us",
+                                "asia"
+                            ]
+                        },
+                        "example": "asia"
+                    },
+                    {
+                        "name": "host",
+                        "in": "query",
+                        "description": "Public key of the host",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                        }
+                    },
+                    {
+                        "name": "all",
+                        "in": "query",
+                        "description": "Indicates whether to retrieve all scans or successful only",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true,
+                            "example": false
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "beginning timestamp of the result set",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-04-12T00:00:00Z"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "ending timestamp of the result set",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-04-16T00:00:00Z"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Maximum number of results",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "example": 48
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "scans": {
+                                            "description": "A list of host scans",
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Scan"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
             }
-          },
-          {
-            "name": "maxDownloadPrice",
-            "in": "query",
-            "description": "Maximum download price per byte",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "500000000000000"
+        },
+        "/hosts/benchmarks": {
+            "get": {
+                "tags": [
+                    "hosts"
+                ],
+                "description": "Retrieve a list of host benchmarks, sorted by timestamp, from the\nmost recent to the oldest",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "node",
+                        "in": "query",
+                        "description": "The node, which performed the benchmarks",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "global",
+                            "enum": [
+                                "global",
+                                "europe",
+                                "east-us",
+                                "asia"
+                            ],
+                            "example": "asia"
+                        }
+                    },
+                    {
+                        "name": "host",
+                        "in": "query",
+                        "description": "Public key of the host",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                        }
+                    },
+                    {
+                        "name": "all",
+                        "in": "query",
+                        "description": "Indicates whether to retrieve all benchmarks or successful only",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true,
+                            "example": true
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "beginning timestamp of the result set",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-04-12T00:00:00Z"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "ending timestamp of the result set",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-04-16T00:00:00Z"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Maximum number of results",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "example": 12
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "benchmarks": {
+                                            "description": "A list of host benchmarks",
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Benchmark"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
             }
-          },
-          {
-            "name": "maxContractPrice",
-            "in": "query",
-            "description": "Maximum contract formation price",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "1000000000000"
+        },
+        "/hosts/changes": {
+            "get": {
+                "tags": [
+                    "hosts"
+                ],
+                "description": "Retrieve a list of historic price changes, sorted by timestamp, from\nthe oldest to the most recent",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "host",
+                        "in": "query",
+                        "description": "Public key of the host",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "beginning timestamp of the result set",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-04-12T00:00:00Z"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "ending timestamp of the result set",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "example": "2024-04-16T00:00:00Z"
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "description": "Maximum number of results",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "example": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "changes": {
+                                            "description": "A list of historic price changes",
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/PriceChange"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
             }
-          },
-          {
-            "name": "minContractDuration",
-            "in": "query",
-            "description": "Minimum contract duration in blocks",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 13104
+        },
+        "/network/hosts": {
+            "get": {
+                "tags": [
+                    "network"
+                ],
+                "description": "Retrieve the number of online hosts and the total number of hosts",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "hosts": {
+                                            "$ref": "#/components/schemas/NetworkHosts"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    }
+                }
             }
-          },
-          {
-            "name": "maxBaseRPCPrice",
-            "in": "query",
-            "description": "Maximum price for one remote procedure call (RPC)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "1000000"
+        },
+        "/network/averages": {
+            "get": {
+                "tags": [
+                    "network"
+                ],
+                "description": "Retrieve the network averages split by tiers:\n- Tier 1: top 10 hosts\n- Tier 2: top 100 hosts minus Tier 1\n- Tier 3: the rest",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "averages": {
+                                            "$ref": "#/components/schemas/NetworkAverages"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    }
+                }
             }
-          },
-          {
-            "name": "maxSectorAccessPrice",
-            "in": "query",
-            "description": "Maximum price for accessing one sector of data (4 MiB)",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "example": "10000000"
+        },
+        "/network/countries": {
+            "get": {
+                "tags": [
+                    "network"
+                ],
+                "description": "Retrieve the list of countries that the hosts are located in",
+                "parameters": [
+                    {
+                        "name": "network",
+                        "in": "query",
+                        "description": "Optional network name",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "mainnet",
+                            "enum": [
+                                "mainnet",
+                                "zen"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "all",
+                        "in": "query",
+                        "description": "Indicates whether to retrieve the countries of all hosts or online only",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "countries": {
+                                            "description": "A list of country codes",
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string",
+                                                "example": "DE"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request parameter(s)"
+                    },
+                    "500": {
+                        "description": "Internal server error"
+                    }
+                }
             }
-          },
-          {
-            "name": "minAvailableStorage",
-            "in": "query",
-            "description": "Minimum available storage in bytes",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 1000000000000
+        },
+        "/service/status": {
+            "get": {
+                "tags": [
+                    "service"
+                ],
+                "description": "Retrieve the current status of the service",
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "nodes": {
+                                            "type": "object",
+                                            "additionalProperties": {
+                                                "$ref": "#/components/schemas/NodeStatus"
+                                            }
+                                        },
+                                        "version": {
+                                            "description": "The version of the portal backend",
+                                            "type": "string",
+                                            "example": "1.3.0"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-          },
-          {
-            "name": "minVersion",
-            "in": "query",
-            "description": "Minimum acceptable version of a host",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "1.5.9",
-              "enum": [
-                "1.5.9",
-                "1.6.0",
-                "2.0.0"
-              ],
-              "example": "1.6.0"
-            }
-          },
-          {
-            "name": "maxLatency",
-            "in": "query",
-            "description": "Maximum latency of a host in nanoseconds",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 100000000
-            }
-          },
-          {
-            "name": "minUploadSpeed",
-            "in": "query",
-            "description": "Minimum upload speed in bytes/second",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 5000000
-            }
-          },
-          {
-            "name": "minDownloadSpeed",
-            "in": "query",
-            "description": "Minimum download speed in bytes/second",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "example": 10000000
-            }
-          },
-          {
-            "name": "country",
-            "in": "query",
-            "description": "The country that the hosts can be located in; repeated params\nare supported",
-            "required": false,
-            "explode": true,
-            "style": "form",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "example": "de"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of results",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "example": 50
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "keys": {
-                      "description": "A list of host public keys",
-                      "type": "array",
-                      "items": {
+        }
+    },
+    "components": {
+        "schemas": {
+            "Host": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 84436
+                    },
+                    "rank": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 142
+                    },
+                    "publicKey": {
                         "type": "string",
                         "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          }
-        }
-      }
-    },
-    "/hosts/host": {
-      "get": {
-        "tags": [
-          "hosts"
-        ],
-        "description": "Retrieve the information about a specific host",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          },
-          {
-            "name": "host",
-            "in": "query",
-            "description": "Public key of the host",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "host": {
-                      "$ref": "#/components/schemas/Host"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          }
-        }
-      }
-    },
-    "/hosts/scans": {
-      "get": {
-        "tags": [
-          "hosts"
-        ],
-        "description": "Retrieve a list of host scans, sorted by timestamp, from the most\nrecent to the oldest",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          },
-          {
-            "name": "node",
-            "in": "query",
-            "description": "The node, which performed the scans",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "global",
-              "enum": [
-                "global",
-                "europe",
-                "east-us",
-                "asia"
-              ]
-            },
-            "example": "asia"
-          },
-          {
-            "name": "host",
-            "in": "query",
-            "description": "Public key of the host",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-            }
-          },
-          {
-            "name": "all",
-            "in": "query",
-            "description": "Indicates whether to retrieve all scans or successful only",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": true,
-              "example": false
-            }
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "description": "beginning timestamp of the result set",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time",
-              "example": "2024-04-12T00:00:00Z"
-            }
-          },
-          {
-            "name": "to",
-            "in": "query",
-            "description": "ending timestamp of the result set",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time",
-              "example": "2024-04-16T00:00:00Z"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of results",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "example": 48
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "scans": {
-                      "description": "A list of host scans",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Scan"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/hosts/benchmarks": {
-      "get": {
-        "tags": [
-          "hosts"
-        ],
-        "description": "Retrieve a list of host benchmarks, sorted by timestamp, from the\nmost recent to the oldest",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          },
-          {
-            "name": "node",
-            "in": "query",
-            "description": "The node, which performed the benchmarks",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "global",
-              "enum": [
-                "global",
-                "europe",
-                "east-us",
-                "asia"
-              ],
-              "example": "asia"
-            }
-          },
-          {
-            "name": "host",
-            "in": "query",
-            "description": "Public key of the host",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-            }
-          },
-          {
-            "name": "all",
-            "in": "query",
-            "description": "Indicates whether to retrieve all benchmarks or successful only",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": true,
-              "example": true
-            }
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "description": "beginning timestamp of the result set",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time",
-              "example": "2024-04-12T00:00:00Z"
-            }
-          },
-          {
-            "name": "to",
-            "in": "query",
-            "description": "ending timestamp of the result set",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time",
-              "example": "2024-04-16T00:00:00Z"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of results",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "example": 12
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "benchmarks": {
-                      "description": "A list of host benchmarks",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Benchmark"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/hosts/changes": {
-      "get": {
-        "tags": [
-          "hosts"
-        ],
-        "description": "Retrieve a list of historic price changes, sorted by timestamp, from\nthe oldest to the most recent",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          },
-          {
-            "name": "host",
-            "in": "query",
-            "description": "Public key of the host",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-            }
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "description": "beginning timestamp of the result set",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time",
-              "example": "2024-04-12T00:00:00Z"
-            }
-          },
-          {
-            "name": "to",
-            "in": "query",
-            "description": "ending timestamp of the result set",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "date-time",
-              "example": "2024-04-16T00:00:00Z"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Maximum number of results",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32",
-              "example": 1000
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "changes": {
-                      "description": "A list of historic price changes",
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/PriceChange"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/network/hosts": {
-      "get": {
-        "tags": [
-          "network"
-        ],
-        "description": "Retrieve the number of online hosts and the total number of hosts",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "hosts": {
-                      "$ref": "#/components/schemas/NetworkHosts"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          }
-        }
-      }
-    },
-    "/network/averages": {
-      "get": {
-        "tags": [
-          "network"
-        ],
-        "description": "Retrieve the network averages split by tiers:\n- Tier 1: top 10 hosts\n- Tier 2: top 100 hosts minus Tier 1\n- Tier 3: the rest",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "averages": {
-                      "$ref": "#/components/schemas/NetworkAverages"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          }
-        }
-      }
-    },
-    "/network/countries": {
-      "get": {
-        "tags": [
-          "network"
-        ],
-        "description": "Retrieve the list of countries that the hosts are located in",
-        "parameters": [
-          {
-            "name": "network",
-            "in": "query",
-            "description": "Optional network name",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "default": "mainnet",
-              "enum": [
-                "mainnet",
-                "zen",
-                "anagami"
-              ]
-            }
-          },
-          {
-            "name": "all",
-            "in": "query",
-            "description": "Indicates whether to retrieve the countries of all hosts or online only",
-            "required": false,
-            "schema": {
-              "type": "boolean",
-              "default": true
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "countries": {
-                      "description": "A list of country codes",
-                      "type": "array",
-                      "items": {
+                    },
+                    "firstSeen": {
                         "type": "string",
-                        "example": "DE"
-                      }
+                        "format": "date-time",
+                        "example": "2024-01-12T06:01:33Z"
+                    },
+                    "knownSince": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 452377
+                    },
+                    "netaddress": {
+                        "type": "string",
+                        "example": "23.26.250.110:9972"
+                    },
+                    "blocked": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "v2": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "interactions": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/HostInteractions"
+                        }
+                    },
+                    "ipNets": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": "23.26.250.0/24"
+                        }
+                    },
+                    "lastIPChange": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-01-12T06:01:33Z"
+                    },
+                    "score": {
+                        "$ref": "#/components/schemas/HostScore"
+                    },
+                    "v2Settings": {
+                        "$ref": "#/components/schemas/HostV2Settings"
+                    },
+                    "siamuxAddresses": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "example": ""
+                        }
+                    },
+                    "ip": {
+                        "type": "string",
+                        "example": "23.26.250.110"
+                    },
+                    "hostname": {
+                        "type": "string",
+                        "example": ""
+                    },
+                    "city": {
+                        "type": "string",
+                        "example": "Detroit"
+                    },
+                    "region": {
+                        "type": "string",
+                        "example": "Michigan"
+                    },
+                    "country": {
+                        "type": "string",
+                        "example": "US"
+                    },
+                    "loc": {
+                        "type": "string",
+                        "example": "42.3314,-83.0457"
+                    },
+                    "org": {
+                        "type": "string",
+                        "example": "AS13737 INCX Global, LLC"
+                    },
+                    "postal": {
+                        "type": "string",
+                        "example": "48226"
+                    },
+                    "timezone": {
+                        "type": "string",
+                        "example": "America/Detroit"
                     }
-                  }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid request parameter(s)"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        }
-      }
-    },
-    "/service/status": {
-      "get": {
-        "tags": [
-          "service"
-        ],
-        "description": "Retrieve the current status of the service",
-        "responses": {
-          "200": {
-            "description": "Successful operation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "nodes": {
-                      "type": "object",
-                      "additionalProperties": {
-                        "$ref": "#/components/schemas/NodeStatus"
-                      }
+            },
+            "HostInteractions": {
+                "type": "object",
+                "properties": {
+                    "uptime": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 2066877566938221
+                    },
+                    "downtime": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 74823000000000
+                    },
+                    "scanHistory": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/HostScan"
+                        }
+                    },
+                    "benchmarkHistory": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/HostBenchmark"
+                        }
+                    },
+                    "lastSeen": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-04-17T09:35:46.566938221Z"
+                    },
+                    "activeHosts": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 1
+                    },
+                    "score": {
+                        "$ref": "#/components/schemas/HostScore"
+                    },
+                    "successes": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 260.71007253190993
+                    },
+                    "failures": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 31.6612005668226
+                    }
+                }
+            },
+            "HostScore": {
+                "type": "object",
+                "properties": {
+                    "prices": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.23601795345163012
+                    },
+                    "storage": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.09758473752299324
+                    },
+                    "collateral": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.41666666666409524
+                    },
+                    "interactions": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.34481522253262525
+                    },
+                    "uptime": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.7837747886133084
+                    },
+                    "age": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.6666666666666666
                     },
                     "version": {
-                      "description": "The version of the portal backend",
-                      "type": "string",
-                      "example": "1.3.0"
+                        "type": "number",
+                        "format": "double",
+                        "example": 1
+                    },
+                    "latency": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0
+                    },
+                    "benchmarks": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0.005142681937860426
+                    },
+                    "contracts": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 1
+                    },
+                    "total": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0
                     }
-                  }
                 }
-              }
+            },
+            "HostScan": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-04-17T04:14:02Z"
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "latency": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 3384000000
+                    },
+                    "error": {
+                        "type": "string",
+                        "example": "context deadline exceeded"
+                    }
+                }
+            },
+            "HostBenchmark": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-04-17T02:29:30Z"
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "error": {
+                        "type": "string",
+                        "example": ""
+                    },
+                    "uploadSpeed": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 4285325.23632819
+                    },
+                    "downloadSpeed": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 6145461.249201419
+                    },
+                    "ttfb": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 2335000000
+                    }
+                }
+            },
+            "HostV2Settings": {
+                "type": "object",
+                "properties": {
+                    "acceptingContracts": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "maxCollateral": {
+                        "type": "string",
+                        "example": ""
+                    },
+                    "maxContractDuration": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 0
+                    },
+                    "protocolVersion": {
+                        "type": "array",
+                        "items": {
+                            "type": "integer",
+                            "format": "int32",
+                            "example": 0
+                        }
+                    },
+                    "prices": {
+                        "type": "object",
+                        "properties": {
+                            "collateral": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "contractPrice": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "egressPrice": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "freeSectorPrice": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "ingressPrice": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "signature": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "storagePrice": {
+                                "type": "string",
+                                "example": ""
+                            },
+                            "tipHeight": {
+                                "type": "integer",
+                                "format": "int64",
+                                "example": 0
+                            },
+                            "validUntil": {
+                                "type": "string",
+                                "format": "date-time",
+                                "example": "0000-00-00T00:00:00Z"
+                            }
+                        }
+                    },
+                    "release": {
+                        "type": "string",
+                        "example": ""
+                    },
+                    "remainingStorage": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 0
+                    },
+                    "totalStorage": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 0
+                    },
+                    "walletAddress": {
+                        "type": "string",
+                        "example": ""
+                    }
+                }
+            },
+            "Scan": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-04-17T04:14:02Z"
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "latency": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 3384000000
+                    },
+                    "error": {
+                        "type": "string",
+                        "example": ""
+                    },
+                    "publicKey": {
+                        "type": "string",
+                        "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                    },
+                    "network": {
+                        "type": "string",
+                        "example": "mainnet"
+                    },
+                    "node": {
+                        "type": "string",
+                        "example": "asia"
+                    }
+                }
+            },
+            "Benchmark": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-04-16T05:13:35Z"
+                    },
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "error": {
+                        "type": "string",
+                        "example": "context deadline exceeded"
+                    },
+                    "uploadSpeed": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0
+                    },
+                    "downloadSpeed": {
+                        "type": "number",
+                        "format": "double",
+                        "example": 0
+                    },
+                    "ttfb": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 0
+                    },
+                    "publicKey": {
+                        "type": "string",
+                        "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
+                    },
+                    "network": {
+                        "type": "string",
+                        "example": "mainnet"
+                    },
+                    "node": {
+                        "type": "string",
+                        "example": "east-us"
+                    }
+                }
+            },
+            "PriceChange": {
+                "type": "object",
+                "properties": {
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-03-22T10:10:57Z"
+                    },
+                    "remainingStorage": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 18379154915328
+                    },
+                    "totalStorage": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 20000001753088
+                    },
+                    "storagePrice": {
+                        "type": "string",
+                        "example": "24885540363"
+                    },
+                    "collateral": {
+                        "type": "string",
+                        "example": "49771080726"
+                    },
+                    "uploadPrice": {
+                        "type": "string",
+                        "example": "10750553437117"
+                    },
+                    "downloadPrice": {
+                        "type": "string",
+                        "example": "10750553437117"
+                    }
+                }
+            },
+            "NetworkHosts": {
+                "type": "object",
+                "properties": {
+                    "total": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 84926
+                    },
+                    "online": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 509
+                    }
+                }
+            },
+            "Averages": {
+                "type": "object",
+                "properties": {
+                    "available": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "storagePrice": {
+                        "type": "string",
+                        "example": "69433629337"
+                    },
+                    "collateral": {
+                        "type": "string",
+                        "example": "142617408521"
+                    },
+                    "uploadPrice": {
+                        "type": "string",
+                        "example": "33120526279092"
+                    },
+                    "downloadPrice": {
+                        "type": "string",
+                        "example": "146633372285060"
+                    },
+                    "contractDuration": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 25948
+                    }
+                }
+            },
+            "NetworkAverages": {
+                "type": "object",
+                "properties": {
+                    "tier1": {
+                        "$ref": "#/components/schemas/Averages"
+                    },
+                    "tier2": {
+                        "$ref": "#/components/schemas/Averages"
+                    },
+                    "tier3": {
+                        "$ref": "#/components/schemas/Averages"
+                    }
+                }
+            },
+            "NodeStatus": {
+                "type": "object",
+                "properties": {
+                    "online": {
+                        "type": "boolean",
+                        "example": true
+                    },
+                    "version": {
+                        "type": "string",
+                        "example": "1.1.1"
+                    },
+                    "networks": {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/NetworkStatus"
+                        }
+                    }
+                }
+            },
+            "NetworkStatus": {
+                "type": "object",
+                "properties": {
+                    "height": {
+                        "type": "integer",
+                        "format": "int64",
+                        "example": 466441
+                    },
+                    "balance": {
+                        "description": "Either 'ok', or 'low', or 'empty'",
+                        "type": "string",
+                        "example": "ok"
+                    }
+                }
             }
-          }
         }
-      }
     }
-  },
-  "components": {
-    "schemas": {
-      "Host": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 84436
-          },
-          "rank": {
-            "type": "integer",
-            "format": "int32",
-            "example": 142
-          },
-          "publicKey": {
-            "type": "string",
-            "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-          },
-          "firstSeen": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-01-12T06:01:33Z"
-          },
-          "knownSince": {
-            "type": "integer",
-            "format": "int64",
-            "example": 452377
-          },
-          "netaddress": {
-            "type": "string",
-            "example": "23.26.250.110:9972"
-          },
-          "blocked": {
-            "type": "boolean",
-            "example": false
-          },
-          "v2": {
-            "type": "boolean",
-            "example": false
-          },
-          "interactions": {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/HostInteractions"
-            }
-          },
-          "ipNets": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "example": "23.26.250.0/24"
-            }
-          },
-          "lastIPChange": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-01-12T06:01:33Z"
-          },
-          "score": {
-            "$ref": "#/components/schemas/HostScore"
-          },
-          "settings": {
-            "$ref": "#/components/schemas/HostSettings"
-          },
-          "v2Settings": {
-            "$ref": "#/components/schemas/HostV2Settings"
-          },
-          "priceTable": {
-            "$ref": "#/components/schemas/HostPriceTable"
-          },
-          "siamuxAddresses": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "example": ""
-            }
-          },
-          "ip": {
-            "type": "string",
-            "example": "23.26.250.110"
-          },
-          "hostname": {
-            "type": "string",
-            "example": ""
-          },
-          "city": {
-            "type": "string",
-            "example": "Detroit"
-          },
-          "region": {
-            "type": "string",
-            "example": "Michigan"
-          },
-          "country": {
-            "type": "string",
-            "example": "US"
-          },
-          "loc": {
-            "type": "string",
-            "example": "42.3314,-83.0457"
-          },
-          "org": {
-            "type": "string",
-            "example": "AS13737 INCX Global, LLC"
-          },
-          "postal": {
-            "type": "string",
-            "example": "48226"
-          },
-          "timezone": {
-            "type": "string",
-            "example": "America/Detroit"
-          }
-        }
-      },
-      "HostInteractions": {
-        "type": "object",
-        "properties": {
-          "uptime": {
-            "type": "integer",
-            "format": "int64",
-            "example": 2066877566938221
-          },
-          "downtime": {
-            "type": "integer",
-            "format": "int64",
-            "example": 74823000000000
-          },
-          "scanHistory": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/HostScan"
-            }
-          },
-          "benchmarkHistory": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/HostBenchmark"
-            }
-          },
-          "lastSeen": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-04-17T09:35:46.566938221Z"
-          },
-          "activeHosts": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "score": {
-            "$ref": "#/components/schemas/HostScore"
-          },
-          "successes": {
-            "type": "number",
-            "format": "double",
-            "example": 260.71007253190993
-          },
-          "failures": {
-            "type": "number",
-            "format": "double",
-            "example": 31.6612005668226
-          }
-        }
-      },
-      "HostScore": {
-        "type": "object",
-        "properties": {
-          "prices": {
-            "type": "number",
-            "format": "double",
-            "example": 0.23601795345163012
-          },
-          "storage": {
-            "type": "number",
-            "format": "double",
-            "example": 0.09758473752299324
-          },
-          "collateral": {
-            "type": "number",
-            "format": "double",
-            "example": 0.41666666666409524
-          },
-          "interactions": {
-            "type": "number",
-            "format": "double",
-            "example": 0.34481522253262525
-          },
-          "uptime": {
-            "type": "number",
-            "format": "double",
-            "example": 0.7837747886133084
-          },
-          "age": {
-            "type": "number",
-            "format": "double",
-            "example": 0.6666666666666666
-          },
-          "version": {
-            "type": "number",
-            "format": "double",
-            "example": 1
-          },
-          "latency": {
-            "type": "number",
-            "format": "double",
-            "example": 0
-          },
-          "benchmarks": {
-            "type": "number",
-            "format": "double",
-            "example": 0.005142681937860426
-          },
-          "contracts": {
-            "type": "number",
-            "format": "double",
-            "example": 1
-          },
-          "total": {
-            "type": "number",
-            "format": "double",
-            "example": 0
-          }
-        }
-      },
-      "HostScan": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-04-17T04:14:02Z"
-          },
-          "success": {
-            "type": "boolean",
-            "example": true
-          },
-          "latency": {
-            "type": "integer",
-            "format": "int64",
-            "example": 3384000000
-          },
-          "error": {
-            "type": "string",
-            "example": "context deadline exceeded"
-          }
-        }
-      },
-      "HostBenchmark": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-04-17T02:29:30Z"
-          },
-          "success": {
-            "type": "boolean",
-            "example": true
-          },
-          "error": {
-            "type": "string",
-            "example": ""
-          },
-          "uploadSpeed": {
-            "type": "number",
-            "format": "double",
-            "example": 4285325.23632819
-          },
-          "downloadSpeed": {
-            "type": "number",
-            "format": "double",
-            "example": 6145461.249201419
-          },
-          "ttfb": {
-            "type": "integer",
-            "format": "int64",
-            "example": 2335000000
-          }
-        }
-      },
-      "HostSettings": {
-        "type": "object",
-        "properties": {
-          "acceptingcontracts": {
-            "type": "boolean",
-            "example": true
-          },
-          "maxdownloadbatchsize": {
-            "type": "integer",
-            "format": "int64",
-            "example": 20971520
-          },
-          "maxduration": {
-            "type": "integer",
-            "format": "int64",
-            "example": 25920
-          },
-          "maxrevisebatchsize": {
-            "type": "integer",
-            "format": "int64",
-            "example": 20971520
-          },
-          "netaddress": {
-            "type": "string",
-            "example": "23.26.250.110:9972"
-          },
-          "remainingstorage": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1373928161280
-          },
-          "sectorsize": {
-            "type": "integer",
-            "format": "int64",
-            "example": 4194304
-          },
-          "totalstorage": {
-            "type": "integer",
-            "format": "int64",
-            "example": 4500001652736
-          },
-          "unlockhash": {
-            "type": "string",
-            "example": "1cc759ba9f2be472ec92d55cd7506030e1281bd190e4f7487b286d99e90b2a128a93724978dd"
-          },
-          "windowsize": {
-            "type": "integer",
-            "format": "int64",
-            "example": 144
-          },
-          "collateral": {
-            "type": "string",
-            "example": "81018518517"
-          },
-          "maxcollateral": {
-            "type": "string",
-            "example": "10000000000000000000000000000"
-          },
-          "baserpcprice": {
-            "type": "string",
-            "example": "100000000000000000"
-          },
-          "contractprice": {
-            "type": "string",
-            "example": "100000000000000000000000"
-          },
-          "downloadbandwidthprice": {
-            "type": "string",
-            "example": "900000000000000"
-          },
-          "sectoraccessprice": {
-            "type": "string",
-            "example": "100000000000000000"
-          },
-          "storageprice": {
-            "type": "string",
-            "example": "32407407407"
-          },
-          "uploadbandwidthprice": {
-            "type": "string",
-            "example": "280000000000000"
-          },
-          "ephemeralaccountexpiry": {
-            "type": "integer",
-            "format": "int64",
-            "example": 2592000000000000
-          },
-          "maxephemeralaccountbalance": {
-            "type": "string",
-            "example": "5000000000000000000000000000"
-          },
-          "revisionnumber": {
-            "type": "integer",
-            "format": "int64",
-            "example": 28
-          },
-          "version": {
-            "type": "string",
-            "example": "1.6.0"
-          },
-          "release": {
-            "type": "string",
-            "example": "hostd v1.0.4"
-          },
-          "siamuxport": {
-            "type": "string",
-            "example": "9973"
-          }
-        }
-      },
-      "HostV2Settings": {
-        "type": "object",
-        "properties": {
-          "acceptingContracts": {
-            "type": "boolean",
-            "example": false
-          },
-          "maxCollateral": {
-            "type": "string",
-            "example": ""
-          },
-          "maxContractDuration": {
-            "type": "integer",
-            "format": "int64",
-            "example": 0
-          },
-          "protocolVersion": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32",
-              "example": 0
-            }
-          },
-          "prices": {
-            "type": "object",
-            "properties": {
-              "collateral": {
-                "type": "string",
-                "example": ""
-              },
-              "contractPrice": {
-                "type": "string",
-                "example": ""
-              },
-              "egressPrice": {
-                "type": "string",
-                "example": ""
-              },
-              "freeSectorPrice": {
-                "type": "string",
-                "example": ""
-              },
-              "ingressPrice": {
-                "type": "string",
-                "example": ""
-              },
-              "signature": {
-                "type": "string",
-                "example": ""
-              },
-              "storagePrice": {
-                "type": "string",
-                "example": ""
-              },
-              "tipHeight": {
-                "type": "integer",
-                "format": "int64",
-                "example": 0
-              },
-              "validUntil": {
-                "type": "string",
-                "format": "date-time",
-                "example": "0000-00-00T00:00:00Z"
-              }
-            }
-          },
-          "release": {
-            "type": "string",
-            "example": ""
-          },
-          "remainingStorage": {
-            "type": "integer",
-            "format": "int64",
-            "example": 0
-          },
-          "totalStorage": {
-            "type": "integer",
-            "format": "int64",
-            "example": 0
-          },
-          "walletAddress": {
-            "type": "string",
-            "example": ""
-          }
-        }
-      },
-      "HostPriceTable": {
-        "type": "object",
-        "properties": {
-          "uid": {
-            "type": "string",
-            "example": "75f7884d758670134627c7e82916394b"
-          },
-          "validity": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1800000000000
-          },
-          "hostblockheight": {
-            "type": "integer",
-            "format": "int64",
-            "example": 466271
-          },
-          "updatepricetablecost": {
-            "type": "string",
-            "example": "1"
-          },
-          "accountbalancecost": {
-            "type": "string",
-            "example": "1"
-          },
-          "fundaccountcost": {
-            "type": "string",
-            "example": "1"
-          },
-          "latestrevisioncost": {
-            "type": "string",
-            "example": "1943200000000000000"
-          },
-          "subscriptionmemorycost": {
-            "type": "string",
-            "example": "1"
-          },
-          "subscriptionnotificationcost": {
-            "type": "string",
-            "example": "1"
-          },
-          "initbasecost": {
-            "type": "string",
-            "example": "100000000000000000"
-          },
-          "memorytimecost": {
-            "type": "string",
-            "example": "1"
-          },
-          "downloadbandwidthcost": {
-            "type": "string",
-            "example": "900000000000000"
-          },
-          "uploadbandwidthcost": {
-            "type": "string",
-            "example": "280000000000000"
-          },
-          "dropsectorsbasecost": {
-            "type": "string",
-            "example": "1"
-          },
-          "dropsectorsunitcost": {
-            "type": "string",
-            "example": "1"
-          },
-          "hassectorbasecost": {
-            "type": "string",
-            "example": "1"
-          },
-          "readbasecost": {
-            "type": "string",
-            "example": "100000000000000000"
-          },
-          "readlengthcost": {
-            "type": "string",
-            "example": "1"
-          },
-          "renewcontractcost": {
-            "type": "string",
-            "example": "100000000000000000"
-          },
-          "revisionbasecost": {
-            "type": "string",
-            "example": "0"
-          },
-          "swapsectorcost": {
-            "type": "string",
-            "example": "1"
-          },
-          "writebasecost": {
-            "type": "string",
-            "example": "100000000000000000"
-          },
-          "writelengthcost": {
-            "type": "string",
-            "example": "1"
-          },
-          "writestorecost": {
-            "type": "string",
-            "example": "32407407407"
-          },
-          "txnfeeminrecommended": {
-            "type": "string",
-            "example": "30000000000000000000"
-          },
-          "txnfeemaxrecommended": {
-            "type": "string",
-            "example": "10000000000000000000"
-          },
-          "contractprice": {
-            "type": "string",
-            "example": "100000000000000000000000"
-          },
-          "collateralcost": {
-            "type": "string",
-            "example": "81018518517"
-          },
-          "maxcollateral": {
-            "type": "string",
-            "example": "10000000000000000000000000000"
-          },
-          "maxduration": {
-            "type": "integer",
-            "format": "int64",
-            "example": 25920
-          },
-          "windowsize": {
-            "type": "integer",
-            "format": "int64",
-            "example": 144
-          },
-          "registryentriesleft": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1000000
-          },
-          "registryentriestotal": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1000000
-          }
-        }
-      },
-      "Scan": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-04-17T04:14:02Z"
-          },
-          "success": {
-            "type": "boolean",
-            "example": true
-          },
-          "latency": {
-            "type": "integer",
-            "format": "int64",
-            "example": 3384000000
-          },
-          "error": {
-            "type": "string",
-            "example": ""
-          },
-          "publicKey": {
-            "type": "string",
-            "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-          },
-          "network": {
-            "type": "string",
-            "example": "mainnet"
-          },
-          "node": {
-            "type": "string",
-            "example": "asia"
-          }
-        }
-      },
-      "Benchmark": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-04-16T05:13:35Z"
-          },
-          "success": {
-            "type": "boolean",
-            "example": false
-          },
-          "error": {
-            "type": "string",
-            "example": "context deadline exceeded"
-          },
-          "uploadSpeed": {
-            "type": "number",
-            "format": "double",
-            "example": 0
-          },
-          "downloadSpeed": {
-            "type": "number",
-            "format": "double",
-            "example": 0
-          },
-          "ttfb": {
-            "type": "integer",
-            "format": "int64",
-            "example": 0
-          },
-          "publicKey": {
-            "type": "string",
-            "example": "ed25519:ab79a75577b8d906d088be3e82a0e25fa8c7531a1d3218f4e9f4361907ed1cb3"
-          },
-          "network": {
-            "type": "string",
-            "example": "mainnet"
-          },
-          "node": {
-            "type": "string",
-            "example": "east-us"
-          }
-        }
-      },
-      "PriceChange": {
-        "type": "object",
-        "properties": {
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2024-03-22T10:10:57Z"
-          },
-          "remainingStorage": {
-            "type": "integer",
-            "format": "int64",
-            "example": 18379154915328
-          },
-          "totalStorage": {
-            "type": "integer",
-            "format": "int64",
-            "example": 20000001753088
-          },
-          "storagePrice": {
-            "type": "string",
-            "example": "24885540363"
-          },
-          "collateral": {
-            "type": "string",
-            "example": "49771080726"
-          },
-          "uploadPrice": {
-            "type": "string",
-            "example": "10750553437117"
-          },
-          "downloadPrice": {
-            "type": "string",
-            "example": "10750553437117"
-          }
-        }
-      },
-      "NetworkHosts": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer",
-            "format": "int32",
-            "example": 84926
-          },
-          "online": {
-            "type": "integer",
-            "format": "int32",
-            "example": 509
-          }
-        }
-      },
-      "Averages": {
-        "type": "object",
-        "properties": {
-          "available": {
-            "type": "boolean",
-            "example": true
-          },
-          "storagePrice": {
-            "type": "string",
-            "example": "69433629337"
-          },
-          "collateral": {
-            "type": "string",
-            "example": "142617408521"
-          },
-          "uploadPrice": {
-            "type": "string",
-            "example": "33120526279092"
-          },
-          "downloadPrice": {
-            "type": "string",
-            "example": "146633372285060"
-          },
-          "contractDuration": {
-            "type": "integer",
-            "format": "int64",
-            "example": 25948
-          }
-        }
-      },
-      "NetworkAverages": {
-        "type": "object",
-        "properties": {
-          "tier1": {
-            "$ref": "#/components/schemas/Averages"
-          },
-          "tier2": {
-            "$ref": "#/components/schemas/Averages"
-          },
-          "tier3": {
-            "$ref": "#/components/schemas/Averages"
-          }
-        }
-      },
-      "NodeStatus": {
-        "type": "object",
-        "properties": {
-          "online": {
-            "type": "boolean",
-            "example": true
-          },
-          "version": {
-            "type": "string",
-            "example": "1.1.1"
-          },
-          "networks": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NetworkStatus"
-            }
-          }
-        }
-      },
-      "NetworkStatus": {
-        "type": "object",
-        "properties": {
-          "height": {
-            "type": "integer",
-            "format": "int64",
-            "example": 466441
-          },
-          "balance": {
-            "description": "Either 'ok', or 'low', or 'empty'",
-            "type": "string",
-            "example": "ok"
-          }
-        }
-      }
-    }
-  }
 }

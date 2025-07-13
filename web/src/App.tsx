@@ -58,9 +58,7 @@ const App = () => {
 	}, [darkMode])
 	useEffect(() => {
 		if (excludedPaths.includes(window.location.pathname)) return
-		if (window.location.pathname.indexOf('/anagami') === 0) {
-			switchNetwork('anagami')
-		} else if (window.location.pathname.indexOf('/zen') === 0) {
+		if (window.location.pathname.indexOf('/zen') === 0) {
 			switchNetwork('zen')
 		} else {
 			switchNetwork('mainnet')
@@ -127,25 +125,6 @@ const App = () => {
 					),
 				},
 				{
-					path: 'anagami',
-					element: (
-						<>
-							<Header
-								darkMode={darkMode}
-								toggleDarkMode={toggleDarkMode}
-							/>
-							<Content darkMode={darkMode}>
-								<Hosts
-									network="anagami"
-									darkMode={darkMode}
-									setHosts={setHosts}
-								/>
-							</Content>
-							<Footer darkMode={darkMode}/>
-						</>
-					),
-				},
-				{
 					path: 'host/:publicKey',
 					element: (
 						<>
@@ -165,24 +144,6 @@ const App = () => {
 				},
 				{
 					path: 'zen/host/:publicKey',
-					element: (
-						<>
-							<Header
-								darkMode={darkMode}
-								toggleDarkMode={toggleDarkMode}
-							/>
-							<Content darkMode={darkMode}>
-								<HostDetails
-									darkMode={darkMode}
-									hosts={hosts}
-								/>
-							</Content>
-							<Footer darkMode={darkMode}/>
-						</>
-					),
-				},
-				{
-					path: 'anagami/host/:publicKey',
 					element: (
 						<>
 							<Header

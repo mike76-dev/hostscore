@@ -164,15 +164,12 @@ const topics: Topic[] = [
 						to the latest version.
 					</p>
 					<p>
-						Currently, the newest hosting software is <code>hostd</code>,
-						which is equal to the version 1.6.0. <code>siad</code> hosts
-						running the 1.5.9 version receive a version score of 0.1. All
-						earlier versions automatically get a score of 0.
+						Currently, all V2 hosts receive a score of 1, while all V1 hosts get a
+						score of 0.
 					</p>
 					<p>
-						V2 hosts, which are already live on the Anagami network, will soon start
-						appearing on the Zen and the Mainnet networks, automatically receive the
-						version of 2.0.0 and the score of 1.0.
+						This may change in the future, when a diversification will be made
+						between the hosts running different releases.
 					</p>
 				</>,
 				link: 'how-is-the-score-calculated-version'
@@ -335,7 +332,7 @@ export const FAQ = (props: FAQProps) => {
 				icon={Back}
 				caption="home"
 				darkMode={props.darkMode}
-				onClick={() => {navigate(network === 'anagami' ? '/anagami' : (network === 'zen' ? '/zen' : '/'))}}
+				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
 			/>
 		</div>
 	)

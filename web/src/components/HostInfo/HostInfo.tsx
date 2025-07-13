@@ -206,57 +206,31 @@ export const HostInfo = (props: HostInfoProps) => {
 	}
 	const { online, lastSeen, uptime, activeHosts, score } = interactions()
 	const [scoreExpanded, toggleScore] = useState(false)
-	const getVersion = (host: Host): string => {
-		if (host.v2 === true) {
-			return '2.0.0'
-		}
-		let version = host.settings.version
-		return version === '' ? 'N/A' : version
-	}
-	const getRelease = (host: Host): string => {
-		let r = (host.v2 === true) ? host.v2Settings.release : host.settings.release
-		return r === '' ? 'N/A' : r
-	}
-	const isAcceptingContracts = (host: Host): string => {
-		if (host.v2 === true) {
-			return host.v2Settings.acceptingContracts ? 'Yes' : 'No'
-		}
-		return host.settings.acceptingcontracts ? 'Yes' : 'No'
-	}
-	const getMaxDuration = (host: Host): string => {
-		let d = (host.v2 === true) ? host.v2Settings.maxContractDuration : host.settings.maxduration
-		return d === 0 ? 'N/A' : blocksToTime(d)
-	}
-	const getContractPrice = (host: Host): string => {
-		let cp = (host.v2 === true) ? host.v2Settings.prices.contractPrice : host.settings.contractprice
-		return convertPrice(cp)
-	}
-	const getStoragePrice = (host: Host): string => {
-		let sp = (host.v2 === true) ? host.v2Settings.prices.storagePrice : host.settings.storageprice
-		return convertPricePerBlock(sp)
-	}
-	const getCollateral = (host: Host): string => {
-		let c = (host.v2 === true) ? host.v2Settings.prices.collateral : host.settings.collateral
-		return convertPricePerBlock(c)
-	}
+	const getVersion = (host: Host): string => (host.v2 === true ? '2.0.0' : '1.x.x')
+	const getRelease = (host: Host): string => (host.v2 === true ? host.v2Settings.release : 'N/A')
+	const isAcceptingContracts = (host: Host): string => (host.v2 === true ? (host.v2Settings.acceptingContracts ? 'Yes' : 'No') : 'No')
+	const getMaxDuration = (host: Host): string => (host.v2 === true ? blocksToTime(host.v2Settings.maxContractDuration) : 'N/A')
+	const getContractPrice = (host: Host): string => (host.v2 === true ? convertPrice(host.v2Settings.prices.contractPrice) : 'N/A')
+	const getStoragePrice = (host: Host): string => (host.v2 === true ? convertPricePerBlock(host.v2Settings.prices.storagePrice) : 'N/A')
+	const getCollateral = (host: Host): string => (host.v2 === true ? convertPricePerBlock(host.v2Settings.prices.collateral) : 'N/A')
 	const getIngressPrice = (host: Host): string => {
-		let ip = (host.v2 === true) ? host.v2Settings.prices.ingressPrice : host.settings.uploadbandwidthprice
-		return ip === '0' ? '0 H/TB' : convertPrice(ip + '0'.repeat(12)) + '/TB'
+		if (host.v2 === true) {
+			let ip = host.v2Settings.prices.ingressPrice
+			return ip === '0' ? '0 H/TB' : convertPrice(ip + '0'.repeat(12)) + '/TB'
+		}
+		return 'N/A'
 	}
 	const getEgressPrice = (host: Host): string => {
-		let ep = (host.v2 === true) ? host.v2Settings.prices.egressPrice : host.settings.downloadbandwidthprice
-		return ep === '0' ? '0 H/TB' : convertPrice(ep + '0'.repeat(12)) + '/TB'
+		if (host.v2 === true) {
+			let ep = host.v2Settings.prices.egressPrice
+			return ep === '0' ? '0 H/TB' : convertPrice(ep + '0'.repeat(12)) + '/TB'
+		}
+		return 'N/A'
 	}
-	const getTotalStorage = (host: Host): string => {
-		let ts = (host.v2 === true) ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : host.settings.totalstorage
-		return convertSize(ts)
-	}
-	const getRemainingStorage = (host: Host): string => {
-		let rs = (host.v2 === true) ? host.v2Settings.remainingStorage * 4 * 1024 * 1024 : host.settings.remainingstorage
-		return convertSize(rs)
-	}
+	const getTotalStorage = (host: Host): string => (host.v2 === true ? convertSize(host.v2Settings.totalStorage * 4 * 1024 * 1024) : 'N/A')
+	const getRemainingStorage = (host: Host): string => (host.v2 === true ? convertSize(host.v2Settings.remainingStorage * 4 * 1024 * 1024) : 'N/A')
 	useEffect(() => {
-		let network = location.pathname.indexOf('/anagami') === 0 ? 'anagami' : (location.pathname.indexOf('/zen') === 0 ? 'zen' : 'mainnet')
+		let network = location.pathname.indexOf('/zen') === 0 ? 'zen' : 'mainnet'
 		getAverages(network)
 		.then(data => {
 			if (data && data.averages) {
@@ -277,7 +251,6 @@ export const HostInfo = (props: HostInfoProps) => {
 					<tr><td>First Seen</td><td>{new Date(props.host.firstSeen).toDateString()}</td></tr>
 					<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
 					<tr><td>Uptime</td><td>{uptime}</td></tr>
-					<tr><td>V2 or V1</td><td>{props.host.v2 === true ? 'V2' : 'V1'}</td></tr>
 					<tr><td>Version</td><td>{getVersion(props.host)}</td></tr>
 					<tr><td>Release</td><td>{getRelease(props.host)}</td></tr>
 					<tr><td>Accepting Contracts</td><td>{isAcceptingContracts(props.host)}</td></tr>

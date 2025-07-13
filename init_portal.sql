@@ -28,7 +28,6 @@ CREATE TABLE hosts (
 	contracts_score    DOUBLE NOT NULL,
 	total_score        DOUBLE NOT NULL,
 	settings           BLOB,
-	price_table        BLOB,
 	siamux_addresses   TEXT NOT NULL,
 	PRIMARY KEY (id, network)
 );
@@ -72,7 +71,8 @@ CREATE TABLE scans (
 	PRIMARY KEY (id),
 	INDEX idx_scans (network, node, public_key, ran_at),
 	INDEX idx_scans_pk (public_key),
-	INDEX idx_scans_npk (network, public_key)
+	INDEX idx_scans_npk (network, public_key),
+	INDEX idx_scans_ra (ran_at)
 );
 
 CREATE TABLE benchmarks (

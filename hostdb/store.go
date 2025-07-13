@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
-	rhpv2 "go.sia.tech/core/rhp/v2"
-	rhpv3 "go.sia.tech/core/rhp/v3"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	"go.sia.tech/coreutils/chain"
@@ -72,37 +70,21 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 	} else {
 		delete(s.blockedHosts, host.PublicKey)
 	}
+
 	s.hosts[host.PublicKey] = host
-	var rev, settings, pt bytes.Buffer
-	if host.V2 {
-		e := types.NewEncoder(&rev)
-		if (host.V2Revision.Parent.ID != types.FileContractID{}) {
-			host.V2Revision.EncodeTo(e)
-			e.Flush()
-			s.v2Contracts[host.V2Revision.Parent.ID] = host.V2Revision.Parent
-		}
-		e = types.NewEncoder(&settings)
-		if (host.V2Settings != rhpv4.HostSettings{}) {
-			host.V2Settings.EncodeTo(e)
-			e.Flush()
-		}
-	} else {
-		e := types.NewEncoder(&rev)
-		if (host.Revision.ParentID != types.FileContractID{}) {
-			host.Revision.EncodeTo(e)
-			e.Flush()
-		}
-		e = types.NewEncoder(&settings)
-		if (host.Settings != rhpv2.HostSettings{}) {
-			utils.EncodeSettings(&host.Settings, e)
-			e.Flush()
-		}
-		e = types.NewEncoder(&pt)
-		if (host.PriceTable != rhpv3.HostPriceTable{}) {
-			utils.EncodePriceTable(&host.PriceTable, e)
-			e.Flush()
-		}
+	var rev, settings bytes.Buffer
+	e := types.NewEncoder(&rev)
+	if (host.V2Revision.Parent.ID != types.FileContractID{}) {
+		host.V2Revision.EncodeTo(e)
+		e.Flush()
+		s.v2Contracts[host.V2Revision.Parent.ID] = host.V2Revision.Parent
 	}
+	e = types.NewEncoder(&settings)
+	if (host.V2Settings != rhpv4.HostSettings{}) {
+		host.V2Settings.EncodeTo(e)
+		e.Flush()
+	}
+
 	_, err := s.tx.Exec(`
 		INSERT INTO hdb_hosts (
 			id,
@@ -123,12 +105,11 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			last_update,
 			revision,
 			settings,
-			price_table,
 			siamux_addresses,
 			modified,
 			fetched
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) AS new
 		ON DUPLICATE KEY UPDATE
 			first_seen = new.first_seen,
 			known_since = new.known_since,
@@ -145,7 +126,6 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 			last_update = new.last_update,
 			revision = new.revision,
 			settings = new.settings,
-			price_table = new.price_table,
 			siamux_addresses = new.siamux_addresses,
 			modified = new.modified
 	`,
@@ -167,7 +147,6 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 		host.Interactions.LastUpdate,
 		rev.Bytes(),
 		settings.Bytes(),
-		pt.Bytes(),
 		strings.Join(host.SiamuxAddresses, ","),
 		time.Now().Unix(),
 		0,
@@ -212,28 +191,12 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 		host.ScanHistory = host.ScanHistory[1:]
 	}
 
-	host.V2 = scan.V2
-	var settings, pt bytes.Buffer
-	if scan.V2 {
-		if (scan.V2Settings != rhpv4.HostSettings{}) {
-			host.V2Settings = scan.V2Settings
-			e := types.NewEncoder(&settings)
-			scan.V2Settings.EncodeTo(e)
-			e.Flush()
-		}
-	} else {
-		if (scan.Settings != rhpv2.HostSettings{}) {
-			host.Settings = scan.Settings
-			e := types.NewEncoder(&settings)
-			utils.EncodeSettings(&scan.Settings, e)
-			e.Flush()
-		}
-		if (scan.PriceTable != rhpv3.HostPriceTable{}) {
-			host.PriceTable = scan.PriceTable
-			e := types.NewEncoder(&pt)
-			utils.EncodePriceTable(&scan.PriceTable, e)
-			e.Flush()
-		}
+	var settings bytes.Buffer
+	if (scan.V2Settings != rhpv4.HostSettings{}) {
+		host.V2Settings = scan.V2Settings
+		e := types.NewEncoder(&settings)
+		scan.V2Settings.EncodeTo(e)
+		e.Flush()
 	}
 
 	_, err := s.tx.Exec(`
@@ -244,13 +207,11 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 			success,
 			latency,
 			error,
-			v2,
 			settings,
-			price_table,
 			modified,
 			fetched
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		host.Network,
 		host.PublicKey[:],
@@ -258,9 +219,7 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 		scan.Success,
 		scan.Latency.Milliseconds(),
 		scan.Error,
-		scan.V2,
 		settings.Bytes(),
-		pt.Bytes(),
 		time.Now().Unix(),
 		0,
 	)
@@ -465,7 +424,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			last_update,
 			revision,
 			settings,
-			price_table,
 			siamux_addresses
 		FROM hdb_hosts
 		WHERE network = ?
@@ -483,8 +441,8 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		var na, ip, smux string
 		var ut, dt, fs, ls, lc int64
 		var si, fi float64
-		var rev, settings, pt []byte
-		if err := rows.Scan(&id, &pk, &fs, &ks, &b, &v2, &na, &ut, &dt, &ls, &ip, &lc, &si, &fi, &lu, &rev, &settings, &pt, &smux); err != nil {
+		var rev, settings []byte
+		if err := rows.Scan(&id, &pk, &fs, &ks, &b, &v2, &na, &ut, &dt, &ls, &ip, &lc, &si, &fi, &lu, &rev, &settings, &smux); err != nil {
 			rows.Close()
 			return utils.AddContext(err, "couldn't scan host data")
 		}
@@ -509,39 +467,23 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			},
 			SiamuxAddresses: strings.Split(smux, ","),
 		}
-		if len(rev) > 0 {
+		if v2 && len(rev) > 0 {
 			d := types.NewBufDecoder(rev)
-			if v2 {
-				host.V2Revision.DecodeFrom(d)
-				if (host.V2Revision.Parent.ID != types.FileContractID{}) {
-					s.v2Contracts[host.V2Revision.Parent.ID] = host.V2Revision.Parent
-				}
-			} else {
-				host.Revision.DecodeFrom(d)
-			}
+			host.V2Revision.DecodeFrom(d)
 			if err := d.Err(); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode revision")
 			}
-		}
-		if len(settings) > 0 {
-			d := types.NewBufDecoder(settings)
-			if v2 {
-				host.V2Settings.DecodeFrom(d)
-			} else {
-				utils.DecodeSettings(&host.Settings, d)
+			if (host.V2Revision.Parent.ID != types.FileContractID{}) {
+				s.v2Contracts[host.V2Revision.Parent.ID] = host.V2Revision.Parent
 			}
+		}
+		if v2 && len(settings) > 0 {
+			d := types.NewBufDecoder(settings)
+			host.V2Settings.DecodeFrom(d)
 			if err := d.Err(); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't decode host settings")
-			}
-		}
-		if len(pt) > 0 {
-			d := types.NewBufDecoder(pt)
-			utils.DecodePriceTable(&host.PriceTable, d)
-			if err := d.Err(); err != nil {
-				rows.Close()
-				return utils.AddContext(err, "couldn't decode host price table")
 			}
 		}
 		if host.Blocked || domains.isBlocked(host.NetAddress) {
@@ -553,7 +495,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 	rows.Close()
 
 	scanStmt, err := s.db.Prepare(`
-		SELECT ran_at, success, latency, error, v2, settings, price_table
+		SELECT ran_at, success, latency, error, settings
 		FROM hdb_scans
 		WHERE public_key = ?
 		AND network = ?
@@ -570,7 +512,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		FROM hdb_scans
 		WHERE public_key = ?
 		AND network = ?
-		AND v2 = ?
 		AND settings IS NOT NULL
 		ORDER BY ran_at DESC
 		LIMIT 1
@@ -579,20 +520,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		return utils.AddContext(err, "couldn't prepare settings statement")
 	}
 	defer settingsStmt.Close()
-
-	priceTableStmt, err := s.db.Prepare(`
-		SELECT price_table
-		FROM hdb_scans
-		WHERE public_key = ?
-		AND network = ?
-		AND price_table IS NOT NULL
-		ORDER BY ran_at DESC
-		LIMIT 1
-	`)
-	if err != nil {
-		return utils.AddContext(err, "couldn't prepare price table statement")
-	}
-	defer priceTableStmt.Close()
 
 	benchmarkStmt, err := s.db.Prepare(`
 		SELECT ran_at, success, upload_speed, download_speed, ttfb, error
@@ -614,11 +541,11 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		}
 		for rows.Next() {
 			var ra int64
-			var success, v2 bool
+			var success bool
 			var latency float64
 			var msg string
-			var settings, pt []byte
-			if err := rows.Scan(&ra, &success, &latency, &msg, &v2, &settings, &pt); err != nil {
+			var settings []byte
+			if err := rows.Scan(&ra, &success, &latency, &msg, &settings); err != nil {
 				rows.Close()
 				return utils.AddContext(err, "couldn't load scan history")
 			}
@@ -627,26 +554,13 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 				Success:   success,
 				Latency:   time.Duration(latency) * time.Millisecond,
 				Error:     msg,
-				V2:        v2,
 			}
 			if len(settings) > 0 {
 				d := types.NewBufDecoder(settings)
-				if v2 {
-					scan.V2Settings.DecodeFrom(d)
-				} else {
-					utils.DecodeSettings(&scan.Settings, d)
-				}
+				scan.V2Settings.DecodeFrom(d)
 				if err := d.Err(); err != nil {
 					rows.Close()
 					return utils.AddContext(err, "couldn't decode host settings")
-				}
-			}
-			if len(pt) > 0 {
-				d := types.NewBufDecoder(pt)
-				utils.DecodePriceTable(&scan.PriceTable, d)
-				if err := d.Err(); err != nil {
-					rows.Close()
-					return utils.AddContext(err, "couldn't decode host price table")
 				}
 			}
 			host.ScanHistory = append([]HostScan{scan}, host.ScanHistory...)
@@ -656,7 +570,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		if host.V2 {
 			if (host.V2Settings == rhpv4.HostSettings{}) {
 				var settings []byte
-				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network, true).Scan(&settings)
+				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network).Scan(&settings)
 				if err != nil && !errors.Is(err, sql.ErrNoRows) {
 					return utils.AddContext(err, "couldn't load host settings")
 				}
@@ -665,36 +579,6 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 					host.V2Settings.DecodeFrom(d)
 					if err := d.Err(); err != nil {
 						return utils.AddContext(err, "couldn't decode host settings")
-					}
-				}
-			}
-		} else {
-			if (host.Settings == rhpv2.HostSettings{}) {
-				var settings []byte
-				err = settingsStmt.QueryRow(host.PublicKey[:], host.Network, false).Scan(&settings)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					return utils.AddContext(err, "couldn't load host settings")
-				}
-				if len(settings) > 0 {
-					d := types.NewBufDecoder(settings)
-					utils.DecodeSettings(&host.Settings, d)
-					if err := d.Err(); err != nil {
-						return utils.AddContext(err, "couldn't decode host settings")
-					}
-				}
-			}
-
-			if (host.PriceTable == rhpv3.HostPriceTable{}) {
-				var pt []byte
-				err = priceTableStmt.QueryRow(host.PublicKey[:], host.Network).Scan(&pt)
-				if err != nil && !errors.Is(err, sql.ErrNoRows) {
-					return utils.AddContext(err, "couldn't load host price table")
-				}
-				if len(pt) > 0 {
-					d := types.NewBufDecoder(pt)
-					utils.DecodePriceTable(&host.PriceTable, d)
-					if err := d.Err(); err != nil {
-						return utils.AddContext(err, "couldn't decode host price table")
 					}
 				}
 			}
@@ -800,9 +684,6 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 					s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
 					return err
 				}
-				if (!exists || s.isSynced()) && !host.Blocked {
-					s.hdb.queueScan(host)
-				}
 			}
 		}
 
@@ -849,7 +730,7 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 					s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
 					return err
 				}
-				if (!exists || s.isSynced()) && !host.Blocked {
+				if s.isSynced() && !host.Blocked {
 					s.hdb.queueScan(host)
 				}
 			}
@@ -953,7 +834,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 	rows.Close()
 
 	rows, err = s.tx.Query(`
-		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.v2, s.settings, s.price_table
+		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.settings
 		FROM hdb_scans s
 		JOIN hdb_hosts h
 		ON s.public_key = h.public_key
@@ -970,12 +851,12 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 	for rows.Next() {
 		var id, ra int64
-		var success, v2 bool
+		var success bool
 		var latency float64
 		var msg string
-		var settings, pt []byte
+		var settings []byte
 		pk := make([]byte, 32)
-		if err := rows.Scan(&id, &pk, &ra, &success, &latency, &msg, &v2, &settings, &pt); err != nil {
+		if err := rows.Scan(&id, &pk, &ra, &success, &latency, &msg, &settings); err != nil {
 			rows.Close()
 			return HostUpdates{}, utils.AddContext(err, "couldn't decode scans")
 		}
@@ -986,29 +867,16 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 				Success:   success,
 				Latency:   time.Duration(latency) * time.Millisecond,
 				Error:     msg,
-				V2:        v2,
 			},
 			PublicKey: types.PublicKey(pk),
 			Network:   s.network,
 		}
 		if len(settings) > 0 {
 			d := types.NewBufDecoder(settings)
-			if v2 {
-				scan.V2Settings.DecodeFrom(d)
-			} else {
-				utils.DecodeSettings(&scan.Settings, d)
-			}
+			scan.V2Settings.DecodeFrom(d)
 			if err := d.Err(); err != nil {
 				rows.Close()
 				return HostUpdates{}, utils.AddContext(err, "couldn't decode host settings")
-			}
-		}
-		if len(pt) > 0 {
-			d := types.NewBufDecoder(pt)
-			utils.DecodePriceTable(&scan.PriceTable, d)
-			if err := d.Err(); err != nil {
-				rows.Close()
-				return HostUpdates{}, utils.AddContext(err, "couldn't decode host price table")
 			}
 		}
 		updates.Scans = append(updates.Scans, scan)
