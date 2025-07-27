@@ -304,7 +304,9 @@ func (api *portalAPI) requestStatus() {
 			mu.Unlock()
 		}
 	}
+	api.mu.Lock()
 	api.nodes = nodes
+	api.mu.Unlock()
 }
 
 func (api *portalAPI) doRequestStatus() {
@@ -331,8 +333,8 @@ func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}*/
 
 	api.mu.RLock()
+	defer api.mu.RUnlock()
 	api.router.ServeHTTP(w, r)
-	api.mu.RUnlock()
 }
 
 func (api *portalAPI) buildHTTPRoutes() {
@@ -371,9 +373,7 @@ func (api *portalAPI) buildHTTPRoutes() {
 		api.serviceStatusHandler(w, req, ps)
 	})
 
-	api.mu.Lock()
 	api.router = *router
-	api.mu.Unlock()
 }
 
 func checkNetwork(network string) string {

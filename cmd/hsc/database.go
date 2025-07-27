@@ -307,18 +307,18 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		}
 	}
 
-	api.mu.Lock()
 	for _, h := range updates.Hosts {
 		var host *portalHost
 		var exists bool
+		api.mu.RLock()
 		hosts, ok := api.hosts[h.Network]
 		if ok {
 			host, exists = hosts[h.PublicKey]
 		}
+		api.mu.RUnlock()
 		var count int
 		if err := priceChangeCountStmt.QueryRow(h.PublicKey[:]).Scan(&count); err != nil {
 			tx.Rollback()
-			api.mu.Unlock()
 			return utils.AddContext(err, "couldn't count price changes")
 		}
 		if exists && (count == 0 || pricesChanged(h, *host)) {
@@ -448,10 +448,11 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		)
 		if err != nil {
 			tx.Rollback()
-			api.mu.Unlock()
 			return utils.AddContext(err, "couldn't update score")
 		}
+		api.mu.Lock()
 		api.hosts[h.Network][h.PublicKey] = host
+		api.mu.Unlock()
 	}
 
 	toUpdate := make(map[string]map[types.PublicKey]struct{})
@@ -480,12 +481,15 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 
 	for network, keys := range toUpdate {
 		for pk := range keys {
+			api.mu.RLock()
 			hosts := api.hosts[network]
 			host, exists := hosts[pk]
 			if !exists {
 				api.log.Warn("orphaned scan or benchmark found", zap.String("network", network), zap.Stringer("host", pk))
+				api.mu.RUnlock()
 				continue
 			}
+			api.mu.RUnlock()
 
 			interactions := host.Interactions[node]
 			interactions.ScanHistory = append(interactions.ScanHistory, newScans[network][pk]...)
@@ -546,18 +550,19 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			)
 			if err != nil {
 				tx.Rollback()
-				api.mu.Unlock()
 				return utils.AddContext(err, "couldn't update score")
 			}
 		}
 	}
 
 	hosts := make(map[string][]portalHost)
+	api.mu.RLock()
 	for _, network := range networks {
 		for _, host := range api.hosts[network] {
 			hosts[network] = append(hosts[network], *host)
 		}
 	}
+	api.mu.RUnlock()
 
 	for _, network := range networks {
 		slices.SortStableFunc(hosts[network], func(a, b portalHost) int {
@@ -579,6 +584,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		})
 	}
 
+	api.mu.Lock()
 	for _, network := range networks {
 		for i := range hosts[network] {
 			api.hosts[network][hosts[network][i].PublicKey].Rank = i + 1
@@ -1755,20 +1761,24 @@ func (api *portalAPI) getCountries(network string, all bool) (countries []string
 	}
 	defer stmt.Close()
 
-	api.mu.RLock()
 	allCountries := make(map[string]struct{})
+	api.mu.RLock()
 	hosts := api.hosts[network]
+	var keys []types.PublicKey
 	for pk, host := range hosts {
-		if !isOnline(*host) {
-			continue
+		if isOnline(*host) {
+			keys = append(keys, pk)
 		}
+	}
+	api.mu.RUnlock()
+
+	for _, pk := range keys {
 		var c string
 		if err := stmt.QueryRow(network, pk[:]).Scan(&c); err != nil {
 			continue
 		}
 		allCountries[c] = struct{}{}
 	}
-	api.mu.RUnlock()
 
 	for c := range allCountries {
 		countries = append(countries, c)
@@ -1812,8 +1822,7 @@ func (api *portalAPI) getHostKeys(
 	api.mu.RLock()
 	hosts := api.hosts[network]
 	var selectedHosts []portalHost
-
-outer:
+	var usefulHosts []*portalHost
 	for _, host := range hosts {
 		if !isOnline(*host) {
 			continue
@@ -1827,6 +1836,12 @@ outer:
 			continue
 		}
 
+		usefulHosts = append(usefulHosts, host)
+	}
+	api.mu.RUnlock()
+
+outer:
+	for _, host := range usefulHosts {
 		if host.V2Settings.Prices.StoragePrice.Cmp(maxStoragePrice) > 0 {
 			continue
 		}
@@ -1893,7 +1908,6 @@ outer:
 
 		selectedHosts = append(selectedHosts, *host)
 	}
-	api.mu.RUnlock()
 
 	slices.SortStableFunc(selectedHosts, func(a, b portalHost) int { return a.Rank - b.Rank })
 
