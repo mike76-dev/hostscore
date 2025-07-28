@@ -1021,11 +1021,12 @@ func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.R
 
 	allHosts := strings.ToLower(req.FormValue("all"))
 	var all bool
-	if allHosts == "" || allHosts == "true" {
+	switch allHosts {
+	case "", "true":
 		all = true
-	} else if allHosts == "false" {
+	case "false":
 		all = false
-	} else {
+	default:
 		writeError(w, "wrong all parameter", http.StatusBadRequest)
 		return
 	}
