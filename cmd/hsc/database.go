@@ -1898,7 +1898,6 @@ outer:
 		if len(countries) > 0 {
 			var c string
 			if err := stmt.QueryRow(network, host.PublicKey[:]).Scan(&c); err != nil {
-				api.mu.RUnlock()
 				return nil, utils.AddContext(err, "couldn't retrieve country")
 			}
 			if _, ok := allCountries[strings.ToLower(c)]; !ok {

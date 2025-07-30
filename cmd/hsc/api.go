@@ -332,8 +332,6 @@ func (api *portalAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}*/
 
-	api.mu.RLock()
-	defer api.mu.RUnlock()
 	api.router.ServeHTTP(w, r)
 }
 
