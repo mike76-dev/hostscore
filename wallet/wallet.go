@@ -238,8 +238,7 @@ func (wm *WalletManager) performWalletMaintenance() {
 		balance := wallet.SumOutputs(utxos)
 		fee := wm.chain.RecommendedFee()
 
-		state := wm.chain.TipState()
-		txns, toSign, err := wm.wallet.RedistributeV2(numOutputs, outputValue, fee)
+		basis, txns, toSign, err := wm.wallet.Redistribute(numOutputs, outputValue, fee)
 		if err != nil {
 			wm.log.Error("failed to redistribute wallet", zap.String("network", wm.store.network), zap.Int("outputs", numOutputs), zap.Stringer("amount", outputValue), zap.Stringer("balance", balance), zap.Error(err))
 			return
@@ -253,14 +252,14 @@ func (wm *WalletManager) performWalletMaintenance() {
 			wm.SignV2Inputs(&txns[i], toSign[i])
 		}
 
-		_, err = wm.chain.AddV2PoolTransactions(state.Index, txns)
+		_, err = wm.chain.AddV2PoolTransactions(basis, txns)
 		if err != nil {
 			wm.log.Error("failed to broadcast v2 transactions", zap.String("network", wm.store.network), zap.Error(err))
 			wm.ReleaseInputs(nil, txns)
 			return
 		}
 
-		wm.syncer.BroadcastV2TransactionSet(state.Index, txns)
+		wm.syncer.BroadcastV2TransactionSet(basis, txns)
 	}
 
 	if err := wm.tg.Add(); err != nil {

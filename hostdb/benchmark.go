@@ -391,12 +391,11 @@ func (hdb *HostDB) runUploadBenchmarkV2(host *HostDBEntry) (roots []types.Hash25
 	var data [rhpv4.SectorSize]byte
 	roots = make([]types.Hash256, numSectors)
 	key := hdb.nodes.Wallet(host.Network).Key()
-	account := rhpv4.Account(key.PublicKey())
 	start := time.Now()
 	if err := rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 		for i := 0; i < numSectors; i++ {
 			frand.Read(data[:256])
-			res, err := rhpv4utils.RPCWriteSector(ctx, t, host.V2Settings.Prices, account.Token(key, host.PublicKey), bytes.NewReader(data[:]), uint64(len(data)))
+			res, err := rhpv4utils.RPCWriteSector(ctx, t, host.V2Settings.Prices, rhpv4.NewAccountToken(key, host.PublicKey), bytes.NewReader(data[:]), uint64(len(data)))
 			if err != nil {
 				return utils.AddContext(err, "unable to upload sector")
 			}
@@ -425,12 +424,11 @@ func (hdb *HostDB) runDownloadBenchmarkV2(host *HostDBEntry, roots []types.Hash2
 	numSectors := benchmarkBatchSize / rhpv2.SectorSize
 	var data [rhpv4.SectorSize]byte
 	key := hdb.nodes.Wallet(host.Network).Key()
-	account := rhpv4.Account(key.PublicKey())
 	start := time.Now()
 	if err := rhp.WithTransportV4(ctx, host.NetAddress, host.PublicKey, func(t rhpv4utils.TransportClient) error {
 		for i := 0; i < numSectors; i++ {
 			tw := newTTFBWriter(bytes.NewBuffer(data[:]))
-			_, err := rhpv4utils.RPCReadSector(ctx, t, host.V2Settings.Prices, account.Token(key, host.PublicKey), tw, roots[i], 0, rhpv4.SectorSize)
+			_, err := rhpv4utils.RPCReadSector(ctx, t, host.V2Settings.Prices, rhpv4.NewAccountToken(key, host.PublicKey), tw, roots[i], 0, rhpv4.SectorSize)
 			if err != nil {
 				return utils.AddContext(err, "unable to download sector")
 			}

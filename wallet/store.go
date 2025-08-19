@@ -125,23 +125,43 @@ func (s *DBStore) WalletEventCount() (uint64, error) {
 	return 0, nil
 }
 
+// WalletEvent implements wallet.SingleAddressStore.
+func (s *DBStore) WalletEvent(types.Hash256) (wallet.Event, error) {
+	return wallet.Event{}, nil
+}
+
 // WalletEvents implements wallet.SingleAddressStore.
 func (s *DBStore) WalletEvents(int, int) ([]wallet.Event, error) {
 	return nil, nil
 }
 
 // LockUTXOs implements wallet.SingleAddressStore.
-func (s *DBStore) LockUTXOs(_ []types.SiacoinOutputID, _ time.Time) error {
+func (s *DBStore) LockUTXOs([]types.SiacoinOutputID, time.Time) error {
 	return nil
 }
 
 // LockedUTXOs implements wallet.SingleAddressStore.
-func (s *DBStore) LockedUTXOs(_ time.Time) ([]types.SiacoinOutputID, error) {
+func (s *DBStore) LockedUTXOs(time.Time) ([]types.SiacoinOutputID, error) {
 	return nil, nil
 }
 
 // ReleaseUTXOs implements wallet.SingleAddressStore.
-func (s *DBStore) ReleaseUTXOs(_ []types.SiacoinOutputID) error {
+func (s *DBStore) ReleaseUTXOs([]types.SiacoinOutputID) error {
+	return nil
+}
+
+// AddBroadcastedSet implements wallet.SingleAddressStore.
+func (s *DBStore) AddBroadcastedSet(wallet.BroadcastedSet) error {
+	return nil
+}
+
+// BroadcastedSets implements wallet.SingleAddressStore.
+func (s *DBStore) BroadcastedSets() ([]wallet.BroadcastedSet, error) {
+	return nil, nil
+}
+
+// RemoveBroadcastedSet implements wallet.SingleAddressStore.
+func (s *DBStore) RemoveBroadcastedSet(_ wallet.BroadcastedSet) error {
 	return nil
 }
 
