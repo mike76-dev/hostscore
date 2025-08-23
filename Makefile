@@ -11,7 +11,7 @@ ldflags= \
 -X "github.com/mike76-dev/hostscore/internal/build.NodeBinaryName=hsd" \
 -X "github.com/mike76-dev/hostscore/internal/build.NodeVersion=2.1.1" \
 -X "github.com/mike76-dev/hostscore/internal/build.ClientBinaryName=hsc" \
--X "github.com/mike76-dev/hostscore/internal/build.ClientVersion=2.2.0" \
+-X "github.com/mike76-dev/hostscore/internal/build.ClientVersion=2.2.1" \
 -X "github.com/mike76-dev/hostscore/internal/build.GitRevision=${GIT_DIRTY}${GIT_REVISION}" \
 -X "github.com/mike76-dev/hostscore/internal/build.BuildTime=${BUILD_TIME}"
 
