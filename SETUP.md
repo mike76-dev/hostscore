@@ -235,7 +235,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd [network-flags]
+ExecStart=/usr/local/bin/hsd --dir=/usr/local/etc/hsd
 TimeoutStopSec=660
 Restart=always
 RestartSec=15
