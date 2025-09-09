@@ -14,7 +14,7 @@ Log into your server and download the binaries. This guide assumes that you will
 ```
 mkdir ~/hostscore
 cd ~/hostscore
-wget -q https://github.com/mike76-dev/hostscore/releases/download/v2.1.0-hsd/hostscore_linux_amd64.zip
+wget -q https://github.com/mike76-dev/hostscore/releases/download/v2.1.1-hsd/hostscore_linux_amd64.zip
 unzip hostscore_linux_amd64.zip
 rm hostscore_linux_amd64.zip
 ```
@@ -268,7 +268,7 @@ Jan 31 13:59:34 server hsd[1945]: Using HSD_API_PASSWORD environment variable.
 Jan 31 13:59:34 server hsd[1945]: Using HSD_DB_PASSWORD environment variable.
 Jan 31 13:59:34 server hsd[1945]: Using HSD_WALLET_SEED environment variable.
 Jan 31 13:59:34 server hsd[1945]: Using HSD_WALLET_SEED_ZEN environment variable.
-Jan 31 13:59:34 server hsd[1945]: hsd v2.1.0
+Jan 31 13:59:34 server hsd[1945]: hsd v2.1.1
 Jan 31 13:59:34 server hsd[1945]: Git Revision 047f00c
 Jan 31 13:59:34 server hsd[1945]: Loading...
 Jan 31 13:59:34 server hsd[1945]: Connecting to the SQL database...
@@ -286,7 +286,7 @@ $ curl -u "":<api_password> "http://localhost:9980/api/node/status"
 ```
 Output:
 {
-	"version": "2.0.0",
+	"version": "2.1.1",
 	"networks": [
 		{
 			"network": "mainnet",
@@ -300,7 +300,7 @@ Output:
 		},
 		{
 			"network": "zen",
-			"height": 16600,
+			"height": 3340,
 			"balance": {
 				"spendable": "0",
 				"confirmed": "0",
