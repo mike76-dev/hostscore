@@ -25,39 +25,29 @@ type IPInfo struct {
 }
 
 const (
-	// marketAPI is the endpoint of the Siacoin exchange rate API.
-	marketAPI = "https://api.siacentral.com/v2/market/exchange-rate"
+	// rateAPI is the endpoint of the Siacoin exchange rate API.
+	rateAPI = "https://api.siascan.com/exchange-rate/siacoin/usd"
 
 	// ipInfoAPI is the endpoint of the IPInfo geolocation API.
 	ipInfoAPI = "https://ipinfo.io/"
 )
 
-type (
-	// marketResponse holds the market API response.
-	marketResponse struct {
-		Message string             `json:"message"`
-		Type    string             `json:"type"`
-		Price   map[string]float64 `json:"price"`
-	}
-)
-
-// FetchSCRates retrieves the Siacoin exchange rates.
-func FetchSCRates() (map[string]float64, error) {
-	resp, err := http.Get(marketAPI)
+// FetchSCRate retrieves the Siacoin exchange rate.
+func FetchSCRate() (rate float64, err error) {
+	resp, err := http.Get(rateAPI)
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return nil, errors.New("falied to fetch SC exchange rates")
+			return 0, errors.New("falied to fetch SC exchange rate")
 		}
-		var data marketResponse
 		dec := json.NewDecoder(resp.Body)
-		err = dec.Decode(&data)
+		err = dec.Decode(&rate)
 		if err != nil {
-			return nil, errors.New("wrong format of SC exchange rates")
+			return 0, errors.New("wrong format of SC exchange rate")
 		}
-		return data.Price, nil
+		return
 	}
-	return nil, utils.AddContext(err, "falied to fetch SC exchange rates")
+	return 0, utils.AddContext(err, "falied to fetch SC exchange rate")
 }
 
 // FetchIPInfo uses the IPInfo API to fetch the host's geolocation.

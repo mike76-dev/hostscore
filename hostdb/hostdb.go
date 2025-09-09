@@ -314,32 +314,29 @@ func (hdb *HostDB) updateSCRate() {
 	defer hdb.tg.Done()
 
 	for {
-		rates, err := external.FetchSCRates()
+		rate, err := external.FetchSCRate()
 		if err != nil {
-			hdb.log.Error("couldn't fetch SC exchange rates", zap.Error(err))
+			hdb.log.Error("couldn't fetch SC exchange rate", zap.Error(err))
 		}
 
-		if rates != nil {
-			rate := rates["usd"]
-			if rate != 0 {
-				hdb.mu.Lock()
-				if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > maxUploadPriceUSD {
-					hdb.priceLimits.maxUploadPrice = utils.FromFloat(maxUploadPriceUSD / rate)
-				} else {
-					hdb.priceLimits.maxUploadPrice = maxUploadPriceSC
-				}
-				if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > maxDownloadPriceUSD {
-					hdb.priceLimits.maxDownloadPrice = utils.FromFloat(maxDownloadPriceUSD / rate)
-				} else {
-					hdb.priceLimits.maxDownloadPrice = maxDownloadPriceSC
-				}
-				if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > maxDownloadPriceUSD {
-					hdb.priceLimits.maxStoragePrice = utils.FromFloat(maxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
-				} else {
-					hdb.priceLimits.maxStoragePrice = maxStoragePriceSC
-				}
-				hdb.mu.Unlock()
+		if rate != 0 {
+			hdb.mu.Lock()
+			if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > maxUploadPriceUSD {
+				hdb.priceLimits.maxUploadPrice = utils.FromFloat(maxUploadPriceUSD / rate)
+			} else {
+				hdb.priceLimits.maxUploadPrice = maxUploadPriceSC
 			}
+			if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > maxDownloadPriceUSD {
+				hdb.priceLimits.maxDownloadPrice = utils.FromFloat(maxDownloadPriceUSD / rate)
+			} else {
+				hdb.priceLimits.maxDownloadPrice = maxDownloadPriceSC
+			}
+			if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > maxDownloadPriceUSD {
+				hdb.priceLimits.maxStoragePrice = utils.FromFloat(maxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
+			} else {
+				hdb.priceLimits.maxStoragePrice = maxStoragePriceSC
+			}
+			hdb.mu.Unlock()
 		}
 
 		select {
