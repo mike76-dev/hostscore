@@ -1059,7 +1059,7 @@ func (s *hostDBStore) pruneOldRecords() error {
 	}
 
 	_, err = s.tx.Exec(`
-		DELETE FROM hdb_benchmarks_`+s.network+`
+		DELETE FROM hdb_benchmarks
 		WHERE ran_at < ?
 		AND network = ?
 	`, time.Now().AddDate(0, 0, -28).Unix(), s.network)
