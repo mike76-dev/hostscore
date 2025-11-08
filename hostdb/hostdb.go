@@ -220,7 +220,7 @@ func syncStore(store *hostDBStore, cm *chain.Manager, index types.ChainIndex) er
 }
 
 // NewHostDB returns a new HostDB.
-func NewHostDB(db *sql.DB, dir string, nodes NodeStore, networks []string) (*HostDB, <-chan error) {
+func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeStore, networks []string) (*HostDB, <-chan error) {
 	errChan := make(chan error, 1)
 	l, closeFn, err := persist.NewFileLogger(filepath.Join(dir, "hostdb.log"), zapcore.InfoLevel)
 	if err != nil {
@@ -241,13 +241,15 @@ func NewHostDB(db *sql.DB, dir string, nodes NodeStore, networks []string) (*Hos
 		closeFn:      closeFn,
 		scanMap:      make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
-			maxContractPrice: maxContractPrice,
-			maxUploadPrice:   maxUploadPriceSC,
-			maxDownloadPrice: maxDownloadPriceSC,
-			maxStoragePrice:  maxStoragePriceSC,
+			maxContractPrice: limits.MaxContractPriceSC,
+			maxUploadPrice:   limits.MaxUploadPriceSC,
+			maxDownloadPrice: limits.MaxDownloadPriceSC,
+			maxStoragePrice:  limits.MaxStoragePriceSC,
 		},
 		blockedDomains: domains,
 	}
+
+	priceLimits = limits
 
 	for _, network := range networks {
 		store, tip, err := newHostDBStore(db, l, network, domains)
@@ -321,20 +323,20 @@ func (hdb *HostDB) updateSCRate() {
 
 		if rate != 0 {
 			hdb.mu.Lock()
-			if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > maxUploadPriceUSD {
-				hdb.priceLimits.maxUploadPrice = utils.FromFloat(maxUploadPriceUSD / rate)
+			if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > priceLimits.MaxUploadPriceUSD {
+				hdb.priceLimits.maxUploadPrice = utils.FromFloat(priceLimits.MaxUploadPriceUSD / rate)
 			} else {
-				hdb.priceLimits.maxUploadPrice = maxUploadPriceSC
+				hdb.priceLimits.maxUploadPrice = priceLimits.MaxUploadPriceSC
 			}
-			if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > maxDownloadPriceUSD {
-				hdb.priceLimits.maxDownloadPrice = utils.FromFloat(maxDownloadPriceUSD / rate)
+			if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > priceLimits.MaxDownloadPriceUSD {
+				hdb.priceLimits.maxDownloadPrice = utils.FromFloat(priceLimits.MaxDownloadPriceUSD / rate)
 			} else {
-				hdb.priceLimits.maxDownloadPrice = maxDownloadPriceSC
+				hdb.priceLimits.maxDownloadPrice = priceLimits.MaxDownloadPriceSC
 			}
-			if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > maxDownloadPriceUSD {
-				hdb.priceLimits.maxStoragePrice = utils.FromFloat(maxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
+			if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > priceLimits.MaxStoragePriceUSD {
+				hdb.priceLimits.maxStoragePrice = utils.FromFloat(priceLimits.MaxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
 			} else {
-				hdb.priceLimits.maxStoragePrice = maxStoragePriceSC
+				hdb.priceLimits.maxStoragePrice = priceLimits.MaxStoragePriceSC
 			}
 			hdb.mu.Unlock()
 		}

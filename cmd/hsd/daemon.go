@@ -12,7 +12,7 @@ import (
 )
 
 // startDaemon starts the hsd server.
-func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword string, seeds map[string]string) error {
+func startDaemon(config *persist.Config, apiPassword, dbPassword string, seeds map[string]string) error {
 	fmt.Printf("hsd v%v\n", build.NodeVersion)
 	if build.GitRevision == "" {
 		fmt.Println("WARN: compiled without build commit or version. To compile correctly, please use the makefile")
@@ -22,7 +22,7 @@ func startDaemon(config *persist.HSDConfig, apiPassword, dbPassword string, seed
 	fmt.Println("Loading...")
 
 	// Start listening to the API requests.
-	l, err := net.Listen("tcp", config.APIAddr)
+	l, err := net.Listen("tcp", config.Config.APIAddr)
 	if err != nil {
 		log.Fatal(err)
 	}

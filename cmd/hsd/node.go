@@ -74,14 +74,14 @@ func (a *app) Networks() []string {
 	return networks
 }
 
-func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]string) *app {
+func initialize(config *persist.Config, dbPassword string, seeds map[string]string) *app {
 	log.Println("Connecting to the SQL database...")
 	cfg := mysql.Config{
-		User:                 config.DBUser,
+		User:                 config.Config.DBUser,
 		Passwd:               dbPassword,
 		Net:                  "tcp",
 		Addr:                 "127.0.0.1:3306",
-		DBName:               config.DBName,
+		DBName:               config.Config.DBName,
 		AllowNativePasswords: true,
 	}
 	db, err := sql.Open("mysql", cfg.FormatDSN())
@@ -102,9 +102,9 @@ func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]s
 	}
 
 	// Make sure the path is an absolute one.
-	dir, err := filepath.Abs(config.Dir)
+	dir, err := filepath.Abs(config.Config.Dir)
 	if err != nil {
-		log.Fatalf("Provided parameter is invalid: %v\n", config.Dir)
+		log.Fatalf("Provided parameter is invalid: %v\n", config.Config.Dir)
 	}
 
 	// Create the state directory if it does not yet exist.
@@ -127,11 +127,11 @@ func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]s
 		case "mainnet":
 			network, genesisBlock = chain.Mainnet()
 			bootstrap = syncer.MainnetBootstrapPeers
-			gatewayAddr = config.GatewayMainnet
+			gatewayAddr = config.Config.GatewayMainnet
 		case "zen":
 			network, genesisBlock = chain.TestnetZen()
 			bootstrap = syncer.ZenBootstrapPeers
-			gatewayAddr = config.GatewayZen
+			gatewayAddr = config.Config.GatewayZen
 		}
 
 		node, err := newNode(db, name, seed, dir, gatewayAddr, network, genesisBlock, bootstrap)
@@ -145,7 +145,7 @@ func initialize(config *persist.HSDConfig, dbPassword string, seeds map[string]s
 	}
 
 	log.Println("Loading host database...")
-	hdb, errChan := hostdb.NewHostDB(db, config.Dir, a, networks)
+	hdb, errChan := hostdb.NewHostDB(db, config.Config.Dir, config.Limits, a, networks)
 	if err := utils.PeekErr(errChan); err != nil {
 		log.Fatalf("Couldn't load host database: %v\n", err)
 	}

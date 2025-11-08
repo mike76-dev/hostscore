@@ -1,0 +1,15 @@
+config:
+  mainnet: :9981
+  zen: :9881
+  api: :9980
+  dir: /usr/local/etc/hsd
+  dbUser: hsuser
+  dbName: hostscore
+priceLimits:
+  maxContractPriceSC: 1SC
+  maxUploadPriceSC: 3KS
+  maxUploadPriceUSD: 6.0
+  maxDownloadPriceSC: 9KS
+  maxDownloadPriceUSD: 18.0
+  maxStoragePriceSC: 3KS
+  maxStoragePriceUSD: 6.0

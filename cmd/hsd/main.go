@@ -15,16 +15,28 @@ import (
 )
 
 // Default config values.
-var defaultConfig = persist.HSDConfig{
-	GatewayMainnet: ":9981",
-	GatewayZen:     ":9881",
-	APIAddr:        ":9980",
-	Dir:            ".",
-	DBUser:         "",
-	DBName:         "hostscore",
+var defaultConfig = persist.Config{
+	Config: persist.ConfigFields{
+		GatewayMainnet: ":9981",
+		GatewayZen:     ":9881",
+		APIAddr:        ":9980",
+		Dir:            ".",
+		DBUser:         "",
+		DBName:         "hostscore",
+	},
+	Limits: persist.ParsedLimits{
+		MaxContractPriceSC:  types.Siacoins(1),
+		MaxUploadPriceSC:    types.Siacoins(1500),
+		MaxUploadPriceUSD:   6.0,
+		MaxDownloadPriceSC:  types.Siacoins(4500),
+		MaxDownloadPriceUSD: 18.0,
+		MaxStoragePriceSC:   types.Siacoins(1500).Div64(1e12).Div64(30 * 144),
+		MaxStoragePriceUSD:  6.0,
+	},
 }
 
 var config persist.HSDConfig
+var parsedConfig persist.Config
 var configDir string
 
 func getAPIPassword() string {
@@ -114,20 +126,6 @@ Generates a secure seed.
 
 func main() {
 	log.SetFlags(0)
-
-	// Load config file if it exists. Otherwise load the defaults.
-	configDir = os.Getenv("HSD_CONFIG_DIR")
-	if configDir != "" {
-		log.Println("Using HSD_CONFIG_DIR environment variable to load config.")
-	}
-	ok, err := config.Load(configDir)
-	if err != nil {
-		log.Fatalln("Could not load config file")
-	}
-	if !ok {
-		config = defaultConfig
-	}
-
 	var gatewayMainnet,
 		gatewayZen,
 		apiAddr,
@@ -166,41 +164,71 @@ func main() {
 			return
 		}
 
+		// Load config file if it exists. Otherwise load the defaults.
+		configDir = os.Getenv("HSD_CONFIG_DIR")
+		if configDir != "" {
+			log.Println("Using HSD_CONFIG_DIR environment variable to load config.")
+		}
+		if err := config.Load(configDir); err != nil {
+			log.Fatalln("Could not load config file:", err)
+		}
+
+		parsedConfig = defaultConfig
+		parsedConfig.Config = config.Config
+		mcp, err := types.ParseCurrency(config.Limits.MaxContractPriceSC)
+		if err != nil {
+			log.Println("Unable to parse MaxContractPrice:", err)
+		} else {
+			parsedConfig.Limits.MaxContractPriceSC = mcp
+		}
+		mup, err := types.ParseCurrency(config.Limits.MaxUploadPriceSC)
+		if err != nil {
+			log.Println("Unable to parse MaxUploadPrice:", err)
+		} else {
+			parsedConfig.Limits.MaxUploadPriceSC = mup
+		}
+		mdp, err := types.ParseCurrency(config.Limits.MaxDownloadPriceSC)
+		if err != nil {
+			log.Println("Unable to parse MaxDownloadPrice:", err)
+		} else {
+			parsedConfig.Limits.MaxDownloadPriceSC = mdp
+		}
+		msp, err := types.ParseCurrency(config.Limits.MaxStoragePriceSC)
+		if err != nil {
+			log.Println("Unable to parse MaxStoragePrice:", err)
+		} else {
+			parsedConfig.Limits.MaxStoragePriceSC = msp.Div64(1e12).Div64(30 * 144)
+		}
+
 		// Parse command line flags. If set, they override the loaded config.
 		if gatewayMainnet != "" {
-			config.GatewayMainnet = gatewayMainnet
+			parsedConfig.Config.GatewayMainnet = gatewayMainnet
 		}
 		if gatewayZen != "" {
-			config.GatewayZen = gatewayZen
+			parsedConfig.Config.GatewayZen = gatewayZen
 		}
 		if apiAddr != "" {
-			config.APIAddr = apiAddr
+			parsedConfig.Config.APIAddr = apiAddr
 		}
 		if dir != "" {
-			config.Dir = dir
+			parsedConfig.Config.Dir = dir
 		}
 		if dbUser != "" {
-			config.DBUser = dbUser
+			parsedConfig.Config.DBUser = dbUser
 		}
 		if dbName != "" {
-			config.DBName = dbName
+			parsedConfig.Config.DBName = dbName
 		}
 		if disableMainnet {
-			config.GatewayMainnet = ""
+			parsedConfig.Config.GatewayMainnet = ""
 		}
 		if disableZen {
-			config.GatewayZen = ""
+			parsedConfig.Config.GatewayZen = ""
 		}
 
 		if disableMainnet && disableZen {
 			// All networks disabled, exiting.
 			log.Fatalln("All networks disabled")
-		}
-
-		// Save the configuration.
-		err = config.Save(configDir)
-		if err != nil {
-			log.Fatalln("Unable to save config file")
 		}
 
 		// Fetch API password.
@@ -220,13 +248,13 @@ func main() {
 
 		// Create the directory if it does not yet exist.
 		// This also checks if the provided directory parameter is valid.
-		err = os.MkdirAll(config.Dir, 0700)
+		err = os.MkdirAll(parsedConfig.Config.Dir, 0700)
 		if err != nil {
-			log.Fatalf("Provided parameter is invalid: %v\n", config.Dir)
+			log.Fatalf("Provided parameter is invalid: %v\n", parsedConfig.Config.Dir)
 		}
 
 		// Start hsd. startDaemon will only return when it is shutting down.
-		err = startDaemon(&config, apiPassword, dbPassword, seeds)
+		err = startDaemon(&parsedConfig, apiPassword, dbPassword, seeds)
 		if err != nil {
 			log.Fatalln(err)
 		}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/mike76-dev/hostscore/persist"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 )
@@ -22,14 +23,7 @@ type hostDBPriceLimits struct {
 }
 
 var (
-	maxContractPrice   = types.Siacoins(1)                                // 1 SC
-	maxUploadPriceSC   = types.Siacoins(1500)                             // 1.5 KS/TB
-	maxDownloadPriceSC = types.Siacoins(4500)                             // 4.5 KS/TB
-	maxStoragePriceSC  = types.Siacoins(1500).Div64(1e12).Div64(30 * 144) // 1.5 KS/TB/month
-
-	maxUploadPriceUSD   = 6.0  // 6 USD/TB
-	maxDownloadPriceUSD = 18.0 // 18 USD/TB
-	maxStoragePriceUSD  = 6.0  // 6 USD/TB/month
+	priceLimits persist.ParsedLimits
 )
 
 // checkGougingV2 performs a number of gouging checks before forming
