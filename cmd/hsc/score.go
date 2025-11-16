@@ -6,10 +6,9 @@ import (
 	"time"
 
 	"github.com/mike76-dev/hostscore/hostdb"
-	"github.com/mike76-dev/hostscore/internal/build"
-	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
+	rhpv4utils "go.sia.tech/coreutils/rhp/v4"
 )
 
 // To calculate the score of each host, we need to assume the settings
@@ -41,7 +40,7 @@ func calculateScore(host portalHost, node string, scans []portalScan, benchmarks
 	ingressPrice := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 	storagePrice := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
 	remainingStorage := host.V2Settings.RemainingStorage * rhpv4.SectorSize
-	version := "2.0.0"
+	version := host.V2Settings.ProtocolVersion
 	acceptingContracts := host.V2Settings.AcceptingContracts
 	sb := scoreBreakdown{
 		PricesScore:       priceAdjustmentScore(egressPrice, ingressPrice, storagePrice),
@@ -85,7 +84,7 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 	ingressPrice := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 	storagePrice := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
 	remainingStorage := host.V2Settings.RemainingStorage * rhpv4.SectorSize
-	version := "2.0.0"
+	version := host.V2Settings.ProtocolVersion
 	acceptingContracts := host.V2Settings.AcceptingContracts
 
 	sb := scoreBreakdown{
@@ -341,26 +340,21 @@ func uptimeScore(ut, dt time.Duration, history []portalScan) float64 {
 	return math.Pow(ratio, 200*math.Min(1-ratio, 0.30))
 }
 
-func versionScore(version string) float64 {
-	versions := []struct {
-		version string
-		penalty float64
-	}{
-		{"1.6.0", 0.10},
-		{"1.5.9", 0.00},
+// versionScore computes a score given the host's protocol version.
+func versionScore(version rhpv4.ProtocolVersion) float64 {
+	switch {
+	case version.Cmp(rhpv4utils.ProtocolVersion501) >= 0:
+		return 1.0
+	case version.Cmp(rhpv4utils.ProtocolVersion500) == 0:
+		return 0.9
+	default:
+		return 0.8
 	}
-	weight := 1.0
-	for _, v := range versions {
-		if build.VersionCmp(version, v.version) < 0 {
-			weight *= v.penalty
-		}
-	}
-	return weight
 }
 
 func bytesToSectors(bytes uint64) uint64 {
-	numSectors := bytes / rhpv2.SectorSize
-	if bytes%rhpv2.SectorSize != 0 {
+	numSectors := bytes / rhpv4.SectorSize
+	if bytes%rhpv4.SectorSize != 0 {
 		numSectors++
 	}
 	return numSectors
