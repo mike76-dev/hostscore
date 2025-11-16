@@ -164,12 +164,9 @@ const topics: Topic[] = [
 						to the latest version.
 					</p>
 					<p>
-						Currently, all V2 hosts receive a score of 1, while all V1 hosts get a
-						score of 0.
-					</p>
-					<p>
-						This may change in the future, when a diversification will be made
-						between the hosts running different releases.
+						Currently, all hosts that do not support data pruning are penalized
+						by getting the score of 0.9. Hosts that also do not support partial
+						contract rollover get the score of 0.8.
 					</p>
 				</>,
 				link: 'how-is-the-score-calculated-version'
