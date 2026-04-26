@@ -68,18 +68,26 @@ func main() {
 		Addr:                 "127.0.0.1:3306",
 		DBName:               *dbName,
 		AllowNativePasswords: true,
+		ParseTime:            true,
+		Timeout:              5 * time.Second,
+		ReadTimeout:          30 * time.Second,
+		WriteTimeout:         30 * time.Second,
 	}
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		log.Fatalf("Could not connect to the database: %v\n", err)
 	}
-	err = db.Ping()
-	if err != nil {
-		log.Fatalf("MySQL database not responding: %v\n", err)
-	}
 	db.SetConnMaxLifetime(time.Minute * 3)
 	db.SetMaxOpenConns(10)
 	db.SetMaxIdleConns(10)
+	db.SetConnMaxIdleTime(2 * time.Minute)
+	db.SetConnMaxLifetime(4 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = db.PingContext(ctx)
+	if err != nil {
+		log.Fatalf("MySQL database not responding: %v\n", err)
+	}
 	defer db.Close()
 
 	apiToken := os.Getenv("HSC_API_TOKEN")
