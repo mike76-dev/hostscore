@@ -72,7 +72,8 @@ CREATE TABLE scans (
 	INDEX idx_scans (network, node, public_key, ran_at),
 	INDEX idx_scans_pk (public_key),
 	INDEX idx_scans_npk (network, public_key),
-	INDEX idx_scans_ra (ran_at)
+	INDEX idx_scans_ra (ran_at),
+	INDEX idx_scans_latest (network, public_key, ran_at DESC)
 );
 
 CREATE TABLE benchmarks (
@@ -88,7 +89,8 @@ CREATE TABLE benchmarks (
 	error          TEXT NOT NULL,
 	PRIMARY KEY (id),
 	INDEX idx_benchmarks_pk (public_key),
-	INDEX idx_benchmarks_npk (network, public_key)
+	INDEX idx_benchmarks_npk (network, public_key),
+	INDEX idx_benchmarks_latest (network, public_key, ran_at DESC)
 );
 
 CREATE TABLE price_changes (
