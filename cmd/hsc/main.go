@@ -69,19 +69,18 @@ func main() {
 		DBName:               *dbName,
 		AllowNativePasswords: true,
 		ParseTime:            true,
-		Timeout:              5 * time.Second,
-		ReadTimeout:          30 * time.Second,
-		WriteTimeout:         30 * time.Second,
+		Timeout:              10 * time.Second,
+		ReadTimeout:          60 * time.Second,
+		WriteTimeout:         60 * time.Second,
 	}
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
 		log.Fatalf("Could not connect to the database: %v\n", err)
 	}
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-	db.SetConnMaxIdleTime(2 * time.Minute)
-	db.SetConnMaxLifetime(4 * time.Minute)
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(25)
+	db.SetConnMaxIdleTime(10 * time.Minute)
+	db.SetConnMaxLifetime(30 * time.Minute)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err = db.PingContext(ctx)
