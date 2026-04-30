@@ -62,8 +62,7 @@ CREATE TABLE hdb_scans (
 	fetched      BIGINT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (network, public_key) REFERENCES hdb_hosts(network, public_key),
-	INDEX idx_scans_host_time (network, public_key, ran_at),
-	INDEX idx_scans_time (network, ran_at)
+	INDEX idx_scans_host_time (network, public_key, ran_at)
 );
 
 CREATE TABLE hdb_benchmarks (
@@ -80,8 +79,7 @@ CREATE TABLE hdb_benchmarks (
 	fetched        BIGINT NOT NULL,
 	PRIMARY KEY (id),
 	FOREIGN KEY (network, public_key) REFERENCES hdb_hosts(network, public_key),
-	INDEX idx_benchmarks_host_time (network, public_key, ran_at),
-	INDEX idx_benchmarks_time (network, ran_at)
+	INDEX idx_benchmarks_host_time (network, public_key, ran_at)
 );
 
 CREATE TABLE hdb_tip (
