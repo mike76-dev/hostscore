@@ -84,10 +84,6 @@ func initialize(config *persist.Config, dbPassword string, seeds map[string]stri
 		Addr:                 "127.0.0.1:3306",
 		DBName:               config.Config.DBName,
 		AllowNativePasswords: true,
-		ParseTime:            true,
-		Timeout:              10 * time.Second,
-		ReadTimeout:          60 * time.Second,
-		WriteTimeout:         60 * time.Second,
 	}
 	db, err := sql.Open("mysql", cfg.FormatDSN())
 	if err != nil {
