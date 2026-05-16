@@ -11,7 +11,6 @@ import (
 	"github.com/mike76-dev/hostscore/internal/utils"
 	"github.com/mike76-dev/hostscore/rhp"
 	walletutil "github.com/mike76-dev/hostscore/wallet"
-	rhpv2 "go.sia.tech/core/rhp/v2"
 	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 	rhpv4utils "go.sia.tech/coreutils/rhp/v4"
@@ -387,7 +386,7 @@ func (hdb *HostDB) runUploadBenchmarkV2(host *HostDBEntry) (roots []types.Hash25
 		}
 	}()
 
-	numSectors := benchmarkBatchSize / rhpv2.SectorSize
+	numSectors := benchmarkBatchSize / rhpv4.SectorSize
 	var data [rhpv4.SectorSize]byte
 	roots = make([]types.Hash256, numSectors)
 	key := hdb.nodes.Wallet(host.Network).Key()
@@ -421,7 +420,7 @@ func (hdb *HostDB) runDownloadBenchmarkV2(host *HostDBEntry, roots []types.Hash2
 		}
 	}()
 
-	numSectors := benchmarkBatchSize / rhpv2.SectorSize
+	numSectors := benchmarkBatchSize / rhpv4.SectorSize
 	var data [rhpv4.SectorSize]byte
 	key := hdb.nodes.Wallet(host.Network).Key()
 	start := time.Now()
@@ -433,7 +432,7 @@ func (hdb *HostDB) runDownloadBenchmarkV2(host *HostDBEntry, roots []types.Hash2
 				return utils.AddContext(err, "unable to download sector")
 			}
 			if i == 0 {
-				ttfb = time.Since(start)
+				ttfb = tw.TTFB()
 			}
 		}
 		if err != nil {
