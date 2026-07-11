@@ -55,7 +55,17 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		panic("wrong host network")
 	}
 
+	// Delete the host from scanMap and release the thread on any exit path.
+	defer func() {
+		hdb.mu.Lock()
+		delete(hdb.scanMap, host.PublicKey)
+		hdb.benchmarkThreads--
+		hdb.mu.Unlock()
+	}()
+
+	hdb.mu.Lock()
 	limits := hdb.priceLimits
+	hdb.mu.Unlock()
 	timestamp := time.Now()
 	var success bool
 	var ul, dl float64
@@ -101,6 +111,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			hdb.mu.Unlock()
 			select {
 			case <-hdb.tg.StopChan():
+				return errors.New("benchmark canceled")
 			case <-time.After(time.Second):
 			}
 		}
@@ -137,10 +148,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	}
 	if err != nil && strings.Contains(err.Error(), "not enough funds") && !strings.Contains(err.Error(), "not enough funds (5)") {
 		// Not the host's fault.
-		hdb.mu.Lock()
-		delete(hdb.scanMap, host.PublicKey)
-		hdb.benchmarkThreads--
-		hdb.mu.Unlock()
 		return
 	}
 	if err == nil {
@@ -149,7 +156,7 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	} else {
 		errMsg = err.Error()
 		// If we are offline it probably wasn't the host's fault.
-		if !hdb.online(host.Network) {
+		if hdb.online(host.Network) {
 			host.Interactions.Failures++
 		}
 	}
@@ -165,12 +172,6 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 	if err := store.updateBenchmarks(host, benchmark); err != nil {
 		hdb.log.Error("couldn't update benchmarks", zap.Error(err))
 	}
-
-	// Delete the host from scanMap.
-	hdb.mu.Lock()
-	delete(hdb.scanMap, host.PublicKey)
-	hdb.benchmarkThreads--
-	hdb.mu.Unlock()
 }
 
 // calculateBenchmarkInterval calculates a benchmark interval depending on
@@ -343,7 +344,10 @@ func (hdb *HostDB) fundAccountV2(host *HostDBEntry) (err error) {
 			return err
 		}
 		host.V2Settings = settings
-		err = checkGougingV2(&settings, hdb.priceLimits)
+		hdb.mu.Lock()
+		limits := hdb.priceLimits
+		hdb.mu.Unlock()
+		err = checkGougingV2(&settings, limits)
 		if err != nil {
 			return err
 		}

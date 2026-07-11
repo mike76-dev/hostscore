@@ -37,6 +37,7 @@ func WithTransportV4(ctx context.Context, addr string, hostKey types.PublicKey, 
 	}()
 	t, err := siamux.Upgrade(ctx, conn, hostKey)
 	if err != nil {
+		conn.Close()
 		return err
 	}
 	defer t.Close()

@@ -26,11 +26,8 @@ var defaultConfig = persist.Config{
 	},
 	Limits: persist.ParsedLimits{
 		MaxContractPriceSC:  types.Siacoins(1),
-		MaxUploadPriceSC:    types.Siacoins(1500),
 		MaxUploadPriceUSD:   6.0,
-		MaxDownloadPriceSC:  types.Siacoins(4500),
 		MaxDownloadPriceUSD: 18.0,
-		MaxStoragePriceSC:   types.Siacoins(1500).Div64(1e12).Div64(30 * 144),
 		MaxStoragePriceUSD:  6.0,
 	},
 }
@@ -181,23 +178,14 @@ func main() {
 		} else {
 			parsedConfig.Limits.MaxContractPriceSC = mcp
 		}
-		mup, err := types.ParseCurrency(config.Limits.MaxUploadPriceSC)
-		if err != nil {
-			log.Println("Unable to parse MaxUploadPrice:", err)
-		} else {
-			parsedConfig.Limits.MaxUploadPriceSC = mup
+		if config.Limits.MaxUploadPriceUSD > 0 {
+			parsedConfig.Limits.MaxUploadPriceUSD = config.Limits.MaxUploadPriceUSD
 		}
-		mdp, err := types.ParseCurrency(config.Limits.MaxDownloadPriceSC)
-		if err != nil {
-			log.Println("Unable to parse MaxDownloadPrice:", err)
-		} else {
-			parsedConfig.Limits.MaxDownloadPriceSC = mdp
+		if config.Limits.MaxDownloadPriceUSD > 0 {
+			parsedConfig.Limits.MaxDownloadPriceUSD = config.Limits.MaxDownloadPriceUSD
 		}
-		msp, err := types.ParseCurrency(config.Limits.MaxStoragePriceSC)
-		if err != nil {
-			log.Println("Unable to parse MaxStoragePrice:", err)
-		} else {
-			parsedConfig.Limits.MaxStoragePriceSC = msp.Div64(1e12).Div64(30 * 144)
+		if config.Limits.MaxStoragePriceUSD > 0 {
+			parsedConfig.Limits.MaxStoragePriceUSD = config.Limits.MaxStoragePriceUSD
 		}
 
 		// Parse command line flags. If set, they override the loaded config.

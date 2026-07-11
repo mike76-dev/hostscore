@@ -178,7 +178,12 @@ func (hdb *HostDB) Close() {
 	}
 
 	for network := range hdb.stores {
-		hdb.unsubscribes[network]()
+		hdb.mu.Lock()
+		unsubscribe := hdb.unsubscribes[network]
+		hdb.mu.Unlock()
+		if unsubscribe != nil {
+			unsubscribe()
+		}
 		hdb.stores[network].close()
 	}
 
@@ -242,9 +247,6 @@ func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeSt
 		scanMap:      make(map[types.PublicKey]bool),
 		priceLimits: hostDBPriceLimits{
 			maxContractPrice: limits.MaxContractPriceSC,
-			maxUploadPrice:   limits.MaxUploadPriceSC,
-			maxDownloadPrice: limits.MaxDownloadPriceSC,
-			maxStoragePrice:  limits.MaxStoragePriceSC,
 		},
 		blockedDomains: domains,
 	}
@@ -252,7 +254,7 @@ func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeSt
 	priceLimits = limits
 
 	for _, network := range networks {
-		store, tip, err := newHostDBStore(db, l, network, domains)
+		store, _, err := newHostDBStore(db, l, network, domains)
 		if err != nil {
 			errChan <- err
 			return nil, errChan
@@ -263,23 +265,28 @@ func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeSt
 
 		// Subscribe in a goroutine to prevent blocking.
 		go func() {
-			for hdb.nodes.ChainManager(network).Tip().Height <= tip.Height {
+			for hdb.nodes.ChainManager(network).Tip().Height <= store.tip.Height {
 				time.Sleep(5 * time.Second)
 			}
-			if err := syncStore(store, hdb.nodes.ChainManager(network), tip); err != nil {
-				index, _ := hdb.nodes.ChainManager(network).BestIndex(tip.Height - 1)
-				if err := syncStore(store, hdb.nodes.ChainManager(network), index); err != nil {
-					l.Fatal("failed to subscribe to chain manager", zap.String("network", network), zap.Error(err))
+			for {
+				if err := syncStore(store, hdb.nodes.ChainManager(network), store.tip); err != nil {
+					l.Error("failed to sync store, retrying", zap.String("network", network), zap.Error(err))
+					time.Sleep(5 * time.Second)
+					continue
 				}
+				break
 			}
 
 			reorgChan := make(chan types.ChainIndex, 1)
-			hdb.unsubscribes[network] = hdb.nodes.ChainManager(network).OnReorg(func(index types.ChainIndex) {
+			unsubscribe := hdb.nodes.ChainManager(network).OnReorg(func(index types.ChainIndex) {
 				select {
 				case reorgChan <- index:
 				default:
 				}
 			})
+			hdb.mu.Lock()
+			hdb.unsubscribes[network] = unsubscribe
+			hdb.mu.Unlock()
 
 			for range reorgChan {
 				lastTip := store.tip
@@ -323,21 +330,9 @@ func (hdb *HostDB) updateSCRate() {
 
 		if rate != 0 {
 			hdb.mu.Lock()
-			if hdb.priceLimits.maxUploadPrice.Siacoins()*rate > priceLimits.MaxUploadPriceUSD {
-				hdb.priceLimits.maxUploadPrice = utils.FromFloat(priceLimits.MaxUploadPriceUSD / rate)
-			} else {
-				hdb.priceLimits.maxUploadPrice = priceLimits.MaxUploadPriceSC
-			}
-			if hdb.priceLimits.maxDownloadPrice.Siacoins()*rate > priceLimits.MaxDownloadPriceUSD {
-				hdb.priceLimits.maxDownloadPrice = utils.FromFloat(priceLimits.MaxDownloadPriceUSD / rate)
-			} else {
-				hdb.priceLimits.maxDownloadPrice = priceLimits.MaxDownloadPriceSC
-			}
-			if hdb.priceLimits.maxStoragePrice.Mul64(1e12).Mul64(30*144).Siacoins()*rate > priceLimits.MaxStoragePriceUSD {
-				hdb.priceLimits.maxStoragePrice = utils.FromFloat(priceLimits.MaxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
-			} else {
-				hdb.priceLimits.maxStoragePrice = priceLimits.MaxStoragePriceSC
-			}
+			hdb.priceLimits.maxUploadPrice = utils.FromFloat(priceLimits.MaxUploadPriceUSD / rate)
+			hdb.priceLimits.maxDownloadPrice = utils.FromFloat(priceLimits.MaxDownloadPriceUSD / rate)
+			hdb.priceLimits.maxStoragePrice = utils.FromFloat(priceLimits.MaxStoragePriceUSD / rate).Div64(1e12).Div64(30 * 144)
 			hdb.mu.Unlock()
 		}
 

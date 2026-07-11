@@ -267,7 +267,8 @@ func collateralScore(uploadSectorCost, maxCollateral, collateralCost types.Curre
 	} else {
 		// Perform linear interpolation for all other values.
 		slope := new(big.Rat).SetFrac(new(big.Int).SetInt64(1), cutoff.Mul64(cutoffMultiplier).Big())
-		intercept := new(big.Rat).Mul(slope, new(big.Rat).SetInt(cutoff.Big())).Neg(slope)
+		intercept := new(big.Rat).Mul(slope, new(big.Rat).SetInt(cutoff.Big()))
+		intercept.Neg(intercept)
 		score := new(big.Rat).SetInt(expectedCollateral.Big())
 		score = score.Mul(score, slope)
 		score = score.Add(score, intercept)

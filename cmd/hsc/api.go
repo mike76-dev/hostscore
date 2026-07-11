@@ -249,6 +249,7 @@ func (api *portalAPI) requestUpdates() {
 			updates, err := c.Updates()
 			if err != nil {
 				api.log.Error("failed to request updates", zap.String("node", node), zap.Error(err))
+				continue
 			}
 			if err := api.insertUpdates(node, updates); err != nil {
 				api.log.Error("failed to insert updates", zap.String("node", node), zap.Error(err))
@@ -684,7 +685,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 		maxContractPrice,
 		uint64(minDuration),
 		uint64(minStorage),
-		time.Duration(maxLatency),
+		time.Duration(maxLatency)*time.Millisecond,
 		float64(minUploadSpeed),
 		float64(minDownloadSpeed),
 		countries,
@@ -889,9 +890,13 @@ func (api *portalAPI) serviceStatusHandler(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
+	api.mu.RLock()
+	nodes := api.nodes
+	api.mu.RUnlock()
+
 	writeJSON(w, statusResponse{
 		Version: build.ClientVersion,
-		Nodes:   api.nodes,
+		Nodes:   nodes,
 	})
 }
 
@@ -1002,7 +1007,11 @@ func (api *portalAPI) networkAveragesHandler(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	writeJSON(w, averagesResponse{Averages: api.averages[network]})
+	api.mu.RLock()
+	averages := api.averages[network]
+	api.mu.RUnlock()
+
+	writeJSON(w, averagesResponse{Averages: averages})
 }
 
 func (api *portalAPI) networkCountriesHandler(w http.ResponseWriter, req *http.Request, _ httprouter.Params) {
