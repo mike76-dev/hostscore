@@ -31,8 +31,9 @@ type hostDBStore struct {
 
 	mu sync.Mutex
 
-	tip           types.ChainIndex
-	lastCommitted time.Time
+	tip              types.ChainIndex
+	lastCommittedTip types.ChainIndex
+	lastCommitted    time.Time
 
 	lastUpdate HostUpdates
 }
@@ -152,12 +153,15 @@ func (s *hostDBStore) update(host *HostDBEntry) error {
 		0,
 	)
 	if err != nil {
+		s.reconnect()
 		return err
 	}
 
 	if err := s.tx.Commit(); err != nil {
+		s.reconnect()
 		return err
 	}
+	s.lastCommittedTip = s.tip
 
 	s.tx, err = s.db.Begin()
 	return err
@@ -224,11 +228,13 @@ func (s *hostDBStore) updateScanHistory(host *HostDBEntry, scan HostScan) error 
 		0,
 	)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't update scan history")
 	}
 
 	err = s.update(host)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't update host")
 	}
 
@@ -280,11 +286,13 @@ func (s *hostDBStore) updateBenchmarks(host *HostDBEntry, benchmark HostBenchmar
 		0,
 	)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't update benchmarks")
 	}
 
 	err = s.update(host)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't update host")
 	}
 
@@ -391,6 +399,19 @@ func (s *hostDBStore) close() {
 	}
 }
 
+func (s *hostDBStore) reconnect() {
+	if s.tx != nil {
+		s.tx.Rollback()
+		s.tx = nil
+	}
+	s.tip = s.lastCommittedTip
+	var err error
+	s.tx, err = s.db.Begin()
+	if err != nil {
+		s.log.Error("couldn't restart transaction", zap.String("network", s.network), zap.Error(err))
+	}
+}
+
 func (s *hostDBStore) load(domains *blockedDomains) error {
 	var height uint64
 	id := make([]byte, 32)
@@ -404,6 +425,7 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 	}
 	s.tip.Height = height
 	copy(s.tip.ID[:], id)
+	s.lastCommittedTip = s.tip
 
 	rows, err := s.db.Query(`
 		SELECT
@@ -644,6 +666,7 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 		`, s.network, s.tip.Height, s.tip.ID[:])
 		if err != nil {
 			s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
+			s.reconnect()
 			return err
 		}
 
@@ -682,6 +705,7 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 				err = s.update(host)
 				if err != nil {
 					s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
+					s.reconnect()
 					return err
 				}
 			}
@@ -728,6 +752,7 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 				err = s.update(host)
 				if err != nil {
 					s.log.Error("couldn't update host", zap.String("network", s.network), zap.Error(err))
+					s.reconnect()
 					return err
 				}
 				if s.isSynced() && !host.Blocked {
@@ -740,11 +765,14 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 	if mayCommit || time.Since(s.lastCommitted) >= 3*time.Second {
 		err := s.tx.Commit()
 		if err != nil {
+			s.reconnect()
 			return utils.AddContext(err, "couldn't commit transaction")
 		}
 		s.lastCommitted = time.Now()
+		s.lastCommittedTip = s.tip
 		s.tx, err = s.db.Begin()
 		if err != nil {
+			s.tx = nil
 			return utils.AddContext(err, "couldn't start transaction")
 		}
 	}
@@ -818,6 +846,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 		LIMIT 1000
 	`, s.network)
 	if err != nil {
+		s.reconnect()
 		return HostUpdates{}, utils.AddContext(err, "couldn't query hosts")
 	}
 
@@ -846,6 +875,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 		LIMIT 1000
 	`, s.network)
 	if err != nil {
+		s.reconnect()
 		return HostUpdates{}, utils.AddContext(err, "couldn't query scans")
 	}
 
@@ -896,6 +926,7 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 		LIMIT 1000
 	`, s.network)
 	if err != nil {
+		s.reconnect()
 		return HostUpdates{}, utils.AddContext(err, "couldn't query benchmarks")
 	}
 
@@ -953,6 +984,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		AND network = ?
 	`)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't prepare host statement")
 	}
 
@@ -963,6 +995,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		_, err := hostStsmt.Exec(time.Now().Unix(), host.ID, s.network)
 		if err != nil {
 			hostStsmt.Close()
+			s.reconnect()
 			return utils.AddContext(err, "couldn't update timestamp in hosts table")
 		}
 	}
@@ -975,6 +1008,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		AND network = ?
 	`)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't prepare scan statement")
 	}
 
@@ -985,6 +1019,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		_, err := scanStmt.Exec(time.Now().Unix(), scan.ID, s.network)
 		if err != nil {
 			scanStmt.Close()
+			s.reconnect()
 			return utils.AddContext(err, "couldn't update timestamp in scans table")
 		}
 	}
@@ -997,6 +1032,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		AND network = ?
 	`)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't prepare benchmark statement")
 	}
 
@@ -1007,6 +1043,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		_, err := benchmarkStmt.Exec(time.Now().Unix(), benchmark.ID, s.network)
 		if err != nil {
 			benchmarkStmt.Close()
+			s.reconnect()
 			return utils.AddContext(err, "couldn't update timestamp in benchmarks table")
 		}
 	}
@@ -1015,6 +1052,7 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 	s.lastUpdate = HostUpdates{}
 
 	if err := s.tx.Commit(); err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't commit transaction")
 	}
 
@@ -1055,6 +1093,7 @@ func (s *hostDBStore) pruneOldRecords() error {
 		AND network = ?
 	`, time.Now().AddDate(0, 0, -7).Unix(), s.network)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't delete old scans")
 	}
 
@@ -1064,10 +1103,12 @@ func (s *hostDBStore) pruneOldRecords() error {
 		AND network = ?
 	`, time.Now().AddDate(0, 0, -28).Unix(), s.network)
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't delete old benchmarks")
 	}
 
 	if err := s.tx.Commit(); err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't commit transaction")
 	}
 

@@ -17,16 +17,30 @@ import (
 
 // A DBStore stores wallet state in a MySQL database.
 type DBStore struct {
-	tip           types.ChainIndex
-	addr          types.Address
-	key           types.PrivateKey
-	sces          map[types.SiacoinOutputID]types.SiacoinElement
-	mu            sync.Mutex
-	db            *sql.DB
-	tx            *sql.Tx
-	log           *zap.Logger
-	network       string
-	lastCommitted time.Time
+	tip              types.ChainIndex
+	lastCommittedTip types.ChainIndex
+	addr             types.Address
+	key              types.PrivateKey
+	sces             map[types.SiacoinOutputID]types.SiacoinElement
+	mu               sync.Mutex
+	db               *sql.DB
+	tx               *sql.Tx
+	log              *zap.Logger
+	network          string
+	lastCommitted    time.Time
+}
+
+func (s *DBStore) reconnect() {
+	if s.tx != nil {
+		s.tx.Rollback()
+		s.tx = nil
+	}
+	s.tip = s.lastCommittedTip
+	var err error
+	s.tx, err = s.db.Begin()
+	if err != nil {
+		s.log.Error("couldn't restart transaction", zap.String("network", s.network), zap.Error(err))
+	}
 }
 
 func (s *DBStore) save() error {
@@ -39,15 +53,16 @@ func (s *DBStore) save() error {
 		VALUES (?, ?, ?)
 	`, s.network, s.tip.Height, s.tip.ID[:])
 	if err != nil {
-		s.tx.Rollback()
-		s.tx, _ = s.db.Begin()
+		s.reconnect()
 		return utils.AddContext(err, "couldn't update tip")
 	}
 
 	err = s.tx.Commit()
 	if err != nil {
+		s.reconnect()
 		return utils.AddContext(err, "couldn't commit transaction")
 	}
+	s.lastCommittedTip = s.tip
 
 	s.tx, err = s.db.Begin()
 	s.lastCommitted = time.Now()
@@ -67,6 +82,7 @@ func (s *DBStore) load() error {
 	}
 	s.tip.Height = height
 	copy(s.tip.ID[:], id)
+	s.lastCommittedTip = s.tip
 
 	rows, err := s.db.Query(`
 		SELECT scoid, bytes
@@ -179,6 +195,7 @@ func (s *DBStore) resetChainState() error {
 
 	_, err := s.tx.Exec("DELETE FROM wt_sces WHERE network = ?", s.network)
 	if err != nil {
+		s.reconnect()
 		return err
 	}
 
@@ -214,6 +231,7 @@ func (s *DBStore) updateSiacoinElements(sces []types.SiacoinElement) error {
 		`, sce.ID[:], s.network, buf.Bytes())
 		if err != nil {
 			s.log.Error("couldn't add SC output", zap.String("network", s.network), zap.Error(err))
+			s.reconnect()
 			return err
 		}
 	}
@@ -230,6 +248,7 @@ func (s *DBStore) removeSiacoinElements(sces []types.SiacoinElement) error {
 		`, sce.ID[:], s.network)
 		if err != nil {
 			s.log.Error("couldn't delete SC output", zap.String("network", s.network), zap.Error(err))
+			s.reconnect()
 			return err
 		}
 	}
