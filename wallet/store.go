@@ -106,7 +106,7 @@ func (s *DBStore) load() error {
 		sce.DecodeFrom(d)
 		if d.Err() != nil {
 			rows.Close()
-			return utils.AddContext(err, "couldn't decode SC element")
+			return utils.AddContext(d.Err(), "couldn't decode SC element")
 		}
 		s.sces[scoid] = sce
 	}
@@ -199,6 +199,7 @@ func (s *DBStore) resetChainState() error {
 		return err
 	}
 
+	s.sces = make(map[types.SiacoinOutputID]types.SiacoinElement)
 	s.tip = types.ChainIndex{}
 	return s.save()
 }
