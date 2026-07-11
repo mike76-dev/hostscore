@@ -365,13 +365,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		}
 
 		if exists {
-			host.NetAddress = h.NetAddress
-			host.Blocked = h.Blocked
-			host.V2 = h.V2
-			host.IPNets = h.IPNets
-			host.LastIPChange = h.LastIPChange
-			host.V2Settings = h.V2Settings
-			host.SiamuxAddresses = append([]string{}, h.SiamuxAddresses...)
 			interactions := host.Interactions[node]
 			interactions.Uptime = max(h.Uptime, interactions.Uptime)
 			interactions.Downtime = max(h.Downtime, interactions.Downtime)
@@ -382,7 +375,24 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				Failures:   max(h.Interactions.Failures, interactions.Failures),
 				LastUpdate: h.Interactions.LastUpdate,
 			}
-			host.Interactions[node] = interactions
+			// Clone the interactions map instead of mutating it in place, so
+			// that host copies handed out to the handlers stay stable.
+			newInteractions := make(map[string]nodeInteractions, len(host.Interactions)+1)
+			for n, ni := range host.Interactions {
+				newInteractions[n] = ni
+			}
+			newInteractions[node] = interactions
+
+			api.mu.Lock()
+			host.NetAddress = h.NetAddress
+			host.Blocked = h.Blocked
+			host.V2 = h.V2
+			host.IPNets = h.IPNets
+			host.LastIPChange = h.LastIPChange
+			host.V2Settings = h.V2Settings
+			host.SiamuxAddresses = append([]string{}, h.SiamuxAddresses...)
+			host.Interactions = newInteractions
+			api.mu.Unlock()
 		} else {
 			host = &portalHost{
 				ID:              h.ID,
@@ -430,19 +440,23 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			}
 		}
 
-		host.Score = calculateGlobalScore(host)
+		score := calculateGlobalScore(host)
+		api.mu.Lock()
+		host.Score = score
+		api.hosts[h.Network][h.PublicKey] = host
+		api.mu.Unlock()
 		_, err := updateScoreStmt.Exec(
-			host.Score.PricesScore,
-			host.Score.StorageScore,
-			host.Score.CollateralScore,
-			host.Score.InteractionsScore,
-			host.Score.UptimeScore,
-			host.Score.AgeScore,
-			host.Score.VersionScore,
-			host.Score.LatencyScore,
-			host.Score.BenchmarksScore,
-			host.Score.ContractsScore,
-			host.Score.TotalScore,
+			score.PricesScore,
+			score.StorageScore,
+			score.CollateralScore,
+			score.InteractionsScore,
+			score.UptimeScore,
+			score.AgeScore,
+			score.VersionScore,
+			score.LatencyScore,
+			score.BenchmarksScore,
+			score.ContractsScore,
+			score.TotalScore,
 			h.Network,
 			h.PublicKey[:],
 		)
@@ -450,9 +464,6 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			tx.Rollback()
 			return utils.AddContext(err, "couldn't update score")
 		}
-		api.mu.Lock()
-		api.hosts[h.Network][h.PublicKey] = host
-		api.mu.Unlock()
 	}
 
 	toUpdate := make(map[string]map[types.PublicKey]struct{})
@@ -492,18 +503,33 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 			api.mu.RUnlock()
 
 			interactions := host.Interactions[node]
-			interactions.ScanHistory = append(interactions.ScanHistory, newScans[network][pk]...)
-			slices.SortFunc(interactions.ScanHistory, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
-			if len(interactions.ScanHistory) > 48 {
-				interactions.ScanHistory = interactions.ScanHistory[:48]
+			// Clone the histories and the interactions map instead of mutating
+			// them in place, so that host copies handed out to the handlers
+			// stay stable.
+			scanHistory := append([]portalScan(nil), interactions.ScanHistory...)
+			scanHistory = append(scanHistory, newScans[network][pk]...)
+			slices.SortFunc(scanHistory, func(a, b portalScan) int { return b.Timestamp.Compare(a.Timestamp) })
+			if len(scanHistory) > 48 {
+				scanHistory = scanHistory[:48]
 			}
-			interactions.BenchmarkHistory = append(interactions.BenchmarkHistory, newBenchmarks[network][pk]...)
-			slices.SortFunc(interactions.BenchmarkHistory, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
-			if len(interactions.BenchmarkHistory) > 12 {
-				interactions.BenchmarkHistory = interactions.BenchmarkHistory[:12]
+			interactions.ScanHistory = scanHistory
+			benchmarkHistory := append([]hostdb.HostBenchmark(nil), interactions.BenchmarkHistory...)
+			benchmarkHistory = append(benchmarkHistory, newBenchmarks[network][pk]...)
+			slices.SortFunc(benchmarkHistory, func(a, b hostdb.HostBenchmark) int { return b.Timestamp.Compare(a.Timestamp) })
+			if len(benchmarkHistory) > 12 {
+				benchmarkHistory = benchmarkHistory[:12]
 			}
+			interactions.BenchmarkHistory = benchmarkHistory
 			interactions.Score = calculateScore(*host, node, interactions.ScanHistory, interactions.BenchmarkHistory)
-			host.Interactions[node] = interactions
+			newInteractions := make(map[string]nodeInteractions, len(host.Interactions)+1)
+			for n, ni := range host.Interactions {
+				newInteractions[n] = ni
+			}
+			newInteractions[node] = interactions
+
+			api.mu.Lock()
+			host.Interactions = newInteractions
+			api.mu.Unlock()
 
 			_, err = interactionsStmt.Exec(
 				network,
@@ -532,19 +558,22 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				api.log.Warn("couldn't update host interactions", zap.Stringer("host", host.PublicKey), zap.String("network", network), zap.String("node", node), zap.Error(err))
 			}
 
-			host.Score = calculateGlobalScore(host)
+			score := calculateGlobalScore(host)
+			api.mu.Lock()
+			host.Score = score
+			api.mu.Unlock()
 			_, err := updateScoreStmt.Exec(
-				host.Score.PricesScore,
-				host.Score.StorageScore,
-				host.Score.CollateralScore,
-				host.Score.InteractionsScore,
-				host.Score.UptimeScore,
-				host.Score.AgeScore,
-				host.Score.VersionScore,
-				host.Score.LatencyScore,
-				host.Score.BenchmarksScore,
-				host.Score.ContractsScore,
-				host.Score.TotalScore,
+				score.PricesScore,
+				score.StorageScore,
+				score.CollateralScore,
+				score.InteractionsScore,
+				score.UptimeScore,
+				score.AgeScore,
+				score.VersionScore,
+				score.LatencyScore,
+				score.BenchmarksScore,
+				score.ContractsScore,
+				score.TotalScore,
 				network,
 				pk[:],
 			)
@@ -676,12 +705,14 @@ func (api *portalAPI) getHost(network string, pk types.PublicKey) (host portalHo
 	api.mu.RLock()
 	hosts := api.hosts[network]
 	h, exists := hosts[pk]
+	if exists {
+		host = *h
+	}
 	api.mu.RUnlock()
 	if !exists {
 		return portalHost{}, errHostNotFound
 	}
 
-	host = *h
 	addr := getAddress(host)
 	info, lastFetched, err := api.getLocation(pk, network, addr)
 	if err != nil {
@@ -1822,7 +1853,7 @@ func (api *portalAPI) getHostKeys(
 	api.mu.RLock()
 	hosts := api.hosts[network]
 	var selectedHosts []portalHost
-	var usefulHosts []*portalHost
+	var usefulHosts []portalHost
 	for _, host := range hosts {
 		if !isOnline(*host) {
 			continue
@@ -1836,7 +1867,7 @@ func (api *portalAPI) getHostKeys(
 			continue
 		}
 
-		usefulHosts = append(usefulHosts, host)
+		usefulHosts = append(usefulHosts, *host)
 	}
 	api.mu.RUnlock()
 
@@ -1905,7 +1936,7 @@ outer:
 			}
 		}
 
-		selectedHosts = append(selectedHosts, *host)
+		selectedHosts = append(selectedHosts, host)
 	}
 
 	slices.SortStableFunc(selectedHosts, func(a, b portalHost) int { return a.Rank - b.Rank })
