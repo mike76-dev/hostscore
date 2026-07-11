@@ -21,25 +21,19 @@ type ConfigFields struct {
 	DBName         string `yaml:"dbName"`
 }
 
-// PriceLimits specifies the price limit settings in SC and fiat.
+// PriceLimits specifies the price limit settings.
 type PriceLimits struct {
 	MaxContractPriceSC  string  `yaml:"maxContractPriceSC"`
-	MaxUploadPriceSC    string  `yaml:"maxUploadPriceSC"`
 	MaxUploadPriceUSD   float64 `yaml:"maxUploadPriceUSD"`
-	MaxDownloadPriceSC  string  `yaml:"maxDownloadPriceSC"`
 	MaxDownloadPriceUSD float64 `yaml:"maxDownloadPriceUSD"`
-	MaxStoragePriceSC   string  `yaml:"maxStoragePriceSC"`
 	MaxStoragePriceUSD  float64 `yaml:"maxStoragePriceUSD"`
 }
 
 // ParsedLimits lists the SC limits in `types.Currency` rather than `string`.
 type ParsedLimits struct {
 	MaxContractPriceSC  types.Currency
-	MaxUploadPriceSC    types.Currency
 	MaxUploadPriceUSD   float64
-	MaxDownloadPriceSC  types.Currency
 	MaxDownloadPriceUSD float64
-	MaxStoragePriceSC   types.Currency
 	MaxStoragePriceUSD  float64
 }
 

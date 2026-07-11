@@ -29,6 +29,12 @@ var (
 // checkGougingV2 performs a number of gouging checks before forming
 // a contract with the V2 host.
 func checkGougingV2(hs *rhpv4.HostSettings, limits hostDBPriceLimits) error {
+	// The USD limits are converted to SC using the exchange rate, which
+	// may not have been fetched yet.
+	if limits.maxUploadPrice.IsZero() || limits.maxDownloadPrice.IsZero() || limits.maxStoragePrice.IsZero() {
+		return errors.New("price limits not initialized: SC exchange rate not available yet")
+	}
+
 	// Upload gouging.
 	if hs.Prices.StoragePrice.Cmp(limits.maxStoragePrice) > 0 {
 		return fmt.Errorf("storage price exceeds max storage price: %v > %v", hs.Prices.StoragePrice, limits.maxStoragePrice)

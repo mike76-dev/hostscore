@@ -7,9 +7,6 @@ config:
   dbName: hostscore
 priceLimits:
   maxContractPriceSC: 1SC
-  maxUploadPriceSC: 3KS
   maxUploadPriceUSD: 6.0
-  maxDownloadPriceSC: 9KS
   maxDownloadPriceUSD: 18.0
-  maxStoragePriceSC: 3KS
   maxStoragePriceUSD: 6.0
