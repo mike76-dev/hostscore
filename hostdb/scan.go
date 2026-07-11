@@ -58,6 +58,13 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		panic("wrong host network")
 	}
 
+	// Delete the host from scanMap on any exit path.
+	defer func() {
+		hdb.mu.Lock()
+		delete(hdb.scanMap, host.PublicKey)
+		hdb.mu.Unlock()
+	}()
+
 	// Resolve the host's used subnets and update the timestamp if they
 	// changed. We only update the timestamp if resolving the ipNets was
 	// successful.
@@ -128,12 +135,6 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 	if err := store.updateScanHistory(host, scan); err != nil {
 		hdb.log.Error("couldn't update scan history", zap.Error(err))
 	}
-
-	// Delete the host from scanMap.
-	hdb.mu.Lock()
-	delete(hdb.scanMap, host.PublicKey)
-	hdb.scanThreads--
-	hdb.mu.Unlock()
 }
 
 // scanHosts is an ongoing function which will scan the full set of hosts
@@ -170,40 +171,57 @@ func (hdb *HostDB) scanHosts() {
 			}
 		}
 
-		for len(hdb.scanList) > 0 {
+		for {
 			hdb.mu.Lock()
-			if hdb.scanThreads < maxScanThreads {
-				hdb.scanThreads++
-				batchSize := scanBatchSize
-				if batchSize > len(hdb.scanList) {
-					batchSize = len(hdb.scanList)
-				}
-				list := hdb.scanList[:batchSize]
-				hdb.scanList = hdb.scanList[batchSize:]
-				hdb.mu.Unlock()
-				go func() {
-					for _, entry := range list {
-						hdb.scanHost(entry)
-					}
-				}()
-			} else {
+			if len(hdb.scanList) == 0 || hdb.scanThreads >= maxScanThreads {
 				hdb.mu.Unlock()
 				break
 			}
+			hdb.scanThreads++
+			batchSize := scanBatchSize
+			if batchSize > len(hdb.scanList) {
+				batchSize = len(hdb.scanList)
+			}
+			list := hdb.scanList[:batchSize]
+			hdb.scanList = hdb.scanList[batchSize:]
+			hdb.mu.Unlock()
+			if err := hdb.tg.Add(); err != nil {
+				hdb.mu.Lock()
+				hdb.scanThreads--
+				hdb.mu.Unlock()
+				return
+			}
+			go func() {
+				defer hdb.tg.Done()
+				for _, entry := range list {
+					hdb.scanHost(entry)
+				}
+				hdb.mu.Lock()
+				hdb.scanThreads--
+				hdb.mu.Unlock()
+			}()
 		}
 
-		for len(hdb.benchmarkList) > 0 {
+		for {
 			hdb.mu.Lock()
-			if hdb.benchmarkThreads < maxBenchmarkThreads {
-				hdb.benchmarkThreads++
-				entry := hdb.benchmarkList[0]
-				hdb.benchmarkList = hdb.benchmarkList[1:]
-				hdb.mu.Unlock()
-				go hdb.benchmarkHost(entry)
-			} else {
+			if len(hdb.benchmarkList) == 0 || hdb.benchmarkThreads >= maxBenchmarkThreads {
 				hdb.mu.Unlock()
 				break
 			}
+			hdb.benchmarkThreads++
+			entry := hdb.benchmarkList[0]
+			hdb.benchmarkList = hdb.benchmarkList[1:]
+			hdb.mu.Unlock()
+			if err := hdb.tg.Add(); err != nil {
+				hdb.mu.Lock()
+				hdb.benchmarkThreads--
+				hdb.mu.Unlock()
+				return
+			}
+			go func() {
+				defer hdb.tg.Done()
+				hdb.benchmarkHost(entry)
+			}()
 		}
 
 		select {
