@@ -178,7 +178,12 @@ func (hdb *HostDB) Close() {
 	}
 
 	for network := range hdb.stores {
-		hdb.unsubscribes[network]()
+		hdb.mu.Lock()
+		unsubscribe := hdb.unsubscribes[network]
+		hdb.mu.Unlock()
+		if unsubscribe != nil {
+			unsubscribe()
+		}
 		hdb.stores[network].close()
 	}
 
@@ -273,12 +278,15 @@ func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeSt
 			}
 
 			reorgChan := make(chan types.ChainIndex, 1)
-			hdb.unsubscribes[network] = hdb.nodes.ChainManager(network).OnReorg(func(index types.ChainIndex) {
+			unsubscribe := hdb.nodes.ChainManager(network).OnReorg(func(index types.ChainIndex) {
 				select {
 				case reorgChan <- index:
 				default:
 				}
 			})
+			hdb.mu.Lock()
+			hdb.unsubscribes[network] = unsubscribe
+			hdb.mu.Unlock()
 
 			for range reorgChan {
 				lastTip := store.tip
