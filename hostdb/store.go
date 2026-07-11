@@ -1064,7 +1064,9 @@ func (s *hostDBStore) getHostsForScan() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, host := range s.hosts {
-		if host.Blocked {
+		// V1 hosts cannot be interacted with since the V2 hardfork,
+		// so only V2 hosts are scanned and benchmarked.
+		if host.Blocked || !host.V2 {
 			continue
 		}
 		if len(host.ScanHistory) == 0 || time.Since(host.ScanHistory[len(host.ScanHistory)-1].Timestamp) >= s.calculateScanInterval(host) {
