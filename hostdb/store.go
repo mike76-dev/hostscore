@@ -718,11 +718,11 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 					// Not a valid host announcement.
 					continue
 				}
-				if len(ha) == 0 {
-					// Empty announcement.
+				addrs := extractSiamuxAddresses(ha)
+				if len(addrs) == 0 {
+					// No siamux addresses announced.
 					continue
 				}
-				addrs := extractSiamuxAddresses(ha)
 				if err := utils.IsValid(addrs[0]); err != nil {
 					// Invalid netaddress.
 					continue
