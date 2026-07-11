@@ -223,6 +223,10 @@ func (s *server) hostDBUpdatesConfirmHandler(jc jape.Context) {
 	if jc.Check("wrong update ID provided", err) != nil {
 		return
 	}
+	if len(updateID) != len(hostdb.UpdateID{}) {
+		jc.Error(errors.New("wrong update ID length"), http.StatusBadRequest)
+		return
+	}
 
 	jc.Check("couldn't finalize updates", s.nodes.HostDB().FinalizeUpdates(hostdb.UpdateID(updateID)))
 }
