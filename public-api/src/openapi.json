@@ -7,7 +7,7 @@
             "name": "MIT License",
             "url": "https://opensource.org/license/mit/"
         },
-        "version": "2.0.0"
+        "version": "2.1.0"
     },
     "servers": [
         {
@@ -759,7 +759,7 @@
                 "tags": [
                     "network"
                 ],
-                "description": "Retrieve the number of online hosts and the total number of hosts",
+                "description": "Retrieve the number of online hosts, the total number of hosts, and the number of known V2 hosts",
                 "parameters": [
                     {
                         "name": "network",
@@ -1424,6 +1424,11 @@
                         "type": "integer",
                         "format": "int32",
                         "example": 84926
+                    },
+                    "totalV2": {
+                        "type": "integer",
+                        "format": "int32",
+                        "example": 1187
                     },
                     "online": {
                         "type": "integer",

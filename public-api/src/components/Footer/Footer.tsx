@@ -1,14 +1,39 @@
 import './Footer.css'
-import { ReactComponent as SiaLogo } from '../../assets/built-with-sia.svg'
+import { ReactComponent as BadgeDark } from '../../assets/built-on-sia-primary-dark.svg'
+import { ReactComponent as BadgeLight } from '../../assets/built-on-sia-primary-light.svg'
 
 type FooterProps = { darkMode: boolean }
 
 export const Footer = (props: FooterProps) => {
 	return (
-		<div className={'footer-container' + (props.darkMode ? ' footer-dark-mode' : '')}>
-			<a className="footer-link" tabIndex={1} href="https://sia.tech" target="_blank" rel="noreferrer">
-				<SiaLogo/>
-			</a>
-		</div>
+		<footer className="footer-container">
+			<div className="wrap footer-inner">
+				<span className="wordmark footer-wordmark"><span>HOST<em>SCORE</em></span></span>
+				<nav className="footer-links" aria-label="Footer">
+					<a
+						className="footer-link"
+						tabIndex={1}
+						href="https://hostscore.info"
+					>Portal</a>
+					<a
+						className="footer-link"
+						tabIndex={1}
+						href="https://github.com/mike76-dev/hostscore"
+						target="_blank"
+						rel="noreferrer"
+					>GitHub</a>
+				</nav>
+				<a
+					className="footer-badge"
+					tabIndex={1}
+					href="https://sia.tech"
+					target="_blank"
+					rel="noreferrer"
+					aria-label="Built on Sia"
+				>
+					{props.darkMode ? <BadgeLight/> : <BadgeDark/>}
+				</a>
+			</div>
+		</footer>
 	)
 }
