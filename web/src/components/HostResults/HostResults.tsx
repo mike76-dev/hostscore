@@ -108,7 +108,11 @@ export const HostResults = (props: HostResultsProps) => {
 		setBenchmarkData(bd)
 	}, [props.host, props.node, locations])
 	return (
-		<div className={'host-results-container' + (props.darkMode ? ' host-results-dark' : '')}>
+		<div className="panel host-results-container">
+			<div className="panel-h">
+				<h2>Benchmarks</h2>
+				<span className="panel-sub">measured from the benchmark nodes</span>
+			</div>
 			<table className="host-results-table">
 				<thead>
 					<tr>

@@ -1,8 +1,7 @@
 import './Status.css'
 import { useState, useEffect, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Loader } from '../'
-import Back from '../../assets/back.png'
+import { Loader } from '../'
 import { NodeStatus, getStatus, useLocations } from '../../api'
 import { NetworkContext } from '../../contexts'
 
@@ -80,7 +79,7 @@ export const Status = (props: StatusProps) => {
 							</tr>
 							<tr>
 								<th rowSpan={2}>Mainnet:</th>
-								<td>Height</td>
+								<td className="status-label">Height</td>
 								{nodes && locations.map(location => (
 									<td key={'height-mainnet-' + location.short}>
 										{nodes[location.short].online === true ? nodes[location.short].networks['mainnet'].height : ''}
@@ -88,7 +87,7 @@ export const Status = (props: StatusProps) => {
 								))}
 							</tr>
 							<tr>
-								<td>Balance</td>
+								<td className="status-label">Balance</td>
 								{nodes && locations.map(location => (
 									<td key={'balance-mainnet-' + location.short}>
 										{nodes[location.short].online === true &&
@@ -99,7 +98,7 @@ export const Status = (props: StatusProps) => {
 							</tr>
 							<tr>
 								<th rowSpan={2}>Zen:</th>
-								<td>Height</td>
+								<td className="status-label">Height</td>
 								{nodes && locations.map(location => (
 									<td key={'height-zen-' + location.short}>
 										{nodes[location.short].online === true ? nodes[location.short].networks['zen'].height : ''}
@@ -107,7 +106,7 @@ export const Status = (props: StatusProps) => {
 								))}
 							</tr>
 							<tr>
-								<td>Balance</td>
+								<td className="status-label">Balance</td>
 								{nodes && locations.map(location => (
 									<td key={'balance-zen-' + location.short}>
 										{nodes[location.short].online === true &&
@@ -125,12 +124,11 @@ export const Status = (props: StatusProps) => {
 					</table>
 				)
 			}
-			<Button
-				icon={Back}
-				caption="home"
-				darkMode={props.darkMode}
+			<button
+				className="button-container"
+				tabIndex={1}
 				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
-			/>
+			>← home</button>
 		</div>
 	)
 }

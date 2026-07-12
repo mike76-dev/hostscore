@@ -2,44 +2,62 @@
 	display: flex;
 	flex-direction: column;
 	position: relative;
+	width: 100%;
+	padding: 26px 0;
+	min-height: 300px;
 }
 
 .status-container h1 {
-	font-size: 2rem;
-}
-
-.status-container-dark h1,
-.status-container-dark td,
-.status-container-dark th {
-	color: var(--textDark);
+	font-family: var(--mono);
+	font-weight: 600;
+	letter-spacing: -.02em;
+	font-size: clamp(24px, 3vw, 34px);
 }
 
 .status-container table {
 	margin-bottom: 2rem;
 	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--hairline);
+	border-radius: 12px;
+	box-shadow: var(--shadow);
+	overflow: hidden;
 }
 
-.status-container table,
-.status-container tr,
+.status-container th {
+	font-size: 11px;
+	font-family: var(--mono);
+	letter-spacing: .1em;
+	text-transform: uppercase;
+	color: var(--muted);
+	font-weight: 600;
+	border-bottom: 1px solid var(--hairline);
+}
+
+.status-container td {
+	border-bottom: 1px solid var(--hairline);
+	font-size: 14px;
+}
+
+.status-container tr:last-child td {
+	border-bottom: none;
+}
+
 .status-container td,
 .status-container th {
-	border: 1px solid var(--borderLight);
-}
-
-.status-container-dark table,
-.status-container-dark tr,
-.status-container-dark td,
-.status-container-dark th {
-	border: 1px solid var(--borderDark);
-}
-
-.status-container td,
-.status-container th {
-	padding: 0.5rem;
+	padding: 0.5rem 0.75rem;
 }
 
 .status-container td {
 	text-align: center;
+	font-family: var(--mono);
+	font-variant-numeric: tabular-nums;
+}
+
+.status-container td.status-label {
+	font-family: var(--sans);
+	font-size: 14px;
+	text-align: left;
 }
 
 .status-container th:first-child {
@@ -47,42 +65,35 @@
 }
 
 .status {
-	width: 1rem;
-	height: 1rem;
+	width: 10px;
+	height: 10px;
 	border-radius: 50%;
 	margin: 0 auto;
 }
 
 .status-good {
-	background-color: green;
+	background-color: var(--good);
 }
 
 .status-medium {
-	background-color: orange;
+	background-color: var(--warn);
 }
 
 .status-bad {
-	background-color: red;
+	background-color: var(--crit);
 }
 
 .status-unavailable {
 	margin-bottom: 2rem;
+	color: var(--muted);
 }
 
 .status-loader {
-	position: absolute!important;
-	left: 30%;
-	top: 30%;
+	position: absolute !important;
+	left: calc(50% - 20px);
+	top: 150px;
 }
 
-@media screen and (max-width: 1000px) {
-	.status-container h1 {
-		text-align: center;
-		font-size: 1.5rem;
-	}
-
-	.status-loader {
-		left: 45%;
-		top: 35%;
-	}
+.status-container .button-container {
+	align-self: flex-start;
 }

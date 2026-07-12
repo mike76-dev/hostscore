@@ -106,6 +106,7 @@ export type NodeStatus = {
 
 export type HostCount = {
 	total: number,
+	totalV2: number,
 	online: number
 }
 

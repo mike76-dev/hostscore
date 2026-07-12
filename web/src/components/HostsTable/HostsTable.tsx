@@ -1,5 +1,5 @@
 import './HostsTable.css'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
 	Host,
 	HostSortType,
@@ -7,6 +7,7 @@ import {
 	useLocations,
 	convertSize,
 	countryByCode,
+	countryFlag,
 	toSia
 } from '../../api'
 import { Sort, Tooltip } from '../'
@@ -19,29 +20,28 @@ type HostsTableProps = {
 }
 
 const StatusTooltip = () => (
-	<div className="hosts-table-tooltip">
-		<div className="hosts-table-flex">
-			<div className="hosts-table-status hosts-table-status-good"></div>
-			<div className="hosts-table-tooltip-text">host is online</div>
+	<div className="hosts-table-legend">
+		<div className="hosts-table-legend-row">
+			<span className="pill pill-ok"><span className="dot dot-good"></span>Accepting</span>
+			online, accepting contracts
 		</div>
-		<div className="hosts-table-flex">
-			<div className="hosts-table-status hosts-table-status-medium"></div>
-			<div className="hosts-table-tooltip-text">host is not accepting contracts</div>
+		<div className="hosts-table-legend-row">
+			<span className="pill pill-warn"><span className="dot dot-warn"></span>Not accepting</span>
+			online, not accepting contracts
 		</div>
-		<div className="hosts-table-flex">
-			<div className="hosts-table-status hosts-table-status-bad"></div>
-			<div className="hosts-table-tooltip-text">host is offline</div>
+		<div className="hosts-table-legend-row">
+			<span className="pill pill-bad"><span className="dot dot-crit"></span>Offline</span>
+			failed the last scans
 		</div>
 	</div>
 )
 
 export const HostsTable = (props: HostsTableProps) => {
+	const navigate = useNavigate()
 	const newLocation = (host: Host) => {
-		let href = window.location.href
-		if (href[href.length - 1] === '/') {
-			return href + 'host/' + stripePrefix(host.publicKey)
-		}
-		return href + '/host/' + stripePrefix(host.publicKey)
+		let path = window.location.pathname
+		if (path[path.length - 1] !== '/') path += '/'
+		return path + 'host/' + stripePrefix(host.publicKey)
 	}
 	const locations = useLocations()
 	const hostStatus = (host: Host) => {
@@ -61,17 +61,35 @@ export const HostsTable = (props: HostsTableProps) => {
 		if (host.v2 === true && host.v2Settings.acceptingContracts === false) return 'medium'
 		return 'good'
 	}
-	const getStoragePrice = (host: Host): string => (host.v2 === true ? toSia(host.v2Settings.prices.storagePrice, true) + '/TB/month' : 'N/A')
-	const getIngressPrice = (host: Host): string => (host.v2 === true ? toSia(host.v2Settings.prices.ingressPrice, false) + '/TB' : 'N/A')
-	const getEgressPrice = (host: Host): string => (host.v2 === true ? toSia(host.v2Settings.prices.egressPrice, false) + '/TB' : 'N/A')
+	const statusPill = (host: Host) => {
+		switch (hostStatus(host)) {
+		case 'good':
+			return <span className="pill pill-ok"><span className="dot dot-good"></span>Accepting</span>
+		case 'medium':
+			return <span className="pill pill-warn"><span className="dot dot-warn"></span>Not accepting</span>
+		default:
+			return <span className="pill pill-bad"><span className="dot dot-crit"></span>Offline</span>
+		}
+	}
+	const getStoragePrice = (host: Host): string => (host.v2 === true ? toSia(host.v2Settings.prices.storagePrice, true) : 'N/A')
+	const getIngressPrice = (host: Host): string => (host.v2 === true ? toSia(host.v2Settings.prices.ingressPrice, false) : 'N/A')
+	const getEgressPrice = (host: Host): string => (host.v2 === true ? toSia(host.v2Settings.prices.egressPrice, false) : 'N/A')
 	const getTotalStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : 0)
-	const getRemainingStorage = (host: Host): number => (host.v2 === true ? host.v2Settings.remainingStorage * 4 * 1024 * 1024 : 0)
+	const getUsedStorage = (host: Host): number => (host.v2 === true ? (host.v2Settings.totalStorage - host.v2Settings.remainingStorage) * 4 * 1024 * 1024 : 0)
+	const utilization = (host: Host): number => {
+		const total = getTotalStorage(host)
+		return total > 0 ? Math.round(getUsedStorage(host) * 100 / total) : 0
+	}
+	const hostLocation = (host: Host): string => {
+		const country = countryByCode(host.country) || ''
+		return host.city ? host.city + ', ' + country : country
+	}
 	return (
-		<div className={'hosts-table-container' + (props.darkMode ? ' hosts-table-dark' : '')}>
+		<div className="hosts-table-container">
 			<table>
 				<thead>
 					<tr>
-						<th style={{minWidth: '4rem'}}>
+						<th>
 							<Sort
 								darkMode={props.darkMode}
 								order={props.sorting.sortBy === 'rank' ? props.sorting.order : 'none'}
@@ -80,64 +98,54 @@ export const HostsTable = (props: HostsTableProps) => {
 								}}
 							>Rank</Sort>
 						</th>
-						<th style={{minWidth: '4rem'}}>
-							<Sort
-								darkMode={props.darkMode}
-								order={props.sorting.sortBy === 'id' ? props.sorting.order : 'none'}
-								setOrder={(order: 'asc' | 'desc') => {
-									props.changeSorting({ sortBy: 'id', order: order })
-								}}
-							>ID</Sort>
-						</th>
-						<th style={{minWidth: '20rem'}}>Net Address</th>
-						<th>
+						<th>Host</th>
+						<th className="hosts-table-num">
 							<Sort
 								darkMode={props.darkMode}
 								order={props.sorting.sortBy === 'storage' ? props.sorting.order : 'none'}
 								setOrder={(order: 'asc' | 'desc') => {
 									props.changeSorting({ sortBy: 'storage', order: order })
 								}}
-							>Storage Price</Sort>
+							>Storage /TB·mo</Sort>
 						</th>
-						<th>
+						<th className="hosts-table-num">
 							<Sort
 								darkMode={props.darkMode}
 								order={props.sorting.sortBy === 'upload' ? props.sorting.order : 'none'}
 								setOrder={(order: 'asc' | 'desc') => {
 									props.changeSorting({ sortBy: 'upload', order: order })
 								}}
-							>Upload Price</Sort>
+							>Ingress /TB</Sort>
 						</th>
-						<th>
+						<th className="hosts-table-num">
 							<Sort
 								darkMode={props.darkMode}
 								order={props.sorting.sortBy === 'download' ? props.sorting.order : 'none'}
 								setOrder={(order: 'asc' | 'desc') => {
 									props.changeSorting({ sortBy: 'download', order: order })
 								}}
-							>Download Price</Sort>
+							>Egress /TB</Sort>
 						</th>
-						<th>
+						<th className="hosts-table-num">
 							<Sort
 								darkMode={props.darkMode}
 								order={props.sorting.sortBy === 'used' ? props.sorting.order : 'none'}
 								setOrder={(order: 'asc' | 'desc') => {
 									props.changeSorting({ sortBy: 'used', order: order })
 								}}
-							>Used Storage</Sort>
+							>Used</Sort>
 						</th>
-						<th>
+						<th className="hosts-table-num">
 							<Sort
 								darkMode={props.darkMode}
 								order={props.sorting.sortBy === 'total' ? props.sorting.order : 'none'}
 								setOrder={(order: 'asc' | 'desc') => {
 									props.changeSorting({ sortBy: 'total', order: order })
 								}}
-							>Total Storage</Sort>
+							>Total</Sort>
 						</th>
-						<th>Country</th>
 						<th>
-							<div className="hosts-table-flex">
+							<div className="hosts-table-status-header">
 								Status
 								<Tooltip darkMode={props.darkMode}><StatusTooltip/></Tooltip>
 							</div>
@@ -146,27 +154,40 @@ export const HostsTable = (props: HostsTableProps) => {
 				</thead>
 				<tbody>
 					{props.hosts.map(host => (
-						<tr key={host.publicKey}>
-							<td>{host.rank}</td>
-							<td>{host.id}</td>
+						<tr
+							key={host.publicKey}
+							tabIndex={1}
+							onClick={() => navigate(newLocation(host))}
+							onKeyUp={(event: React.KeyboardEvent<HTMLTableRowElement>) => {
+								if (event.key === 'Enter') navigate(newLocation(host))
+							}}
+						>
+							<td className="hosts-table-rank">#{host.rank}</td>
 							<td>
-								<Link
-									className="hosts-table-link"
-									to={newLocation(host)}
-									tabIndex={1}
+								<div className="hosts-table-addr">{host.netaddress}</div>
+								<div className="hosts-table-loc">
+									{hostLocation(host)}
+									{host.country !== '' &&
+										<span className="hosts-table-flag">{countryFlag(host.country)}</span>
+									}
+								</div>
+							</td>
+							<td className="hosts-table-num">{getStoragePrice(host)}</td>
+							<td className="hosts-table-num">{getIngressPrice(host)}</td>
+							<td className="hosts-table-num">{getEgressPrice(host)}</td>
+							<td className="hosts-table-num">
+								<div
+									className="hosts-table-used"
+									title={utilization(host) + '% of advertised storage in use'}
 								>
-									{host.netaddress}
-								</Link>
+									<span className="meter">
+										<i style={{width: utilization(host) + '%'}}></i>
+									</span>
+									<span>{convertSize(getUsedStorage(host))}</span>
+								</div>
 							</td>
-							<td style={{textAlign: 'center'}}>{getStoragePrice(host)}</td>
-							<td style={{textAlign: 'center'}}>{getIngressPrice(host)}</td>
-							<td style={{textAlign: 'center'}}>{getEgressPrice(host)}</td>
-							<td style={{textAlign: 'center'}}>{convertSize(getTotalStorage(host) - getRemainingStorage(host))}</td>
-							<td style={{textAlign: 'center'}}>{convertSize(getTotalStorage(host))}</td>
-							<td>{countryByCode(host.country)}</td>
-							<td>
-								<div className={'hosts-table-status hosts-table-status-' + hostStatus(host)}></div>
-							</td>
+							<td className="hosts-table-num">{convertSize(getTotalStorage(host))}</td>
+							<td>{statusPill(host)}</td>
 						</tr>
 					))}
 				</tbody>

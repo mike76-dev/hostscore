@@ -10,28 +10,24 @@ type CountrySelectorProps = {
 
 export const CountrySelector = (props: CountrySelectorProps) => {
 	return (
-		<div className="country-selector-container">
-			<label className={props.darkMode ? 'country-selector-dark' : ''}>
-				<span className="country-selector-text">Filter by country:</span>
-				<select
-					className="country-selector-select"
-					value={props.value}
-					onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
-						props.onChange(event.target.value)
-					}}
-					tabIndex={1}
-				>
-					<option key="country-none" value="">All Countries</option>
-					{props.options && props.options
-						.sort((a, b) => (countryByCode(a) || '').localeCompare(countryByCode(b) || ''))
-						.map(option => (
-						<option
-							key={'country-' + option}
-							value={option}
-						>{countryByCode(option)}</option>
-					))}
-				</select>
-			</label>
-		</div>
+		<select
+			className="ctl"
+			aria-label="Filter by country"
+			value={props.value}
+			onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
+				props.onChange(event.target.value)
+			}}
+			tabIndex={1}
+		>
+			<option key="country-none" value="">All countries</option>
+			{props.options && props.options
+				.sort((a, b) => (countryByCode(a) || '').localeCompare(countryByCode(b) || ''))
+				.map(option => (
+				<option
+					key={'country-' + option}
+					value={option}
+				>{countryByCode(option)}</option>
+			))}
+		</select>
 	)
 }
