@@ -42,8 +42,9 @@ type keysResponse struct {
 }
 
 type hostCount struct {
-	Total  int `json:"total"`
-	Online int `json:"online"`
+	Total   int `json:"total"`
+	TotalV2 int `json:"totalV2"`
+	Online  int `json:"online"`
 }
 
 type networkHostsResponse struct {
@@ -916,6 +917,9 @@ func (api *portalAPI) networkHostsHandler(w http.ResponseWriter, req *http.Reque
 	api.mu.RLock()
 	hosts.Total = len(api.hosts[network])
 	for _, host := range api.hosts[network] {
+		if host.V2 {
+			hosts.TotalV2++
+		}
 		if isOnline(*host) {
 			hosts.Online++
 		}
