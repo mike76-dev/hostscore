@@ -8,12 +8,16 @@ type HeaderProps = {
 
 export const Header = (props: HeaderProps) => {
 	return (
-		<div className={'header-container' + (props.darkMode ? ' header-dark-mode' : '')}>
-			<Logo/>
-			<ModeSelector
-				darkMode={props.darkMode}
-				toggleDarkMode={props.toggleDarkMode}
-			/>
-		</div>
+		<header className="header-container">
+			<div className="wrap header-inner">
+				<Logo/>
+				<div className="header-right">
+					<ModeSelector
+						darkMode={props.darkMode}
+						toggleDarkMode={props.toggleDarkMode}
+					/>
+				</div>
+			</div>
+		</header>
 	)
 }

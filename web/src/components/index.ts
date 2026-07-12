@@ -1,7 +1,6 @@
 export * from './About/About'
 export * from './Averages/Averages'
 export * from './Benchmark/Benchmark'
-export * from './Button/Button'
 export * from './Content/Content'
 export * from './CountrySelector/CountrySelector'
 export * from './FAQ/FAQ'

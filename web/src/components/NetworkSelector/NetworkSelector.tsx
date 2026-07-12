@@ -1,7 +1,7 @@
 import './NetworkSelector.css'
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useExcludedPaths, getNetworkHosts } from '../../api'
+import { useExcludedPaths } from '../../api'
 
 type NetworkSelectorProps = {
 	darkMode: boolean,
@@ -14,14 +14,6 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	const navigate = useNavigate()
 	const [network, switchNetwork] = useState(props.network)
 	const excludedPaths = useExcludedPaths()
-	const [onlineHosts, setOnlineHosts] = useState(0)
-	const [time, setTime] = useState(new Date())
-	useEffect((): any => {
-		const interval = setInterval(() => {
-			setTime(new Date())
-		}, 600000)
-		return () => clearInterval(interval)
-	}, [])
 	useEffect(() => {
 		if (excludedPaths.includes(location.pathname)) return
 		if (location.pathname.indexOf('/zen') === 0) {
@@ -31,30 +23,23 @@ export const NetworkSelector = (props: NetworkSelectorProps) => {
 	useEffect(() => {
 		switchNetwork(props.network)
 	}, [props.network])
-	useEffect(() => {
-		if (network === '') return
-		getNetworkHosts(network)
-		.then(data => {
-			if (data) setOnlineHosts(data.hosts.online)
-		})
-	}, [network, time])
+	const select = (value: string) => {
+		if (value === network) return
+		props.switchNetwork(value)
+		navigate(value === 'zen' ? '/zen' : '/')
+	}
 	return (
-		<div className={'network-selector-container' + (props.darkMode ? ' network-selector-dark' : '')}>
-			<select
-				className="network-selector-select"
-				onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
-					props.switchNetwork(event.target.value)
-					navigate(event.target.value === 'zen' ? '/zen' : '/')
-				}}
-				value={network}
+		<div className="seg" role="group" aria-label="Network">
+			<button
 				tabIndex={1}
-			>
-				<option value="mainnet">Mainnet</option>
-				<option value="zen">Zen</option>
-			</select>
-			<div className="network-selector-text">
-				{network !== '' && 'Online hosts: ' + onlineHosts}
-			</div>
+				aria-pressed={network !== 'zen'}
+				onClick={() => select('mainnet')}
+			>Mainnet</button>
+			<button
+				tabIndex={1}
+				aria-pressed={network === 'zen'}
+				onClick={() => select('zen')}
+			>Zen</button>
 		</div>
 	)
 }

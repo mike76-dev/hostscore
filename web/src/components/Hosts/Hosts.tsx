@@ -13,9 +13,12 @@ import {
 } from '../'
 import {
 	Host,
+	HostCount,
 	getHosts,
 	getAverages,
-	getCountries
+	getCountries,
+	getNetworkHosts,
+	toSia
 } from '../../api'
 import { HostContext, NetworkContext } from '../../contexts'
 
@@ -24,6 +27,10 @@ type HostsProps = {
 	darkMode: boolean,
 	setHosts: (hosts: Host[]) => any,
 }
+
+const formatCount = (count: number) => count.toLocaleString('en-US')
+
+const formatPB = (bytes: number) => (bytes / 1e15).toFixed(2)
 
 export const Hosts = (props: HostsProps) => {
 	const {
@@ -46,6 +53,7 @@ export const Hosts = (props: HostsProps) => {
 	const [hosts, setHostsLocal] = useState<Host[]>([])
 	const [mapHosts, setMapHosts] = useState<Host[]>([])
 	const [total, setTotal] = useState(0)
+	const [hostCount, setHostCount] = useState<HostCount>()
 	const [loading, setLoading] = useState(false)
 	const [loadingAverages, setLoadingAverages] = useState(false)
 	const { network, setHosts } = props
@@ -119,6 +127,12 @@ export const Hosts = (props: HostsProps) => {
 		})
 	}, [network, time, setAverages, setLoadingAverages])
 	useEffect(() => {
+		getNetworkHosts(network)
+		.then(data => {
+			if (data) setHostCount(data.hosts)
+		})
+	}, [network, time])
+	useEffect(() => {
 		getCountries(network, !onlineOnly)
 		.then(data => {
 			if (data && data.countries) {
@@ -133,42 +147,131 @@ export const Hosts = (props: HostsProps) => {
 			setQuery('')
 			prevNetwork.current = network
 		}
+	// eslint-disable-next-line
 	}, [network, changeOffset])
+
+	// Network-wide statistics derived from the full list of online hosts.
+	const accepting = mapHosts.filter(host =>
+		host.v2 === true && host.v2Settings.acceptingContracts).length
+	const totalStorage = mapHosts.reduce((sum, host) =>
+		sum + (host.v2 === true ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : 0), 0)
+	const usedStorage = mapHosts.reduce((sum, host) =>
+		sum + (host.v2 === true ?
+			(host.v2Settings.totalStorage - host.v2Settings.remainingStorage) * 4 * 1024 * 1024 : 0), 0)
+	const tier1 = averages['tier1']
+
 	return (
 		<div className="hosts-container">
-			<div className="hosts-subcontainer">
-				<HostMap
-					darkMode={props.darkMode}
-					network={network}
-					hosts={mapHosts}
-				/>
+			<section className="hosts-hero">
+				<div className="eyebrow">
+					{'Sia storage network · ' + (network === 'zen' ? 'Zen testnet' : 'Mainnet')}
+				</div>
+				<h1 className="hosts-title"><em>Every host</em> under continuous observation</h1>
+				<p className="hosts-lead">
+					HostScore watches every host on the Sia network, scanning them
+					around the clock from three vantage points — Europe, East&nbsp;USA
+					and Asia. Hosts are benchmarked and scored on pricing, performance
+					and reliability.
+				</p>
+				<div className="hosts-stats">
+					<div className="hosts-stat">
+						<div className="hosts-stat-key">Known V2 hosts</div>
+						<div className="hosts-stat-value">
+							{hostCount && hostCount.totalV2 !== undefined ? formatCount(hostCount.totalV2) : '—'}
+						</div>
+						<div className="hosts-stat-sub">
+							{hostCount ? 'of ' + formatCount(hostCount.total) + ' hosts ever seen' : ' '}
+						</div>
+					</div>
+					<div className="hosts-stat">
+						<div className="hosts-stat-key">Online hosts</div>
+						<div className="hosts-stat-value">
+							{hostCount ? formatCount(hostCount.online) : '—'}
+						</div>
+						<div className="hosts-stat-sub">
+							{mapHosts.length > 0 ?
+								formatCount(accepting) + ' accepting contracts · ' +
+								(accepting * 100 / mapHosts.length).toFixed(1) + '%' : ' '}
+						</div>
+					</div>
+					<div className="hosts-stat">
+						<div className="hosts-stat-key">Advertised capacity</div>
+						<div className="hosts-stat-value">
+							{mapHosts.length > 0 ? <>{formatPB(totalStorage)} <small>PB</small></> : '—'}
+						</div>
+						<div className="hosts-stat-sub">
+							{mapHosts.length > 0 ?
+								formatPB(usedStorage) + ' PB in use · ' +
+								(totalStorage > 0 ? (usedStorage * 100 / totalStorage).toFixed(0) : '0') + '%' : ' '}
+						</div>
+					</div>
+					<div className="hosts-stat">
+						<div className="hosts-stat-key">Tier-1 storage price</div>
+						<div className="hosts-stat-value">
+							{tier1 && tier1.available ? toSia(tier1.storagePrice, true) : '—'}
+						</div>
+						<div className="hosts-stat-sub">avg of top 10 hosts, /TB·month</div>
+					</div>
+				</div>
+			</section>
+			<div className="hosts-cols">
+				<div className="panel hosts-map-panel">
+					<div className="panel-h">
+						<h2>Host map</h2>
+					</div>
+					<div className="hosts-map-body">
+						<HostMap
+							darkMode={props.darkMode}
+							network={network}
+							hosts={mapHosts}
+						/>
+					</div>
+				</div>
+				<div className="panel hosts-averages-panel">
+					{loadingAverages ?
+						<Loader
+							darkMode={props.darkMode}
+							className="hosts-averages-loader"
+						/>
+					:
+						<Averages
+							darkMode={props.darkMode}
+							averages={averages}
+						/>
+					}
+				</div>
+			</div>
+			<div className="hosts-section-h">
+				<h2>Host explorer</h2>
+				<span className="hosts-section-sub">
+					{hostCount ? formatCount(hostCount.online) + ' online · ranked by total score' : ''}
+				</span>
+			</div>
+			<div className="panel hosts-explorer">
+				<div className="hosts-filters">
+					<HostSearch
+						darkMode={props.darkMode}
+						value={query}
+						onChange={setQuery}
+					/>
+					<CountrySelector
+						darkMode={props.darkMode}
+						options={countries}
+						value={country}
+						onChange={setCountry}
+					/>
+					<HostSelector
+						darkMode={props.darkMode}
+						value={onlineOnly ? 'online' : 'all'}
+						onChange={switchHosts}
+					/>
+				</div>
 				<div className="hosts-table-div">
-					{loading &&
+					{loading ?
 						<Loader
 							darkMode={props.darkMode}
 							className="hosts-table-loader"
 						/>
-					}
-					<div className="hosts-row">
-						<HostSelector
-							darkMode={props.darkMode}
-							value={onlineOnly ? 'online' : 'all'}
-							onChange={switchHosts}
-						/>
-						<HostSearch
-							darkMode={props.darkMode}
-							value={query}
-							onChange={setQuery}
-						/>
-						<CountrySelector
-							darkMode={props.darkMode}
-							options={countries}
-							value={country}
-							onChange={setCountry}
-						/>
-					</div>
-					{loading ?
-						<></>
 					:
 					(hosts.length > 0 ?
 						<>
@@ -188,22 +291,9 @@ export const Hosts = (props: HostsProps) => {
 							/>
 						</>
 					:
-						<div className={'hosts-not-found' + (props.darkMode ? ' hosts-not-found-dark' : '')}>No hosts found</div>
+						<div className="hosts-not-found">No hosts found</div>
 					)}
 				</div>
-			</div>
-			<div className="hosts-averages-div">
-				{loadingAverages ?
-					<Loader
-						darkMode={props.darkMode}
-						className="hosts-averages-loader"
-					/>
-				:
-					<Averages
-						darkMode={props.darkMode}
-						averages={averages}
-					/>
-				}
 			</div>
 		</div>
 	)

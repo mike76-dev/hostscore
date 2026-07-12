@@ -1,5 +1,4 @@
 import './NodeSelector.css'
-import { ChangeEvent } from 'react'
 import { useLocations } from '../../api'
 
 type NodeSelectorProps = {
@@ -10,27 +9,22 @@ type NodeSelectorProps = {
 
 export const NodeSelector = (props: NodeSelectorProps) => {
 	const locations = useLocations()
-	const onChange = (e: ChangeEvent<HTMLSelectElement>): any => {
-		props.setNode(e.target.value)
-	}
 	return (
-		<div className={'node-selector-container' + (props.darkMode ? ' node-selector-dark' : '')}>
-			<label>
-				<span className="node-selector-text">Select node:</span>
-				<select
-					className="node-selector-select"
+		<div className="seg" role="group" aria-label="Benchmark node">
+			<button
+				key="global"
+				tabIndex={1}
+				aria-pressed={props.node === 'global'}
+				onClick={() => props.setNode('global')}
+			>Global</button>
+			{locations.map(location => (
+				<button
+					key={location.short}
 					tabIndex={1}
-					onChange={onChange}
-				>
-					<option key="global" value="global">Global</option>
-					{locations.map(location => (
-						<option
-							key={location.short}
-							value={location.short}
-						>{location.long}</option>
-					))}
-				</select>
-			</label>
+					aria-pressed={props.node === location.short}
+					onClick={() => props.setNode(location.short)}
+				>{location.long}</button>
+			))}
 		</div>
 	)
 }

@@ -2,8 +2,7 @@ import './FAQ.css'
 import { useContext } from 'react'
 import { useParams } from 'react-router'
 import { useNavigate } from 'react-router-dom'
-import { Button, FAQItem } from '../'
-import Back from '../../assets/back.png'
+import { FAQItem } from '../'
 import { NetworkContext } from '../../contexts'
 
 export type Topic = {
@@ -325,12 +324,11 @@ export const FAQ = (props: FAQProps) => {
 					))}
 				</FAQItem>
 			))}
-			<Button
-				icon={Back}
-				caption="home"
-				darkMode={props.darkMode}
+			<button
+				className="button-container"
+				tabIndex={1}
 				onClick={() => {navigate(network === 'zen' ? '/zen' : '/')}}
-			/>
+			>← home</button>
 		</div>
 	)
 }

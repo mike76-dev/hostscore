@@ -2,32 +2,28 @@
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	height: 20rem;
-	min-height: 20rem;
-	margin-bottom: 1rem;
-	border: 1px solid var(--borderLight);
+	height: 100%;
+	min-height: 320px;
 	width: 100%;
-}
-
-.host-map-dark {
-	border-color: var(--borderDark);
+	border-radius: 8px;
+	overflow: hidden;
 }
 
 .leaflet-container {
 	width: 100%;
 	height: 100%;
+	min-height: 320px;
+	background: var(--raised);
 }
 
 .leaflet-container a {
-	color: #000000;
-}
-
-.host-map-dark .leaflet-container a {
-	color: var(--textDark);
+	color: var(--accent);
 }
 
 .leaflet-popup-content {
 	margin: 0.5rem 1rem;
+	font-family: var(--mono);
+	font-size: 12.5px;
 }
 
 .host-map-link {
@@ -40,29 +36,44 @@
 }
 
 .host-map-marker {
-	background-color: #009fff;
+	background-color: var(--accent);
+	border: 2px solid var(--surface);
 	border-radius: 50%;
 	display: block;
-	width: 1rem;
-	height: 1rem;
+	width: 12px !important;
+	height: 12px !important;
+	margin-left: -6px !important;
+	margin-top: -6px !important;
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-.host-map-dark .leaflet-popup-content-wrapper,
-.host-map-dark .leaflet-popup-tip {
-	background-color: var(--outlineLight);
-	color: var(--textDark);
+.host-map-unknown {
+	color: var(--muted);
+	padding: 40px 0;
 }
 
-.host-map-dark .host-map-unknown {
-	color: var(--textDark);
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+	background-color: var(--surface);
+	color: var(--ink);
+	box-shadow: var(--shadow);
 }
 
-.host-map-dark .leaflet-popup-close-button span {
-	color: var(--borderDark);
+.leaflet-popup-close-button span {
+	color: var(--muted);
 }
 
-.host-map-dark .leaflet-control-zoom-in,
-.host-map-dark .leaflet-control-zoom-out,
-.host-map-dark .leaflet-control-attribution {
-	background-color: var(--borderDark);
+.leaflet-bar a {
+	background-color: var(--surface);
+	color: var(--ink);
+	border-bottom-color: var(--hairline);
+}
+
+.leaflet-bar a:hover {
+	background-color: var(--raised);
+}
+
+.leaflet-control-attribution {
+	background: color-mix(in srgb, var(--surface) 75%, transparent) !important;
+	color: var(--muted);
 }

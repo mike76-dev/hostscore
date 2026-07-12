@@ -1,42 +1,23 @@
 .faq-container {
-	padding: 0 1rem;
 	position: relative;
+	width: 100%;
+	padding: 26px 0;
 }
 
 .faq-container h1 {
-	font-size: 2rem;
+	font-family: var(--mono);
+	font-weight: 600;
+	letter-spacing: -.02em;
+	font-size: clamp(24px, 3vw, 34px);
 }
 
 .faq-container p {
-	font-size: 1rem;
+	font-size: 15px;
+	color: var(--ink2);
 	margin-top: 0;
-}
-
-.faq-container-dark h1,
-.faq-container-dark div {
-	color: var(--textDark);
+	max-width: 65ch;
 }
 
 .faq-container .button-container {
-	position: absolute;
-	top: 1rem;
-	right: 0;
-}
-
-@media screen and (max-width: 2000px) {
-	.faq-container {
-		width: 100%;
-		height: 100%;
-	}
-}
-
-@media screen and (max-width: 1000px) {
-	.faq-container h1 {
-		text-align: center;
-		font-size: 1.5rem;
-	}
-
-	.faq-container .button-container {
-		position: inherit;
-	}
+	margin-top: 1rem;
 }

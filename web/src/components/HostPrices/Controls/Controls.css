@@ -1,32 +1,28 @@
 .host-prices-controls-container {
 	display: flex;
 	flex-direction: row;
+	gap: 5px;
 	position: absolute;
-	top: 0.25rem;
-	right: 0.25rem;
+	top: 16px;
+	right: 16px;
 }
 
 .host-prices-control {
-	border: none;
-	background-color: transparent;
-	width: 1.5rem;
-	height: 1.5rem;
-	font-size: 1.2rem;
-	font-weight: bold;
+	width: 26px;
+	height: 26px;
+	font-size: 14px;
+	font-family: var(--mono);
+	font-weight: 600;
 	cursor: pointer;
-	border-radius: 0.25rem;
-	color: rgba(0, 0, 0, 0.5);
+	border: 1px solid var(--hairline);
+	border-radius: 7px;
+	background: var(--surface);
+	color: var(--ink2);
+	display: grid;
+	place-items: center;
 }
 
-.host-prices-control:focus {
-	outline: 2px solid var(--outlineLight);
-}
-
-.host-prices-dark .host-prices-control {
-	color: var(--textDark);
-	opacity: 0.5;
-}
-
-.host-prices-dark .host-prices-control:focus {
-	outline: 2px solid var(--outlineDark);
+.host-prices-control:hover {
+	color: var(--ink);
+	border-color: var(--hairline-strong);
 }

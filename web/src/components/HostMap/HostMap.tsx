@@ -147,13 +147,10 @@ export const HostMap = (props: HostMapProps) => {
 						scrollWheelZoom={true}
 					>
 						<TileLayer
-							attribution={props.darkMode ?
-								'&copy; <a href="https://carto.com/attributions">Carto</a> contributors' :
-								'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-							}
+							attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
 							url={props.darkMode ?
 								'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
-								'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+								'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
 							}
 						/>
 						<Marker
@@ -176,13 +173,10 @@ export const HostMap = (props: HostMapProps) => {
 					scrollWheelZoom={true}
 				>
 					<TileLayer
-						attribution={props.darkMode ?
-							'&copy; <a href="https://carto.com/attributions">Carto</a> contributors' :
-							'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-						}
+						attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
 						url={props.darkMode ?
 							'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
-							'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+							'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
 						}
 					/>
 					{props.hosts.map(host => (

@@ -24,7 +24,7 @@ import { NetworkContext, HostContext } from './contexts'
 
 const App = () => {
 	let data = window.localStorage.getItem('darkMode')
-	let mode = data ? JSON.parse(data) : false
+	let mode = data ? JSON.parse(data) : window.matchMedia('(prefers-color-scheme: dark)').matches
 	const [darkMode, toggleDarkMode] = useState(mode)
 	const [network, switchNetwork] = useState('')
 	const [averages, setAverages] = useState<{ [tier: string]: NetworkAverages }>({})
@@ -55,6 +55,7 @@ const App = () => {
 	const excludedPaths = useExcludedPaths()
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
+		document.documentElement.dataset.theme = darkMode ? 'dark' : 'light'
 	}, [darkMode])
 	useEffect(() => {
 		if (excludedPaths.includes(window.location.pathname)) return

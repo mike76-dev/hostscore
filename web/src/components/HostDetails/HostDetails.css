@@ -1,50 +1,136 @@
 .host-details-container {
 	display: flex;
-	flex-direction: row;
+	flex-direction: column;
 	width: 100%;
-	height: 100%;
 	position: relative;
+	min-height: 400px;
+	gap: 14px;
+	padding-bottom: 8px;
+}
+
+.host-details-back {
+	align-self: flex-start;
+	margin-top: 26px;
 }
 
 .host-not-found {
 	align-self: center;
-	width: 100%;
-	text-align: center;
-	font-size: 2rem;
-}
-
-.host-details-dark .host-not-found {
-	color: var(--textDark);
-}
-
-.host-details-subcontainer {
-	display: flex;
-	flex-direction: column;
-	width: 50%;
-}
-
-.host-details-container .button-container {
-	position: absolute;
-	top: -0.5rem;
-	right: 0;
+	margin-top: 100px;
+	font-size: 1.5rem;
+	color: var(--muted);
 }
 
 .host-details-loader {
-	position: absolute!important;
-	left: 46vw;
-	top: 32vh;
+	position: absolute !important;
+	left: calc(50% - 20px);
+	top: 200px;
+}
+
+/* ---------- identity card ---------- */
+
+.host-details-id {
+	padding: 18px;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 14px;
+}
+
+.host-details-id-main {
+	min-width: 0;
+}
+
+.host-details-addr {
+	font-family: var(--mono);
+	font-size: clamp(18px, 2.4vw, 26px);
+	letter-spacing: -.02em;
+	margin: 0;
+	font-weight: 650;
+	overflow-wrap: anywhere;
+}
+
+.host-details-pk {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 6px;
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--muted);
+	min-width: 0;
+}
+
+.host-details-pk code {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 52ch;
+}
+
+.host-details-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-left: auto;
+}
+
+.host-details-chip {
+	font-size: 12.5px;
+	color: var(--ink2);
+	border: 1px solid var(--hairline);
+	background: var(--raised);
+	border-radius: 99px;
+	padding: 4px 11px;
+	white-space: nowrap;
+}
+
+.host-details-chip b {
+	color: var(--ink);
+	font-weight: 600;
+}
+
+.host-details-flag {
+	margin-left: 5px;
+}
+
+/* ---------- layout ---------- */
+
+.host-details-node {
+	display: flex;
+}
+
+.host-details-grid {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 14px;
+	align-items: start;
+}
+
+.host-details-side {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-width: 0;
+}
+
+.host-details-map-panel {
+	display: flex;
+	flex-direction: column;
+}
+
+.host-details-map-body {
+	position: relative;
+	/* isolate Leaflet's high internal z-indexes from the rest of the page */
+	z-index: 0;
+	margin: 8px 10px 10px;
 }
 
 @media screen and (max-width: 1000px) {
-	.host-details-container {
-		flex-direction: column;
+	.host-details-grid {
+		grid-template-columns: 1fr;
 	}
 
-	.host-details-subcontainer {
-		width: inherit;
-	}
-
-	.host-details-loader {
-		left: 40vw;
+	.host-details-chips {
+		margin-left: 0;
 	}
 }

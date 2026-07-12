@@ -172,8 +172,8 @@ const PriceChart = (props: PriceChartProps) => {
 			data: totalStorage,
 			label: 'Total Storage',
 			yAxisID: 'y1',
-			borderColor: 'rgba(0, 127, 127, 0.25)',
-			backgroundColor: 'rgba(0, 127, 127, 0.25)',
+			borderColor: props.darkMode ? 'rgba(57, 135, 229, 0.25)' : 'rgba(42, 120, 214, 0.25)',
+			backgroundColor: props.darkMode ? 'rgba(57, 135, 229, 0.12)' : 'rgba(42, 120, 214, 0.12)',
 			fill: true,
 			stepped: 'before',
 			pointRadius: 0,
@@ -184,8 +184,8 @@ const PriceChart = (props: PriceChartProps) => {
 			data: usedStorage,
 			label: 'Used Storage',
 			yAxisID: 'y1',
-			borderColor: 'rgba(0, 255, 255, 0.25)',
-			backgroundColor: 'rgba(0, 255, 255, 0.25)',
+			borderColor: props.darkMode ? 'rgba(57, 135, 229, 0.55)' : 'rgba(42, 120, 214, 0.55)',
+			backgroundColor: props.darkMode ? 'rgba(57, 135, 229, 0.35)' : 'rgba(42, 120, 214, 0.35)',
 			fill: true,
 			stepped: 'before',
 			pointRadius: 0,
@@ -196,48 +196,48 @@ const PriceChart = (props: PriceChartProps) => {
 			data: uploadPrice,
 			label: 'Ingress Price',
 			yAxisID: 'y',
-			borderColor: '#ff0000',
+			borderColor: props.darkMode ? '#c98500' : '#eda100',
 			backgroundColor: 'transparent',
 			fill: false,
 			stepped: 'before',
 			pointRadius: 0,
-			borderWidth: 1,
+			borderWidth: 1.5,
 			order: 3
 		})
 		datasets.push({
 			data: downloadPrice,
 			label: 'Egress Price',
 			yAxisID: 'y',
-			borderColor: '#0000ff',
+			borderColor: props.darkMode ? '#9085e9' : '#4a3aa7',
 			backgroundColor: 'transparent',
 			fill: false,
 			stepped: 'before',
 			pointRadius: 0,
-			borderWidth: 1,
+			borderWidth: 1.5,
 			order: 4
 		})
 		datasets.push({
 			data: storagePrice,
 			label: 'Storage Price per Month',
 			yAxisID: 'y',
-			borderColor: props.darkMode ? '#ffffff' : '#000000',
+			borderColor: props.darkMode ? '#3987e5' : '#2a78d6',
 			backgroundColor: 'transparent',
 			fill: false,
 			stepped: 'before',
 			pointRadius: 0,
-			borderWidth: 1,
+			borderWidth: 2,
 			order: 5
 		})
 		datasets.push({
 			data: collateral,
 			label: 'Collateral per Month',
 			yAxisID: 'y',
-			borderColor: '#00ff00',
+			borderColor: props.darkMode ? '#199e70' : '#1baf7a',
 			backgroundColor: 'transparent',
 			fill: false,
 			stepped: 'before',
 			pointRadius: 0,
-			borderWidth: 1,
+			borderWidth: 1.5,
 			order: 6
 		})
 		return { labels, datasets }
@@ -266,6 +266,9 @@ const PriceChart = (props: PriceChartProps) => {
 			}
 			const data = formatData(props.data)
 			const { y, y1 } = maxValues(data.datasets as Dataset[])
+			const gridColor = props.darkMode ? '#1d2823' : '#e3e8e4'
+			const tickColor = props.darkMode ? '#6f8177' : '#7b8a82'
+			const labelColor = props.darkMode ? '#a7bab0' : '#4c5a53'
 			chartRef.current = new Chart(ctx, {
 				type: 'line',
 				data: data,
@@ -274,26 +277,34 @@ const PriceChart = (props: PriceChartProps) => {
 					scales: {
 						x: {
 							grid: {
-								color: props.darkMode ? 'rgba(127, 127, 127, 0.1)': 'rgba(0, 0, 0, 0.1)'
+								color: gridColor
+							},
+							ticks: {
+								color: tickColor
 							}
 						},
 						y: {
 							title: {
 								display: true,
-								text: 'Price in SC/TB'
+								text: 'Price in SC/TB',
+								color: labelColor
 							},
 							type: 'linear',
 							position: 'left',
 							beginAtZero: true,
 							grid: {
-								color: props.darkMode ? 'rgba(127, 127, 127, 0.1)': 'rgba(0, 0, 0, 0.1)'
+								color: gridColor
+							},
+							ticks: {
+								color: tickColor
 							},
 							suggestedMax: y * 1.05
 						},
 						y1: {
 							title: {
 								display: true,
-								text: 'Storage in TB'
+								text: 'Storage in TB',
+								color: labelColor
 							},
 							type: 'linear',
 							position: 'right',
@@ -301,13 +312,21 @@ const PriceChart = (props: PriceChartProps) => {
 							grid: {
 								drawOnChartArea: false
 							},
+							ticks: {
+								color: tickColor
+							},
 							suggestedMax: y1
 						}
 					},
 					plugins: {
 						legend: {
 							display: true,
-							position: 'bottom'
+							position: 'bottom',
+							labels: {
+								color: labelColor,
+								boxWidth: 20,
+								boxHeight: 8
+							}
 						}
 					}
 				}
@@ -324,14 +343,13 @@ const PriceChart = (props: PriceChartProps) => {
 	}, [props.data])
 
 	return (
-		<canvas ref={canvasCallback}></canvas>
+		<canvas key={props.darkMode ? 'dark' : 'light'} ref={canvasCallback}></canvas>
 	)
 }
 
 export const HostPrices = (props: HostPricesProps) => {
 	const [scale, setScale] = useState<ScaleOptions>('day')
 	const [maxTimestamp, setMaxTimestamp] = useState((new Date()).getTime())
-	const [collapsed, toggleCollapsed] = useState(false)
 	const moveLeft = () => {
 		if (!props.data || props.data.length === 0) return
 		let ts = (new Date(props.data[0].timestamp)).getTime()
@@ -380,40 +398,30 @@ export const HostPrices = (props: HostPricesProps) => {
 		}
 	}
 	return (
-		<div className={'host-prices-container' + (props.darkMode ? ' host-prices-dark' : '')}>
-			<p
-				className={'host-prices-title' + (collapsed ? ' host-prices-collapsed' : '')}
-				tabIndex={1}
-				onClick={() => {toggleCollapsed(!collapsed)}}
-				onKeyUp={(e: React.KeyboardEvent<HTMLParagraphElement>) => {
-					if (e.key === ' ' || e.key === 'Enter') {
-						toggleCollapsed(!collapsed)
-					}
-				}}
-			>
-				Historic Price Development
-			</p>
-			{!collapsed &&
-				<>
-					<PriceChart
-						data={props.data}
-						scale={scale}
-						setScale={setScale}
-						maxTimestamp={maxTimestamp}
-						setMaxTimestamp={setMaxTimestamp}
-						darkMode={props.darkMode}
-					/>
-					{props.data &&
-						<Controls
-							darkMode={props.darkMode}
-							zoomIn={zoomIn}
-							zoomOut={zoomOut}
-							moveLeft={moveLeft}
-							moveRight={moveRight}
-						/>
-					}
-				</>
+		<div className="panel host-prices-container">
+			<div className="panel-h">
+				<h2>Price development</h2>
+				<span className="panel-sub">history of the advertised prices and storage</span>
+			</div>
+			{props.data &&
+				<Controls
+					darkMode={props.darkMode}
+					zoomIn={zoomIn}
+					zoomOut={zoomOut}
+					moveLeft={moveLeft}
+					moveRight={moveRight}
+				/>
 			}
+			<div className="host-prices-body">
+				<PriceChart
+					data={props.data}
+					scale={scale}
+					setScale={setScale}
+					maxTimestamp={maxTimestamp}
+					setMaxTimestamp={setMaxTimestamp}
+					darkMode={props.darkMode}
+				/>
+			</div>
 		</div>
 	)
 }

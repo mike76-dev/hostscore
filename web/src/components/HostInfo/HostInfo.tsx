@@ -5,7 +5,6 @@ import {
 	Host,
 	HostScore,
 	NetworkAverages,
-	getFlagEmoji,
 	blocksToTime,
 	convertSize,
 	convertPrice,
@@ -34,115 +33,34 @@ interface TooltipProps {
 	averages: { [tier: string]: NetworkAverages }
 }
 
-const StoragePriceTooltip = (props: TooltipProps) => (
+const AveragesTooltip = (props: TooltipProps & {
+	title: string,
+	format: (data: NetworkAverages) => string
+}) => (
 	<div>
-		<div>Average storage prices:</div>
-		<div className="host-info-tooltip-row">
-			<span>Tier 1:</span>
-			<span>{toSia(props.averages['tier1'].storagePrice, true) + '/TB/month'}</span>
-		</div>
-		{props.averages['tier2'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 2:</span>
-				<span>{toSia(props.averages['tier2'].storagePrice, true) + '/TB/month'}</span>
-			</div>
-		}
-		{props.averages['tier3'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 3:</span>
-				<span>{toSia(props.averages['tier3'].storagePrice, true) + '/TB/month'}</span>
-			</div>
-		}
+		<div>{props.title}</div>
+		{['tier1', 'tier2', 'tier3'].map((tier, index) => (
+			props.averages[tier] && props.averages[tier].available === true &&
+				<div className="host-info-tooltip-row" key={tier}>
+					<span>{'Tier ' + (index + 1) + ':'}</span>
+					<span>{props.format(props.averages[tier])}</span>
+				</div>
+		))}
 	</div>
 )
 
-const CollateralTooltip = (props: TooltipProps) => (
-	<div>
-		<div>Average collateral rates:</div>
-		<div className="host-info-tooltip-row">
-			<span>Tier 1:</span>
-			<span>{toSia(props.averages['tier1'].collateral, true) + '/TB/month'}</span>
-		</div>
-		{props.averages['tier2'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 2:</span>
-				<span>{toSia(props.averages['tier2'].collateral, true) + '/TB/month'}</span>
-			</div>
-		}
-		{props.averages['tier3'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 3:</span>
-				<span>{toSia(props.averages['tier3'].collateral, true) + '/TB/month'}</span>
-			</div>
-		}
-	</div>
-)
-
-const UploadPriceTooltip = (props: TooltipProps) => (
-	<div>
-		<div>Average ingress prices:</div>
-		<div className="host-info-tooltip-row">
-			<span>Tier 1:</span>
-			<span>{toSia(props.averages['tier1'].uploadPrice, false) + '/TB'}</span>
-		</div>
-		{props.averages['tier2'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 2:</span>
-				<span>{toSia(props.averages['tier2'].uploadPrice, false) + '/TB'}</span>
-			</div>
-		}
-		{props.averages['tier3'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 3:</span>
-				<span>{toSia(props.averages['tier3'].uploadPrice, false) + '/TB'}</span>
-			</div>
-		}
-	</div>
-)
-
-const DownloadPriceTooltip = (props: TooltipProps) => (
-	<div>
-		<div>Average egress prices:</div>
-		<div className="host-info-tooltip-row">
-			<span>Tier 1:</span>
-			<span>{toSia(props.averages['tier1'].downloadPrice, false) + '/TB'}</span>
-		</div>
-		{props.averages['tier2'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 2:</span>
-				<span>{toSia(props.averages['tier2'].downloadPrice, false) + '/TB'}</span>
-			</div>
-		}
-		{props.averages['tier3'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 3:</span>
-				<span>{toSia(props.averages['tier3'].downloadPrice, false) + '/TB'}</span>
-			</div>
-		}
-	</div>
-)
-
-const ContractDurationTooltip = (props: TooltipProps) => (
-	<div>
-		<div>Average contract durations:</div>
-		<div className="host-info-tooltip-row">
-			<span>Tier 1:</span>
-			<span>{blocksToTime(props.averages['tier1'].contractDuration)}</span>
-		</div>
-		{props.averages['tier2'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 2:</span>
-				<span>{blocksToTime(props.averages['tier2'].contractDuration)}</span>
-			</div>
-		}
-		{props.averages['tier3'].available === true &&
-			<div className="host-info-tooltip-row">
-				<span>Tier 3:</span>
-				<span>{blocksToTime(props.averages['tier3'].contractDuration)}</span>
-			</div>
-		}
-	</div>
-)
+const scoreComponents = (score: HostScore): { key: string, value: number }[] => ([
+	{ key: 'accepting contracts', value: score.contracts },
+	{ key: 'prices', value: score.prices },
+	{ key: 'storage', value: score.storage },
+	{ key: 'collateral', value: score.collateral },
+	{ key: 'interactions', value: score.interactions },
+	{ key: 'uptime', value: score.uptime },
+	{ key: 'age', value: score.age },
+	{ key: 'version', value: score.version },
+	{ key: 'latency', value: score.latency },
+	{ key: 'benchmarks', value: score.benchmarks }
+])
 
 export const HostInfo = (props: HostInfoProps) => {
 	const locations = useLocations()
@@ -205,8 +123,6 @@ export const HostInfo = (props: HostInfoProps) => {
 		return { online, lastSeen, uptime, activeHosts, score }
 	}
 	const { online, lastSeen, uptime, activeHosts, score } = interactions()
-	const [scoreExpanded, toggleScore] = useState(false)
-	const getVersion = (host: Host): string => (host.v2 === true ? '2.0.0' : '1.x.x')
 	const getRelease = (host: Host): string => (host.v2 === true ? host.v2Settings.release : 'N/A')
 	const isAcceptingContracts = (host: Host): string => (host.v2 === true ? (host.v2Settings.acceptingContracts ? 'Yes' : 'No') : 'No')
 	const getMaxDuration = (host: Host): string => (host.v2 === true ? blocksToTime(host.v2Settings.maxContractDuration) : 'N/A')
@@ -238,119 +154,124 @@ export const HostInfo = (props: HostInfoProps) => {
 			}
 		})
 	}, [location, setAverages])
+	const components = scoreComponents(score)
+	const lowest = Math.min(...components.map(c => c.value))
+	const row = (key: string, value: React.ReactNode) => (
+		<div className="kv">
+			<span className="kv-key">{key}</span>
+			<span className="kv-value">{value}</span>
+		</div>
+	)
 	return (
-		<div className={'host-info-container' + (props.darkMode ? ' host-info-dark' : '')}>
-			<table>
-				<tbody>
-					<tr><td>ID</td><td>{props.host.id}</td></tr>
-					<tr><td>Rank</td><td>{props.host.rank}</td></tr>
-					<tr><td>Public Key</td><td className="host-info-small">{props.host.publicKey}</td></tr>
-					<tr><td>Address</td><td>{props.host.netaddress}</td></tr>
-					<tr><td>Location</td><td>{getFlagEmoji(props.host.country)}</td></tr>
-					<tr><td>Online</td><td>{online ? 'Yes' : 'No'}</td></tr>
-					<tr><td>First Seen</td><td>{new Date(props.host.firstSeen).toDateString()}</td></tr>
-					<tr><td>Last Seen</td><td>{lastSeen}</td></tr>
-					<tr><td>Uptime</td><td>{uptime}</td></tr>
-					<tr><td>Version</td><td>{getVersion(props.host)}</td></tr>
-					<tr><td>Release</td><td>{getRelease(props.host)}</td></tr>
-					<tr><td>Accepting Contracts</td><td>{isAcceptingContracts(props.host)}</td></tr>
-					<tr>
-						<td>Max Contract Duration</td>
-						<td>
-							{getMaxDuration(props.host)}
-							{averages['tier1'] &&
-								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
-									<ContractDurationTooltip averages={averages}/>
-								</Tooltip>
-							}
-						</td>
-					</tr>
-					<tr><td>Contract Price</td><td>{getContractPrice(props.host)}</td></tr>
-					<tr>
-						<td>Storage Price</td>
-						<td>
-							{getStoragePrice(props.host)}
-							{averages['tier1'] &&
-								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
-									<StoragePriceTooltip averages={averages}/>
-								</Tooltip>
-							}
-						</td>
-					</tr>
-					<tr>
-						<td>Collateral</td>
-						<td>
-							{getCollateral(props.host)}
-							{averages['tier1'] &&
-								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
-									<CollateralTooltip averages={averages}/>
-								</Tooltip>
-							}
-						</td>
-					</tr>
-					<tr>
-						<td>Ingress Price</td>
-						<td>
-							{getIngressPrice(props.host)}
-							{averages['tier1'] &&
-								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
-									<UploadPriceTooltip averages={averages}/>
-								</Tooltip>
-							}
-						</td>
-					</tr>
-					<tr>
-						<td>Egress Price</td>
-						<td>
-							{getEgressPrice(props.host)}
-							{averages['tier1'] &&
-								<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
-									<DownloadPriceTooltip averages={averages}/>
-								</Tooltip>
-							}
-						</td>
-					</tr>
-					<tr><td>Total Storage</td><td>{getTotalStorage(props.host)}</td></tr>
-					<tr><td>Remaining Storage</td><td>{getRemainingStorage(props.host)}</td></tr>
-					<tr><td>Active Hosts in Subnet</td><td>{activeHosts}</td></tr>
-					<tr>
-						<td className={'host-info-score' + (scoreExpanded ? ' host-info-score-expanded' : '')}>
-							<span onClick={() => {toggleScore(!scoreExpanded)}}>
-								Relative Score
-							</span>
-						</td>
-						<td>{score.total.toPrecision(2)}</td>
-					</tr>
-					{scoreExpanded &&
-						<tr className="host-info-score-details">
-							<td>
-								Accepting Contracts<br/>
-								Prices<br/>
-								Storage<br/>
-								Collateral<br/>
-								Interactions<br/>
-								Uptime<br/>
-								Age<br/>
-								Version<br/>
-								Latency<br/>
-								Benchmarks
-							</td>
-							<td>
-								{score.contracts.toPrecision(2)}<br/>
-								{score.prices.toPrecision(2)}<br/>
-								{score.storage.toPrecision(2)}<br/>
-								{score.collateral.toPrecision(2)}<br/>
-								{score.interactions.toPrecision(2)}<br/>
-								{score.uptime.toPrecision(2)}<br/>
-								{score.age.toPrecision(2)}<br/>
-								{score.version.toPrecision(2)}<br/>
-								{score.latency.toPrecision(2)}<br/>
-								{score.benchmarks.toPrecision(2)}
-							</td>
-						</tr>
+		<div className="panel host-info-container">
+			<div className="panel-h">
+				<h2>Overview</h2>
+				<span className="panel-sub">
+					{props.node === 'global' ? 'across all benchmark nodes' :
+						'as seen from ' + (locations.find(l => l.short === props.node)?.long || props.node)}
+				</span>
+			</div>
+			<div className="host-info-body">
+				{row('ID', props.host.id)}
+				{row('Rank', '#' + props.host.rank)}
+				{row('Online', online ? 'Yes' : 'No')}
+				{row('First seen', new Date(props.host.firstSeen).toDateString())}
+				{row('Last seen', lastSeen)}
+				{row('Uptime', uptime)}
+				{row('Release', getRelease(props.host))}
+				{row('Accepting contracts', isAcceptingContracts(props.host))}
+				{row('Max contract duration', <>
+					{getMaxDuration(props.host)}
+					{averages['tier1'] &&
+						<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
+							<AveragesTooltip
+								averages={averages}
+								title="Average contract durations:"
+								format={data => blocksToTime(data.contractDuration)}
+							/>
+						</Tooltip>
 					}
-				</tbody>
-			</table>
+				</>)}
+				{row('Contract price', getContractPrice(props.host))}
+				{row('Storage price', <>
+					{getStoragePrice(props.host)}
+					{averages['tier1'] &&
+						<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
+							<AveragesTooltip
+								averages={averages}
+								title="Average storage prices:"
+								format={data => toSia(data.storagePrice, true) + '/TB/month'}
+							/>
+						</Tooltip>
+					}
+				</>)}
+				{row('Collateral', <>
+					{getCollateral(props.host)}
+					{averages['tier1'] &&
+						<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
+							<AveragesTooltip
+								averages={averages}
+								title="Average collateral rates:"
+								format={data => toSia(data.collateral, true) + '/TB/month'}
+							/>
+						</Tooltip>
+					}
+				</>)}
+				{row('Ingress price', <>
+					{getIngressPrice(props.host)}
+					{averages['tier1'] &&
+						<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
+							<AveragesTooltip
+								averages={averages}
+								title="Average ingress prices:"
+								format={data => toSia(data.uploadPrice, false) + '/TB'}
+							/>
+						</Tooltip>
+					}
+				</>)}
+				{row('Egress price', <>
+					{getEgressPrice(props.host)}
+					{averages['tier1'] &&
+						<Tooltip className="host-info-tooltip" darkMode={props.darkMode}>
+							<AveragesTooltip
+								averages={averages}
+								title="Average egress prices:"
+								format={data => toSia(data.downloadPrice, false) + '/TB'}
+							/>
+						</Tooltip>
+					}
+				</>)}
+				{row('Total storage', getTotalStorage(props.host))}
+				{row('Remaining storage', getRemainingStorage(props.host))}
+				{row('Active hosts in subnet', activeHosts)}
+			</div>
+			<div className="host-info-score">
+				<div className="panel-h">
+					<h2>Score breakdown</h2>
+					<span className="panel-sub">relative to the whole network</span>
+				</div>
+				<div className="host-info-score-body">
+					<div className="host-info-score-total">
+						<span className="host-info-score-value">{score.total.toPrecision(2)}</span>
+						<span className="host-info-score-rank">RANK #{props.host.rank}</span>
+					</div>
+					{components.map(component => (
+						<div
+							className={'host-info-score-row' + (component.value === lowest ? ' host-info-score-low' : '')}
+							key={component.key}
+						>
+							<span className="host-info-score-key">{component.key}</span>
+							<span className="host-info-score-bar">
+								<i style={{width: Math.max(1.5, component.value * 100) + '%'}}></i>
+							</span>
+							<span className="host-info-score-number">{component.value.toPrecision(2)}</span>
+						</div>
+					))}
+					<div className="host-info-score-note">
+						The total score is the product of all factors.
+					</div>
+				</div>
+			</div>
 		</div>
 	)
 }
