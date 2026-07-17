@@ -41,17 +41,13 @@ const App = () => {
 		const savedOnlineOnly = window.localStorage.getItem('online')
 		return savedOnlineOnly && savedOnlineOnly === 'false' ? false : true
 	})
-	const [query, setQuery] = useState(() => {
-		return window.localStorage.getItem('query') || ''
-	})
+	const [query, setQuery] = useState('')
 	const [sorting, changeSorting] = useState<HostSortType>(() => {
 		const savedSorting = window.localStorage.getItem('sorting')
 		return savedSorting ? JSON.parse(savedSorting) : { sortBy: 'rank', order: 'asc' }
 	})
 	const [countries, setCountries] = useState<string[]>([])
-	const [country, setCountry] = useState(() => {
-		return window.localStorage.getItem('country') || ''
-	})
+	const [country, setCountry] = useState('')
 	const excludedPaths = useExcludedPaths()
 	useEffect(() => {
 		window.localStorage.setItem('darkMode', JSON.stringify(darkMode))
@@ -75,14 +71,15 @@ const App = () => {
 		window.localStorage.setItem('online', onlineOnly ? 'true' : 'false')
 	}, [onlineOnly])
 	useEffect(() => {
-		window.localStorage.setItem('query', query)
-	}, [query])
-	useEffect(() => {
 		window.localStorage.setItem('sorting', JSON.stringify(sorting))
 	}, [sorting])
 	useEffect(() => {
-		window.localStorage.setItem('country', country)
-	}, [country])
+		// The search and country filters are deliberately not persisted:
+		// restoring them on reload would leave the network-wide statistics
+		// without an unfiltered host list to be calculated from.
+		window.localStorage.removeItem('query')
+		window.localStorage.removeItem('country')
+	}, [])
 	const router = createBrowserRouter([
 		{
 			element: <Outlet/>,

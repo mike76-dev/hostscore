@@ -32,6 +32,13 @@ const formatCount = (count: number) => count.toLocaleString('en-US')
 
 const formatPB = (bytes: number) => (bytes / 1e15).toFixed(2)
 
+type NetworkStats = {
+	online: number,
+	accepting: number,
+	totalStorage: number,
+	usedStorage: number
+}
+
 export const Hosts = (props: HostsProps) => {
 	const {
 		offset,
@@ -54,6 +61,7 @@ export const Hosts = (props: HostsProps) => {
 	const [mapHosts, setMapHosts] = useState<Host[]>([])
 	const [total, setTotal] = useState(0)
 	const [hostCount, setHostCount] = useState<HostCount>()
+	const [stats, setStats] = useState<NetworkStats>()
 	const [loading, setLoading] = useState(false)
 	const [loadingAverages, setLoadingAverages] = useState(false)
 	const { network, setHosts } = props
@@ -86,10 +94,27 @@ export const Hosts = (props: HostsProps) => {
 	}, [onlineOnly, query, country, sorting, changeOffset])
 	useEffect(() => {
 		const cancelTokenSource = axios.CancelToken.source()
+		const filtered = query !== '' || country !== ''
 		getHosts(network, false, 0, -1, query, country, { sortBy: 'rank', order: 'asc' }, cancelTokenSource.token)
 		.then(data => {
 			if (data && data.hosts) {
-				setMapHosts(data.hosts)
+				const hosts: Host[] = data.hosts
+				setMapHosts(hosts)
+				// The network-wide statistics must not be derived from a
+				// filtered host list; while a search or country filter is
+				// active, the last unfiltered snapshot is kept instead.
+				if (!filtered && hosts.length > 0) {
+					setStats({
+						online: hosts.length,
+						accepting: hosts.filter(host =>
+							host.v2 === true && host.v2Settings.acceptingContracts).length,
+						totalStorage: hosts.reduce((sum, host) =>
+							sum + (host.v2 === true ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : 0), 0),
+						usedStorage: hosts.reduce((sum, host) =>
+							sum + (host.v2 === true ?
+								(host.v2Settings.totalStorage - host.v2Settings.remainingStorage) * 4 * 1024 * 1024 : 0), 0)
+					})
+				}
 			}
 		})
 		return () => {
@@ -145,19 +170,12 @@ export const Hosts = (props: HostsProps) => {
 			changeOffset(0)
 			setOnlineOnly(true)
 			setQuery('')
+			setStats(undefined)
 			prevNetwork.current = network
 		}
 	// eslint-disable-next-line
 	}, [network, changeOffset])
 
-	// Network-wide statistics derived from the full list of online hosts.
-	const accepting = mapHosts.filter(host =>
-		host.v2 === true && host.v2Settings.acceptingContracts).length
-	const totalStorage = mapHosts.reduce((sum, host) =>
-		sum + (host.v2 === true ? host.v2Settings.totalStorage * 4 * 1024 * 1024 : 0), 0)
-	const usedStorage = mapHosts.reduce((sum, host) =>
-		sum + (host.v2 === true ?
-			(host.v2Settings.totalStorage - host.v2Settings.remainingStorage) * 4 * 1024 * 1024 : 0), 0)
 	const tier1 = averages['tier1']
 
 	return (
@@ -189,20 +207,20 @@ export const Hosts = (props: HostsProps) => {
 							{hostCount ? formatCount(hostCount.online) : '—'}
 						</div>
 						<div className="hosts-stat-sub">
-							{mapHosts.length > 0 ?
-								formatCount(accepting) + ' accepting contracts · ' +
-								(accepting * 100 / mapHosts.length).toFixed(1) + '%' : ' '}
+							{stats ?
+								formatCount(stats.accepting) + ' accepting contracts · ' +
+								(stats.accepting * 100 / stats.online).toFixed(1) + '%' : ' '}
 						</div>
 					</div>
 					<div className="hosts-stat">
 						<div className="hosts-stat-key">Advertised capacity</div>
 						<div className="hosts-stat-value">
-							{mapHosts.length > 0 ? <>{formatPB(totalStorage)} <small>PB</small></> : '—'}
+							{stats ? <>{formatPB(stats.totalStorage)} <small>PB</small></> : '—'}
 						</div>
 						<div className="hosts-stat-sub">
-							{mapHosts.length > 0 ?
-								formatPB(usedStorage) + ' PB in use · ' +
-								(totalStorage > 0 ? (usedStorage * 100 / totalStorage).toFixed(0) : '0') + '%' : ' '}
+							{stats ?
+								formatPB(stats.usedStorage) + ' PB in use · ' +
+								(stats.totalStorage > 0 ? (stats.usedStorage * 100 / stats.totalStorage).toFixed(0) : '0') + '%' : ' '}
 						</div>
 					</div>
 					<div className="hosts-stat">
@@ -224,6 +242,7 @@ export const Hosts = (props: HostsProps) => {
 							darkMode={props.darkMode}
 							network={network}
 							hosts={mapHosts}
+							filtered={query !== '' || country !== ''}
 						/>
 					</div>
 				</div>

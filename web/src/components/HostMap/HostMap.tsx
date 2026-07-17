@@ -1,5 +1,5 @@
 import './HostMap.css'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
 	Host,
@@ -14,7 +14,7 @@ import {
 } from 'react-leaflet'
 import {
 	LatLngExpression,
-	LatLngBounds,
+	latLngBounds,
 	divIcon
 } from 'leaflet'
 
@@ -22,10 +22,15 @@ type HostMapProps = {
 	darkMode: boolean,
 	network: string,
 	host?: Host,
-	hosts?: Host[]
+	hosts?: Host[],
+	filtered?: boolean
 }
 
 const defaultLocation = '52.37,5.22'.split(',').map(coord => parseFloat(coord)) as [number, number]
+
+const geolocation = (location: string) => {
+	return location.split(',').map(l => Number.parseFloat(l)) as LatLngExpression
+}
 
 const UpdateMap = () => {
 	const map = useMap()
@@ -48,38 +53,36 @@ const CenterMap = (props: CenterProps) => {
 	return null
 }
 
-interface BoundsProps {
-	network: string,
-	hosts?: Host[],
-	onBoundsChange: (bounds: LatLngBounds) => void,
+interface FitProps {
+	hosts: Host[],
+	filtered: boolean
 }
 
-const Bounds: React.FC<BoundsProps> = ({
-	network,
-	hosts,
-	onBoundsChange
-	}) => {
+// Fits the viewport to the current host list whenever a search or country
+// filter produces a new list (and once more when the filter is cleared).
+const FitHosts = ({ hosts, filtered }: FitProps) => {
 	const map = useMap()
+	const prevHosts = useRef(hosts)
+	const wasFiltered = useRef(false)
 	useEffect(() => {
-		onBoundsChange(map.getBounds())
-		const updateBounds = () => {
-			onBoundsChange(map.getBounds())
-		}
-		map.on('moveend', updateBounds)
-		map.on('zoomend', updateBounds)
-		return () => {
-			map.off('moveend', updateBounds)
-			map.off('zoomend', updateBounds)
-		}
-	// eslint-disable-next-line
-	}, [map, network, hosts])
+		if (prevHosts.current === hosts) return
+		prevHosts.current = hosts
+		const shouldFit = filtered || wasFiltered.current
+		wasFiltered.current = filtered
+		if (!shouldFit) return
+		const located = hosts.filter(host => host.loc !== '')
+		if (located.length === 0) return
+		map.fitBounds(
+			latLngBounds(located.map(host => geolocation(host.loc))),
+			{ padding: [40, 40], maxZoom: 10 }
+		)
+	}, [map, hosts, filtered])
 	return null
 }
 
 export const HostMap = (props: HostMapProps) => {
 	const [center, setCenter] = useState<LatLngExpression>(defaultLocation)
-	const [bounds, setBounds] = useState<LatLngBounds | undefined>()
-	const [zoom, setZoom] = useState(7)
+	const zoom = 7
 	useEffect(() => {
 		if (!props.host && navigator.geolocation) {
 			navigator.geolocation.getCurrentPosition(
@@ -89,9 +92,6 @@ export const HostMap = (props: HostMapProps) => {
 			)
 		}
 	}, [props.host])
-	const geolocation = (location: string) => {
-		return location.split(',').map(l => Number.parseFloat(l)) as LatLngExpression
-	}
 	const newLocation = (host: Host) => {
 		let href = window.location.href
 		if (href[href.length - 1] === '/') {
@@ -99,45 +99,7 @@ export const HostMap = (props: HostMapProps) => {
 		}
 		return href + '/host/' + stripePrefix(host.publicKey)
 	}
-	const handleBoundsChange = (b: LatLngBounds) => {
-		setBounds(b)
-	}
-	useEffect(() => {
-		if (!bounds || !props.hosts || props.hosts.length === 0)  return
-		let minLat = 90
-		let maxLat = -90
-		let minLng = 180
-		let maxLng = -180
-		props.hosts.forEach(host => {
-			let loc = host.loc.split(',').map(l => Number.parseFloat(l))
-			if (loc[0] < minLat) minLat = loc[0]
-			if (loc[0] > maxLat) maxLat = loc[0]
-			if (loc[1] < minLng) minLng = loc[1]
-			if (loc[1] > maxLng) maxLng = loc[1]
-		})
-		let deltaLat = maxLat - minLat
-		let deltaLng = maxLng - minLng
-		if (deltaLng >= 180) deltaLng = 360 - deltaLng
-		let centerLat = (maxLat + minLat) / 2
-		let centerLng = (maxLng + minLng) / 2
-		let ne = bounds.getNorthEast()
-		let sw = bounds.getSouthWest()
-		let ns = ne.lat - sw.lat
-		let ew = ne.lng - sw.lng
-		if (ew >= 180) ew = 360 - ew
-		let newZoom = zoom
-		do {
-			if (deltaLat <= ns * (zoom - newZoom + 1) && deltaLng <= ew * (zoom - newZoom + 1)) {
-				if ((center as [number, number])[0] !== centerLat && (center as [number, number])[1] !== centerLng) {
-					setZoom(newZoom)
-					setCenter([centerLat, centerLng])
-					break
-				}
-			}
-			newZoom--
-		} while (newZoom >= 5)
-	}, [props.hosts, bounds, center, zoom, setCenter])
-	 return (
+	return (
 		<div className={'host-map-container' + (props.darkMode ? ' host-map-dark' : '')}>
 			{props.host &&
 				(props.host.loc !== '' ?
@@ -195,10 +157,9 @@ export const HostMap = (props: HostMapProps) => {
 					))}
 					<UpdateMap/>
 					<CenterMap center={center} zoom={zoom}/>
-					<Bounds
-						network={props.network}
+					<FitHosts
 						hosts={props.hosts}
-						onBoundsChange={handleBoundsChange}
+						filtered={props.filtered === true}
 					/>
 				</MapContainer>
 			}
