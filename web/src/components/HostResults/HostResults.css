@@ -50,6 +50,8 @@
 	font-size: 13px;
 	border-collapse: collapse;
 	border-top: 1px solid var(--hairline);
+	table-layout: fixed;
+	width: calc(100% - 32px);
 }
 
 .host-benchmarks-table tr > td,

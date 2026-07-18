@@ -179,7 +179,7 @@ export const HostResults = (props: HostResultsProps) => {
 						{benchmarkData.map((row, j) => (
 							<tr key={'benchmark-row-' + j}>
 								{row.map((cell, i) => (
-									<td key={'benchmark-' + j + '-' + i} style={{width: '' + 100/locations.length + '%'}}>
+									<td key={'benchmark-' + j + '-' + i}>
 										{cell &&
 											<Benchmark
 												timestamp={cell.timestamp}
