@@ -32,6 +32,21 @@ const geolocation = (location: string) => {
 	return location.split(',').map(l => Number.parseFloat(l)) as LatLngExpression
 }
 
+// The basemaps are rendered without a key if public/carto.js provides none.
+const CartoTiles = ({ darkMode }: { darkMode: boolean }) => {
+	const key = window.CARTO_API_KEY
+	return (
+		<TileLayer
+			attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+			url={'https://{s}.basemaps.cartocdn.com/' +
+				(darkMode ? 'dark_all' : 'light_all') +
+				'/{z}/{x}/{y}{r}.png' +
+				(key ? '?key=' + encodeURIComponent(key) : '')
+			}
+		/>
+	)
+}
+
 const UpdateMap = () => {
 	const map = useMap()
 	useEffect(() => {
@@ -108,13 +123,7 @@ export const HostMap = (props: HostMapProps) => {
 						zoom={7}
 						scrollWheelZoom={true}
 					>
-						<TileLayer
-							attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-							url={props.darkMode ?
-								'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
-								'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-							}
-						/>
+						<CartoTiles darkMode={props.darkMode}/>
 						<Marker
 							position={geolocation(props.host.loc)}
 							icon={divIcon({className: 'host-map-marker'})}
@@ -134,13 +143,7 @@ export const HostMap = (props: HostMapProps) => {
 					zoom={zoom}
 					scrollWheelZoom={true}
 				>
-					<TileLayer
-						attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-						url={props.darkMode ?
-							'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' :
-							'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-						}
-					/>
+					<CartoTiles darkMode={props.darkMode}/>
 					{props.hosts.map(host => (
 						host.loc !== '' &&
 						<Marker
