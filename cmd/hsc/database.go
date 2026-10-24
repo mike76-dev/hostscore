@@ -927,16 +927,8 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 		return 0
 	})
 
-	if limit < 0 {
-		limit = len(hosts)
-	}
-	if offset > len(hosts) {
-		offset = len(hosts)
-	}
-	if offset+limit > len(hosts) {
-		limit = len(hosts) - offset
-	}
 	total = len(hosts)
+	offset, limit = clampRange(offset, limit, total)
 	more = offset+limit < total
 	hosts = hosts[offset : offset+limit]
 
@@ -1998,4 +1990,20 @@ func (api *portalAPI) pruneOldScans() {
 			api.log.Error("unable to prune old scans", zap.Error(err))
 		}
 	}
+}
+
+// clampRange clamps user-supplied offset and limit to [0; total] without
+// ever computing offset+limit on unclamped values, which could overflow
+// and cause a slice-bounds panic. A negative limit means "all".
+func clampRange(offset, limit, total int) (int, int) {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > total {
+		offset = total
+	}
+	if limit < 0 || limit > total-offset {
+		limit = total - offset
+	}
+	return offset, limit
 }
