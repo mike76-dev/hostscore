@@ -95,6 +95,15 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 			return err
 		}
 
+		// Re-check gouging: fetchSettingsV2 just overwrote the settings with
+		// fresh host-supplied values, and the cost calculations below must
+		// not run on unchecked prices — besides forming a contract at
+		// gouging prices, large enough values overflow Currency.Mul64,
+		// which panics.
+		if err := checkGougingV2(&host.V2Settings, limits); err != nil {
+			return err
+		}
+
 		if err := hdb.formContractV2(host); err != nil {
 			return err
 		}
@@ -343,14 +352,15 @@ func (hdb *HostDB) fundAccountV2(host *HostDBEntry) (err error) {
 		if err != nil {
 			return err
 		}
-		host.V2Settings = settings
 		hdb.mu.Lock()
 		limits := hdb.priceLimits
 		hdb.mu.Unlock()
-		err = checkGougingV2(&settings, limits)
-		if err != nil {
+		// Only adopt the fresh settings once they pass the gouging check,
+		// so malicious prices are never persisted with the host entry.
+		if err := checkGougingV2(&settings, limits); err != nil {
 			return err
 		}
+		host.V2Settings = settings
 
 		// Check the account balance.
 		balance, err := rhpv4utils.RPCAccountBalance(ctx, t, rhpv4.Account(key.PublicKey()))
