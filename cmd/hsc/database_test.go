@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"math"
 	"testing"
+
+	"go.sia.tech/core/types"
 )
 
 // TestClampRange is a regression test: offset+limit used to be computed on
@@ -29,5 +32,34 @@ func TestClampRange(t *testing.T) {
 			t.Errorf("clampRange(%d, %d, %d) = (%d, %d), want (%d, %d)",
 				tt.offset, tt.limit, tt.total, gotOffset, gotLimit, tt.wantOffset, tt.wantLimit)
 		}
+	}
+}
+
+// TestDecodePrice is a regression test: getPriceChanges used to wrap the
+// wrong (always-nil) error variable on decode failures, silently returning
+// no results, and choked on the empty price blobs stored for non-V2 hosts.
+func TestDecodePrice(t *testing.T) {
+	var buf bytes.Buffer
+	e := types.NewEncoder(&buf)
+	types.V1Currency(types.Siacoins(42)).EncodeTo(e)
+	e.Flush()
+
+	var c types.Currency
+	if err := decodePrice(buf.Bytes(), &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.Equals(types.Siacoins(42)) {
+		t.Errorf("decodePrice = %v, want 42 SC", c)
+	}
+
+	if err := decodePrice(nil, &c); err != nil {
+		t.Fatal(err)
+	}
+	if !c.IsZero() {
+		t.Errorf("empty blob decoded to %v, want zero", c)
+	}
+
+	if err := decodePrice([]byte{1, 2, 3}, &c); err == nil {
+		t.Error("expected an error for a truncated blob")
 	}
 }

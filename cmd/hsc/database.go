@@ -1629,20 +1629,16 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey, from, 
 			TotalStorage:     ts,
 		}
 
-		d := types.NewBufDecoder(cb)
-		if (*types.V1Currency)(&pc.Collateral).DecodeFrom(d); d.Err() != nil {
+		if err := decodePrice(cb, &pc.Collateral); err != nil {
 			return nil, utils.AddContext(err, "couldn't decode collateral")
 		}
-		d = types.NewBufDecoder(spb)
-		if (*types.V1Currency)(&pc.StoragePrice).DecodeFrom(d); d.Err() != nil {
+		if err := decodePrice(spb, &pc.StoragePrice); err != nil {
 			return nil, utils.AddContext(err, "couldn't decode storage price")
 		}
-		d = types.NewBufDecoder(upb)
-		if (*types.V1Currency)(&pc.UploadPrice).DecodeFrom(d); d.Err() != nil {
+		if err := decodePrice(upb, &pc.UploadPrice); err != nil {
 			return nil, utils.AddContext(err, "couldn't decode upload price")
 		}
-		d = types.NewBufDecoder(dpb)
-		if (*types.V1Currency)(&pc.DownloadPrice).DecodeFrom(d); d.Err() != nil {
+		if err := decodePrice(dpb, &pc.DownloadPrice); err != nil {
 			return nil, utils.AddContext(err, "couldn't decode download price")
 		}
 
@@ -1653,6 +1649,18 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey, from, 
 	slices.Reverse(pcs)
 
 	return
+}
+
+// decodePrice decodes a V1Currency price blob. An empty blob is valid and
+// decodes to zero: insertUpdates stores empty price blobs for non-V2 hosts.
+func decodePrice(b []byte, c *types.Currency) error {
+	if len(b) == 0 {
+		*c = types.ZeroCurrency
+		return nil
+	}
+	d := types.NewBufDecoder(b)
+	(*types.V1Currency)(c).DecodeFrom(d)
+	return d.Err()
 }
 
 // calculateAverages calculates the averages for the given network.
