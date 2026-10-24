@@ -21,13 +21,14 @@ func newRatelimiter(stopChan chan struct{}) *ratelimiter {
 		requests: make(map[string]int),
 	}
 
-	ticker := time.Tick(time.Second)
 	go func() {
-		for range ticker {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
 			select {
 			case <-stopChan:
 				return
-			default:
+			case <-ticker.C:
 			}
 			rl.mu.Lock()
 			rl.requests = make(map[string]int)
