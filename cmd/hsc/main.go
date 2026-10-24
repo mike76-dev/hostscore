@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	client "github.com/mike76-dev/hostscore/api"
 	"github.com/mike76-dev/hostscore/internal/build"
 	"github.com/mike76-dev/hostscore/persist"
 	"go.uber.org/zap/zapcore"
@@ -115,9 +114,6 @@ func main() {
 	}
 	defer api.close()
 
-	for key, node := range s.nodes {
-		api.clients[key] = client.NewClient(node.Address, node.Password)
-	}
 	api.buildHTTPRoutes()
 
 	closeChan := make(chan int, 1)

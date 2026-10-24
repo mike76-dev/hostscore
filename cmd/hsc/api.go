@@ -217,6 +217,13 @@ func newAPI(s *jsonStore, db *sql.DB, token string, logger *zap.Logger, cache *r
 		api.hosts[network] = make(map[types.PublicKey]*portalHost)
 	}
 
+	// The clients map must be complete before the goroutines below start
+	// iterating it: it is read without locking everywhere, which is only
+	// safe because it never changes after this point.
+	for key, node := range s.nodes {
+		api.clients[key] = client.NewClient(node.Address, node.Password)
+	}
+
 	api.rl = newRatelimiter(api.stopChan)
 
 	err := api.load()
