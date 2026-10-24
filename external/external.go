@@ -7,9 +7,15 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/mike76-dev/hostscore/internal/utils"
 )
+
+// httpClient is used for all external API calls. http.DefaultClient has no
+// timeout, so a stalled response would block the caller forever — e.g. the
+// exchange-rate loop in hostdb, making HostDB.Close() hang with it.
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 // IPInfo contains the geolocation data of a host.
 type IPInfo struct {
@@ -34,11 +40,11 @@ const (
 
 // FetchSCRate retrieves the Siacoin exchange rate.
 func FetchSCRate() (rate float64, err error) {
-	resp, err := http.Get(rateAPI)
+	resp, err := httpClient.Get(rateAPI)
 	if err == nil {
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return 0, errors.New("falied to fetch SC exchange rate")
+			return 0, errors.New("failed to fetch SC exchange rate")
 		}
 		dec := json.NewDecoder(resp.Body)
 		err = dec.Decode(&rate)
@@ -47,7 +53,7 @@ func FetchSCRate() (rate float64, err error) {
 		}
 		return
 	}
-	return 0, utils.AddContext(err, "falied to fetch SC exchange rate")
+	return 0, utils.AddContext(err, "failed to fetch SC exchange rate")
 }
 
 // FetchIPInfo uses the IPInfo API to fetch the host's geolocation.
@@ -65,7 +71,7 @@ func FetchIPInfo(addr, token string) (IPInfo, error) {
 		return IPInfo{}, nil
 	}
 
-	resp, err := http.Get(ipInfoAPI + ips[0] + "?token=" + token)
+	resp, err := httpClient.Get(ipInfoAPI + ips[0] + "?token=" + token)
 	if err != nil {
 		return IPInfo{}, err
 	}
