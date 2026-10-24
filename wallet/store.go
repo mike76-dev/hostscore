@@ -185,12 +185,8 @@ func (s *DBStore) resetChainState() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.tx == nil {
-		var err error
-		s.tx, err = s.db.Begin()
-		if err != nil {
-			return err
-		}
+	if err := s.ensureTx(); err != nil {
+		return err
 	}
 
 	_, err := s.tx.Exec("DELETE FROM wt_sces WHERE network = ?", s.network)
@@ -216,7 +212,24 @@ func (s *DBStore) getSiacoinElements() (sces []types.SiacoinElement) {
 	return
 }
 
+// ensureTx restarts the transaction if a failed reconnect left it nil, so
+// a DB outage leads to a returned error instead of a nil dereference.
+// A lock must be acquired before calling ensureTx.
+func (s *DBStore) ensureTx() error {
+	if s.tx == nil {
+		var err error
+		s.tx, err = s.db.Begin()
+		if err != nil {
+			return utils.AddContext(err, "couldn't restart transaction")
+		}
+	}
+	return nil
+}
+
 func (s *DBStore) updateSiacoinElements(sces []types.SiacoinElement) error {
+	if err := s.ensureTx(); err != nil {
+		return err
+	}
 	for _, sce := range sces {
 		sce.StateElement.MerkleProof = append([]types.Hash256(nil), sce.StateElement.MerkleProof...)
 		s.sces[types.SiacoinOutputID(sce.ID)] = sce
@@ -240,6 +253,9 @@ func (s *DBStore) updateSiacoinElements(sces []types.SiacoinElement) error {
 }
 
 func (s *DBStore) removeSiacoinElements(sces []types.SiacoinElement) error {
+	if err := s.ensureTx(); err != nil {
+		return err
+	}
 	for _, sce := range sces {
 		delete(s.sces, types.SiacoinOutputID(sce.ID))
 		_, err := s.tx.Exec(`

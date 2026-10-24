@@ -661,6 +661,15 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// A failed reconnect may have left the transaction nil; try to restart
+	// it rather than panic, and let the caller retry on failure.
+	if s.tx == nil {
+		s.reconnect()
+		if s.tx == nil {
+			return errors.New("no database transaction")
+		}
+	}
+
 	for _, cau := range applied {
 		if s.network != cau.State.Network.Name {
 			continue
