@@ -58,3 +58,23 @@ func TestCollateralScore(t *testing.T) {
 		})
 	}
 }
+
+// TestSectorsToBytes is a regression test: converting a host-supplied
+// sector count to bytes used to wrap on overflow.
+func TestSectorsToBytes(t *testing.T) {
+	tests := []struct {
+		sectors uint64
+		want    uint64
+	}{
+		{0, 0},
+		{1, 1 << 22},
+		{1<<42 - 1, (1<<42 - 1) << 22}, // largest non-clamped value
+		{1 << 42, math.MaxUint64},      // used to wrap to 0
+		{math.MaxUint64, math.MaxUint64},
+	}
+	for _, tt := range tests {
+		if got := sectorsToBytes(tt.sectors); got != tt.want {
+			t.Errorf("sectorsToBytes(%d) = %d, want %d", tt.sectors, got, tt.want)
+		}
+	}
+}

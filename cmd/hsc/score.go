@@ -39,7 +39,7 @@ func calculateScore(host portalHost, node string, scans []portalScan, benchmarks
 	egressPrice := host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 	ingressPrice := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 	storagePrice := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
-	remainingStorage := host.V2Settings.RemainingStorage * rhpv4.SectorSize
+	remainingStorage := sectorsToBytes(host.V2Settings.RemainingStorage)
 	version := host.V2Settings.ProtocolVersion
 	acceptingContracts := host.V2Settings.AcceptingContracts
 	sb := scoreBreakdown{
@@ -83,7 +83,7 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 	egressPrice := host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 	ingressPrice := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
 	storagePrice := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
-	remainingStorage := host.V2Settings.RemainingStorage * rhpv4.SectorSize
+	remainingStorage := sectorsToBytes(host.V2Settings.RemainingStorage)
 	version := host.V2Settings.ProtocolVersion
 	acceptingContracts := host.V2Settings.AcceptingContracts
 
@@ -363,6 +363,15 @@ func versionScore(version rhpv4.ProtocolVersion) float64 {
 	default:
 		return 0.8
 	}
+}
+
+// sectorsToBytes converts a host-supplied sector count to bytes, clamping
+// at math.MaxUint64 instead of silently wrapping on overflow.
+func sectorsToBytes(sectors uint64) uint64 {
+	if sectors > math.MaxUint64/rhpv4.SectorSize {
+		return math.MaxUint64
+	}
+	return sectors * rhpv4.SectorSize
 }
 
 func bytesToSectors(bytes uint64) uint64 {
