@@ -231,16 +231,27 @@ func collateralScore(uploadSectorCost, maxCollateral, collateralCost types.Curre
 		return 0
 	}
 
+	// mul64 multiplies a currency by a uint64, clamping at types.MaxCurrency
+	// instead of panicking: the factors are host-supplied, so a misconfigured
+	// or malicious host could otherwise crash the scorer.
+	mul64 := func(c types.Currency, v uint64) types.Currency {
+		p, overflow := c.Mul64WithOverflow(v)
+		if overflow {
+			return types.MaxCurrency
+		}
+		return p
+	}
+
 	// Convenience variables.
 	ratioNum := uint64(3)
 	ratioDenom := uint64(2)
 
 	// Compute the cost of storing.
 	numSectors := bytesToSectors(dataPerHost)
-	storageCost := uploadSectorCost.Mul64(numSectors)
+	storageCost := mul64(uploadSectorCost, numSectors)
 
 	// Calculate the expected collateral for the host allocation.
-	expectedCollateral := collateralCost.Mul64(dataPerHost).Mul64(contractPeriod)
+	expectedCollateral := mul64(mul64(collateralCost, dataPerHost), contractPeriod)
 	if expectedCollateral.Cmp(maxCollateral) > 0 {
 		expectedCollateral = maxCollateral
 	}
@@ -253,20 +264,21 @@ func collateralScore(uploadSectorCost, maxCollateral, collateralCost types.Curre
 	// Determine a cutoff at 150% of the storage cost. Meaning that a host
 	// should be willing to put in at least 1.5x the amount of money the renter
 	// expects to spend on storage on that host.
-	cutoff := storageCost.Mul64(ratioNum).Div64(ratioDenom)
+	cutoff := mul64(storageCost, ratioNum).Div64(ratioDenom)
 
 	// The score is a linear function between 0 and 1 where the upper limit is
 	// 4 times the cutoff. Beyond that, we don't care if a host puts in more
 	// collateral.
 	cutoffMultiplier := uint64(4)
+	upperLimit := mul64(cutoff, cutoffMultiplier)
 
 	if expectedCollateral.Cmp(cutoff) < 0 {
 		return math.SmallestNonzeroFloat64 // expectedCollateral <= cutoff -> score is basically 0
-	} else if expectedCollateral.Cmp(cutoff.Mul64(cutoffMultiplier)) >= 0 {
-		return 1 // expectedCollateral is 10x cutoff -> score is 1
+	} else if expectedCollateral.Cmp(upperLimit) >= 0 {
+		return 1 // expectedCollateral is 4x cutoff -> score is 1
 	} else {
 		// Perform linear interpolation for all other values.
-		slope := new(big.Rat).SetFrac(new(big.Int).SetInt64(1), cutoff.Mul64(cutoffMultiplier).Big())
+		slope := new(big.Rat).SetFrac(new(big.Int).SetInt64(1), upperLimit.Big())
 		intercept := new(big.Rat).Mul(slope, new(big.Rat).SetInt(cutoff.Big()))
 		intercept.Neg(intercept)
 		score := new(big.Rat).SetInt(expectedCollateral.Big())
