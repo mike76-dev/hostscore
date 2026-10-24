@@ -131,8 +131,7 @@ type jsonPersist struct {
 // JSONPeerStore implements PeerStore with a JSON file on disk.
 type JSONPeerStore struct {
 	*EphemeralPeerStore
-	path     string
-	lastSave time.Time
+	path string
 }
 
 func (jps *JSONPeerStore) load() error {
@@ -147,18 +146,21 @@ func (jps *JSONPeerStore) load() error {
 	if err := json.NewDecoder(f).Decode(&p); err != nil {
 		return err
 	}
-	jps.EphemeralPeerStore.peers = p.Peers
-	jps.EphemeralPeerStore.bans = p.Bans
+	// The decoded maps may be nil if the file contains null values or
+	// omits the keys; keep the initialized empty maps in that case,
+	// otherwise AddPeer and Ban panic on assignment to a nil map.
+	if p.Peers != nil {
+		jps.EphemeralPeerStore.peers = p.Peers
+	}
+	if p.Bans != nil {
+		jps.EphemeralPeerStore.bans = p.Bans
+	}
 	return nil
 }
 
 func (jps *JSONPeerStore) save() error {
 	jps.EphemeralPeerStore.mu.Lock()
 	defer jps.EphemeralPeerStore.mu.Unlock()
-	if time.Since(jps.lastSave) < 5*time.Second {
-		return nil
-	}
-	defer func() { jps.lastSave = time.Now() }()
 	// clear out expired bans
 	for peer, b := range jps.EphemeralPeerStore.bans {
 		if time.Until(b.Expiry) <= 0 {
