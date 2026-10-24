@@ -389,6 +389,13 @@ func (s *hostDBStore) lastFailedBenchmarks(host *HostDBEntry) int {
 	return count
 }
 
+// getTip returns the store's current chain index.
+func (s *hostDBStore) getTip() types.ChainIndex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tip
+}
+
 func (s *hostDBStore) close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()

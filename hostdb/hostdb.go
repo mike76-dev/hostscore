@@ -265,13 +265,26 @@ func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeSt
 
 		// Subscribe in a goroutine to prevent blocking.
 		go func() {
-			for hdb.nodes.ChainManager(network).Tip().Height <= store.tip.Height {
-				time.Sleep(5 * time.Second)
+			if err := hdb.tg.Add(); err != nil {
+				return
+			}
+			defer hdb.tg.Done()
+
+			for hdb.nodes.ChainManager(network).Tip().Height <= store.getTip().Height {
+				select {
+				case <-hdb.tg.StopChan():
+					return
+				case <-time.After(5 * time.Second):
+				}
 			}
 			for {
-				if err := syncStore(store, hdb.nodes.ChainManager(network), store.tip); err != nil {
+				if err := syncStore(store, hdb.nodes.ChainManager(network), store.getTip()); err != nil {
 					l.Error("failed to sync store, retrying", zap.String("network", network), zap.Error(err))
-					time.Sleep(5 * time.Second)
+					select {
+					case <-hdb.tg.StopChan():
+						return
+					case <-time.After(5 * time.Second):
+					}
 					continue
 				}
 				break
@@ -288,9 +301,13 @@ func NewHostDB(db *sql.DB, dir string, limits persist.ParsedLimits, nodes NodeSt
 			hdb.unsubscribes[network] = unsubscribe
 			hdb.mu.Unlock()
 
-			for range reorgChan {
-				lastTip := store.tip
-				if err := syncStore(store, hdb.nodes.ChainManager(network), lastTip); err != nil {
+			for {
+				select {
+				case <-hdb.tg.StopChan():
+					return
+				case <-reorgChan:
+				}
+				if err := syncStore(store, hdb.nodes.ChainManager(network), store.getTip()); err != nil {
 					l.Error("failed to sync store", zap.String("network", network), zap.Error(err))
 				}
 			}
