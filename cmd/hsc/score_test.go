@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	rhpv4 "go.sia.tech/core/rhp/v4"
 	"go.sia.tech/core/types"
 )
 
@@ -75,6 +76,32 @@ func TestSectorsToBytes(t *testing.T) {
 	for _, tt := range tests {
 		if got := sectorsToBytes(tt.sectors); got != tt.want {
 			t.Errorf("sectorsToBytes(%d) = %d, want %d", tt.sectors, got, tt.want)
+		}
+	}
+}
+
+// TestCalculateCosts is a regression test: deriving cost figures from
+// stored host-supplied prices used to panic on Currency overflow, letting
+// a malicious host crash the portal.
+func TestCalculateCosts(t *testing.T) {
+	var settings rhpv4.HostSettings
+	settings.Prices.StoragePrice = types.Siacoins(1).Div64(1e12).Div64(30 * 144)
+	settings.Prices.IngressPrice = types.Siacoins(1).Div64(1e12)
+	settings.Prices.EgressPrice = types.Siacoins(1).Div64(1e12)
+	if _, ok := calculateCosts(settings); !ok {
+		t.Error("expected sane prices to compute")
+	}
+
+	for _, set := range []func(*rhpv4.HostPrices){
+		func(p *rhpv4.HostPrices) { p.StoragePrice = types.MaxCurrency },
+		func(p *rhpv4.HostPrices) { p.IngressPrice = types.MaxCurrency },
+		func(p *rhpv4.HostPrices) { p.EgressPrice = types.MaxCurrency },
+		func(p *rhpv4.HostPrices) { p.Collateral = types.MaxCurrency },
+	} {
+		var s rhpv4.HostSettings
+		set(&s.Prices)
+		if _, ok := calculateCosts(s); ok {
+			t.Error("expected overflowing prices to be rejected")
 		}
 	}
 }

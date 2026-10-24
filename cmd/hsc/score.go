@@ -24,6 +24,34 @@ var (
 	maxStoragePrice  = types.Siacoins(500).Div64(1e12).Div64(30 * 144) // 500 SC/TB/month
 )
 
+// hostCosts holds the cost figures derived from a host's advertised prices.
+type hostCosts struct {
+	uploadSectorCost types.Currency
+	egressPrice      types.Currency
+	ingressPrice     types.Currency
+	storagePrice     types.Currency
+}
+
+// calculateCosts derives the cost figures used by the score functions. ok is
+// false if the computation overflows: the core Currency math panics on
+// overflow, and the prices are host-supplied and stored without a gouging
+// check, so a malicious host must not be able to crash the portal.
+func calculateCosts(settings rhpv4.HostSettings) (costs hostCosts, ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	prices := settings.Prices
+	appendCost := prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost()
+	uploadCost := prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost()
+	costs.uploadSectorCost = appendCost.Add(uploadCost)
+	costs.egressPrice = prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
+	costs.ingressPrice = uploadCost.Div64(rhpv4.SectorSize)
+	costs.storagePrice = appendCost.Div64(rhpv4.SectorSize)
+	return costs, true
+}
+
 // calculateScore calculates the total host's score.
 func calculateScore(host portalHost, node string, scans []portalScan, benchmarks []hostdb.HostBenchmark) scoreBreakdown {
 	interactions, ok := host.Interactions[node]
@@ -31,21 +59,19 @@ func calculateScore(host portalHost, node string, scans []portalScan, benchmarks
 		return scoreBreakdown{}
 	}
 
-	appendCost := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost()
-	uploadCost := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost()
-	uploadSectorCost := appendCost.Add(uploadCost)
+	costs, ok := calculateCosts(host.V2Settings)
+	if !ok {
+		return scoreBreakdown{}
+	}
 	maxCollateral := host.V2Settings.MaxCollateral
 	collateral := host.V2Settings.Prices.Collateral
-	egressPrice := host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
-	ingressPrice := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
-	storagePrice := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
 	remainingStorage := sectorsToBytes(host.V2Settings.RemainingStorage)
 	version := host.V2Settings.ProtocolVersion
 	acceptingContracts := host.V2Settings.AcceptingContracts
 	sb := scoreBreakdown{
-		PricesScore:       priceAdjustmentScore(egressPrice, ingressPrice, storagePrice),
+		PricesScore:       priceAdjustmentScore(costs.egressPrice, costs.ingressPrice, costs.storagePrice),
 		StorageScore:      storageRemainingScore(remainingStorage),
-		CollateralScore:   collateralScore(uploadSectorCost, maxCollateral, collateral),
+		CollateralScore:   collateralScore(costs.uploadSectorCost, maxCollateral, collateral),
 		InteractionsScore: interactionScore(interactions.Successes, interactions.Failures),
 		UptimeScore:       uptimeScore(interactions.Uptime, interactions.Downtime, scans),
 		AgeScore:          ageScore(host.FirstSeen),
@@ -75,22 +101,20 @@ func calculateGlobalScore(host *portalHost) scoreBreakdown {
 		return scoreBreakdown{}
 	}
 
-	appendCost := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost()
-	uploadCost := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost()
-	uploadSectorCost := appendCost.Add(uploadCost)
+	costs, ok := calculateCosts(host.V2Settings)
+	if !ok {
+		return scoreBreakdown{}
+	}
 	maxCollateral := host.V2Settings.MaxCollateral
 	collateral := host.V2Settings.Prices.Collateral
-	egressPrice := host.V2Settings.Prices.RPCReadSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
-	ingressPrice := host.V2Settings.Prices.RPCWriteSectorCost(rhpv4.SectorSize).RenterCost().Div64(rhpv4.SectorSize)
-	storagePrice := host.V2Settings.Prices.RPCAppendSectorsCost(1, contractPeriod).RenterCost().Div64(rhpv4.SectorSize)
 	remainingStorage := sectorsToBytes(host.V2Settings.RemainingStorage)
 	version := host.V2Settings.ProtocolVersion
 	acceptingContracts := host.V2Settings.AcceptingContracts
 
 	sb := scoreBreakdown{
-		PricesScore:     priceAdjustmentScore(egressPrice, ingressPrice, storagePrice),
+		PricesScore:     priceAdjustmentScore(costs.egressPrice, costs.ingressPrice, costs.storagePrice),
 		StorageScore:    storageRemainingScore(remainingStorage),
-		CollateralScore: collateralScore(uploadSectorCost, maxCollateral, collateral),
+		CollateralScore: collateralScore(costs.uploadSectorCost, maxCollateral, collateral),
 		AgeScore:        ageScore(host.FirstSeen),
 		VersionScore:    versionScore(version),
 		ContractsScore:  contractsScore(acceptingContracts),
