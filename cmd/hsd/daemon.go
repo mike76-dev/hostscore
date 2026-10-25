@@ -42,6 +42,10 @@ func startDaemon(config *persist.Config, apiPassword, dbPassword string, seeds m
 
 	<-signalCh
 	log.Println("Shutting down...")
+	// Close the HostDB first: it waits for the scanning, benchmarking and
+	// syncing goroutines and commits the store transactions, which needs
+	// both the SQL database and the chain managers still available.
+	a.hdb.Close()
 	for name := range seeds {
 		stops[name]()
 	}
