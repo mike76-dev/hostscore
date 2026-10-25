@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -35,7 +36,11 @@ func startDaemon(config *persist.Config, apiPassword, dbPassword string, seeds m
 	}
 
 	log.Println("api: Listening on", l.Addr())
-	go startWeb(l, a, apiPassword)
+	go func() {
+		if err := startWeb(l, a, apiPassword); err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Println("ERROR: web server failed:", err)
+		}
+	}()
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt)

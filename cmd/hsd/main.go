@@ -166,17 +166,42 @@ func main() {
 		if configDir != "" {
 			log.Println("Using HSD_CONFIG_DIR environment variable to load config.")
 		}
-		if err := config.Load(configDir); err != nil {
-			log.Fatalln("Could not load config file:", err)
-		}
-
 		parsedConfig = defaultConfig
-		parsedConfig.Config = config.Config
-		mcp, err := types.ParseCurrency(config.Limits.MaxContractPriceSC)
-		if err != nil {
-			log.Println("Unable to parse MaxContractPrice:", err)
+		if err := config.Load(configDir); err != nil {
+			if !os.IsNotExist(err) {
+				log.Fatalln("Could not load config file:", err)
+			}
+			log.Println("Config file not found, using the defaults.")
 		} else {
-			parsedConfig.Limits.MaxContractPriceSC = mcp
+			// Only override the defaults with the fields actually set in
+			// the config file, so an omitted field keeps its default
+			// instead of becoming an empty string.
+			if config.Config.GatewayMainnet != "" {
+				parsedConfig.Config.GatewayMainnet = config.Config.GatewayMainnet
+			}
+			if config.Config.GatewayZen != "" {
+				parsedConfig.Config.GatewayZen = config.Config.GatewayZen
+			}
+			if config.Config.APIAddr != "" {
+				parsedConfig.Config.APIAddr = config.Config.APIAddr
+			}
+			if config.Config.Dir != "" {
+				parsedConfig.Config.Dir = config.Config.Dir
+			}
+			if config.Config.DBUser != "" {
+				parsedConfig.Config.DBUser = config.Config.DBUser
+			}
+			if config.Config.DBName != "" {
+				parsedConfig.Config.DBName = config.Config.DBName
+			}
+		}
+		if config.Limits.MaxContractPriceSC != "" {
+			mcp, err := types.ParseCurrency(config.Limits.MaxContractPriceSC)
+			if err != nil {
+				log.Println("Unable to parse MaxContractPrice:", err)
+			} else {
+				parsedConfig.Limits.MaxContractPriceSC = mcp
+			}
 		}
 		if config.Limits.MaxUploadPriceUSD > 0 {
 			parsedConfig.Limits.MaxUploadPriceUSD = config.Limits.MaxUploadPriceUSD
@@ -236,7 +261,7 @@ func main() {
 
 		// Create the directory if it does not yet exist.
 		// This also checks if the provided directory parameter is valid.
-		err = os.MkdirAll(parsedConfig.Config.Dir, 0700)
+		err := os.MkdirAll(parsedConfig.Config.Dir, 0700)
 		if err != nil {
 			log.Fatalf("Provided parameter is invalid: %v\n", parsedConfig.Config.Dir)
 		}
