@@ -177,28 +177,30 @@ sudo chown <user> /usr/local/etc/*
 ```
 where `user` is the name of the user that will be running the service.
 
-Open the `hsdconfig.json` file:
+Open the `hsdconfig.yml` file:
 ```
-$ nano hsdconfig.json
+$ nano hsdconfig.yml
 ```
-First, choose a `name` of your hsd node. Fill in the `dbUser` and `dbName` fields with the MySQL user name (`hsuser`) and the database name (`hostscore`). Set the directory to store the `hsd` metadata and log files (here it is `/usr/local/etc/hsd`). You can also change the default port numbers:
+Fill in the `dbUser` and `dbName` fields with the MySQL user name (`hsuser`) and the database name (`hostscore`). Set the directory to store the `hsd` metadata and log files (here it is `/usr/local/etc/hsd`). You can also change the default port numbers and adjust the price limits:
 ```
-"HSD Configuration"
-"0.4.0"
-{
-        "mainnet": ":9981",
-        "zen": ":9881",
-        "api": ":9980",
-        "dir": "/usr/local/etc/hsd",
-        "dbUser": "hsuser",
-        "dbName": "hostscore"
-}
+config:
+  mainnet: :9981
+  zen: :9881
+  api: :9980
+  dir: /usr/local/etc/hsd
+  dbUser: hsuser
+  dbName: hostscore
+priceLimits:
+  maxContractPriceSC: 1SC
+  maxUploadPriceUSD: 6.0
+  maxDownloadPriceUSD: 18.0
+  maxStoragePriceUSD: 6.0
 ```
-If you are not going to run on a specific network, you may omit the corresponding line.
+Any omitted field falls back to its default value. To not run on a specific network, use the `--no-mainnet` or `--no-zen` command line flag when starting `hsd`.
 
 Save and exit. Now copy the file to its new location:
 ```
-$ cp hsdconfig.json /usr/local/etc/hsd
+$ cp hsdconfig.yml /usr/local/etc/hsd
 ```
 Now copy the `hsd` binary over:
 ```
