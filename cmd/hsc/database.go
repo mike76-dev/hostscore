@@ -766,6 +766,9 @@ func (api *portalAPI) getHosts(network string, all bool, offset, limit int, quer
 			keys = append(keys, types.PublicKey(pk))
 		}
 		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, false, 0, utils.AddContext(err, "couldn't read public keys")
+		}
 
 		api.mu.RLock()
 		allHosts := api.hosts[network]
@@ -1124,6 +1127,9 @@ func (api *portalAPI) getScans(network, node string, pk types.PublicKey, all boo
 		}
 		scans = append(scans, scan)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, utils.AddContext(err, "couldn't read scan history")
+	}
 
 	return
 }
@@ -1199,6 +1205,9 @@ func (api *portalAPI) getBenchmarks(network, node string, pk types.PublicKey, al
 			Node:      n,
 		}
 		benchmarks = append(benchmarks, benchmark)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, utils.AddContext(err, "couldn't read benchmark history")
 	}
 
 	return
@@ -1318,6 +1327,9 @@ func (api *portalAPI) load() error {
 		api.hosts[network][host.PublicKey] = host
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return utils.AddContext(err, "couldn't read hosts")
+	}
 
 	hosts := make(map[string][]portalHost)
 	for _, network := range networks {
@@ -1457,6 +1469,9 @@ func (api *portalAPI) loadInteractions(network string) error {
 			host.Interactions[node] = interactions
 		}
 		rows.Close()
+		if err := rows.Err(); err != nil {
+			return utils.AddContext(err, "couldn't read interactions")
+		}
 	}
 
 	return utils.ComposeErrors(api.loadScans(network), api.loadBenchmarks(network))
@@ -1507,6 +1522,9 @@ func (api *portalAPI) loadScans(network string) error {
 				interactions.ScanHistory = append(interactions.ScanHistory, scan)
 			}
 			rows.Close()
+			if err := rows.Err(); err != nil {
+				return utils.AddContext(err, "couldn't read scan history")
+			}
 			host.Interactions[node] = interactions
 		}
 	}
@@ -1563,6 +1581,9 @@ func (api *portalAPI) loadBenchmarks(network string) error {
 				interactions.BenchmarkHistory = append(interactions.BenchmarkHistory, benchmark)
 			}
 			rows.Close()
+			if err := rows.Err(); err != nil {
+				return utils.AddContext(err, "couldn't read benchmarks")
+			}
 			host.Interactions[node] = interactions
 		}
 	}
@@ -1643,6 +1664,9 @@ func (api *portalAPI) getPriceChanges(network string, pk types.PublicKey, from, 
 		}
 
 		pcs = append(pcs, pc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, utils.AddContext(err, "couldn't read price changes")
 	}
 
 	// Sort in ascending order.
@@ -1778,6 +1802,9 @@ func (api *portalAPI) getCountries(network string, all bool) (countries []string
 		}
 
 		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, utils.AddContext(err, "couldn't read countries")
+		}
 		return countries, nil
 	}
 

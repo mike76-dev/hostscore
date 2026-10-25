@@ -111,6 +111,9 @@ func (s *DBStore) load() error {
 		s.sces[scoid] = sce
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return utils.AddContext(err, "couldn't read SC elements")
+	}
 
 	s.tx, err = s.db.Begin()
 	return err

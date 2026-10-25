@@ -206,6 +206,9 @@ func loadBlockedDomains(db *sql.DB) (*blockedDomains, error) {
 		domains = append(domains, domain)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, utils.AddContext(err, "couldn't read blocked domains")
+	}
 	return newBlockedDomains(domains), nil
 }
 

@@ -522,6 +522,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 		s.hosts[host.PublicKey] = host
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return utils.AddContext(err, "couldn't read hosts")
+	}
 
 	scanStmt, err := s.db.Prepare(`
 		SELECT ran_at, success, latency, error, settings
@@ -595,6 +598,9 @@ func (s *hostDBStore) load(domains *blockedDomains) error {
 			host.ScanHistory = append([]HostScan{scan}, host.ScanHistory...)
 		}
 		rows.Close()
+		if err := rows.Err(); err != nil {
+			return utils.AddContext(err, "couldn't read scan history")
+		}
 
 		if host.V2 {
 			if (host.V2Settings == rhpv4.HostSettings{}) {
@@ -872,11 +878,20 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 			rows.Close()
 			return HostUpdates{}, utils.AddContext(err, "couldn't decode host data")
 		}
-		host := s.hosts[types.PublicKey(pk)]
+		host, exists := s.hosts[types.PublicKey(pk)]
+		if !exists {
+			// The database and the in-memory map are out of sync; skip
+			// the row rather than dereference a nil entry.
+			s.log.Warn("host not found in memory", zap.String("network", s.network), zap.String("publicKey", types.PublicKey(pk).String()))
+			continue
+		}
 		host.ActiveHosts = s.activeHostsInSubnet(host.IPNets)
 		updates.Hosts = append(updates.Hosts, *host)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return HostUpdates{}, utils.AddContext(err, "couldn't read hosts")
+	}
 
 	rows, err = s.tx.Query(`
 		SELECT s.id, s.public_key, s.ran_at, s.success, s.latency, s.error, s.settings
@@ -928,6 +943,9 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 		updates.Scans = append(updates.Scans, scan)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return HostUpdates{}, utils.AddContext(err, "couldn't read scans")
+	}
 
 	rows, err = s.tx.Query(`
 		SELECT b.id, b.public_key, b.ran_at, b.success, b.upload_speed, b.download_speed, b.ttfb, b.error
@@ -972,6 +990,9 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 		updates.Benchmarks = append(updates.Benchmarks, benchmark)
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return HostUpdates{}, utils.AddContext(err, "couldn't read benchmarks")
+	}
 
 	updates.ID = id
 	s.lastUpdate = updates
