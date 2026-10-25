@@ -84,8 +84,7 @@ func NewWallet(store *DBStore, cm *chain.Manager, syncer *syncer.Syncer, log *za
 			select {
 			case <-wm.tg.StopChan():
 				return
-			default:
-				time.Sleep(5 * time.Second)
+			case <-time.After(5 * time.Second):
 			}
 		}
 
@@ -150,6 +149,12 @@ func (wm *WalletManager) syncStore(index types.ChainIndex) error {
 func (wm *WalletManager) Close() error {
 	if err := wm.tg.Stop(); err != nil {
 		wm.log.Error("unable to stop threads", zap.String("network", wm.store.network), zap.Error(err))
+	}
+	// Close the underlying wallet too: it runs its own rebroadcast
+	// goroutine with an OnReorg subscription, which would otherwise keep
+	// running against the closed store.
+	if err := wm.wallet.Close(); err != nil {
+		wm.log.Error("unable to close wallet", zap.String("network", wm.store.network), zap.Error(err))
 	}
 	wm.store.close()
 	return nil
