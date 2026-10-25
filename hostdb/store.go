@@ -403,6 +403,9 @@ func (s *hostDBStore) close() {
 		if err := s.tx.Commit(); err != nil {
 			s.log.Error("couldn't commit transaction", zap.String("network", s.network), zap.Error(err))
 		}
+		// Leave no transaction behind: a straggling API call must fail
+		// instead of reopening one on the closed store.
+		s.tx = nil
 	}
 }
 
@@ -857,13 +860,13 @@ func (s *hostDBStore) checkSubnets(ipNets []string) int {
 // since the last retrieval.
 // The batch size is limited to avoid sending too large responses.
 func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.tx == nil {
 		s.log.Error("there is no transaction", zap.String("network", s.network))
 		return HostUpdates{}, errors.New("no database transaction")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	rows, err := s.tx.Query(`
 		SELECT public_key
@@ -1008,6 +1011,9 @@ func (s *hostDBStore) getRecentUpdates(id UpdateID) (updates HostUpdates, err er
 
 // finalizeUpdates updates the timestamps after the client confirms the data receipt.
 func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if id != s.lastUpdate.ID {
 		return nil
 	}
@@ -1016,9 +1022,6 @@ func (s *hostDBStore) finalizeUpdates(id UpdateID) error {
 		s.log.Error("there is no transaction", zap.String("network", s.network))
 		return errors.New("no database transaction")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	hostStsmt, err := s.tx.Prepare(`
 		UPDATE hdb_hosts
@@ -1125,12 +1128,12 @@ func (s *hostDBStore) getHostsForScan() {
 }
 
 func (s *hostDBStore) pruneOldRecords() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if s.tx == nil {
 		return errors.New("no database transaction")
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	_, err := s.tx.Exec(`
 		DELETE FROM hdb_scans
