@@ -186,6 +186,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		SELECT COUNT(*)
 		FROM price_changes
 		WHERE public_key = ?
+		AND network = ?
 	`)
 	if err != nil {
 		tx.Rollback()
@@ -321,7 +322,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 		}
 		api.mu.RUnlock()
 		var count int
-		if err := priceChangeCountStmt.QueryRow(h.PublicKey[:]).Scan(&count); err != nil {
+		if err := priceChangeCountStmt.QueryRow(h.PublicKey[:], h.Network).Scan(&count); err != nil {
 			tx.Rollback()
 			return utils.AddContext(err, "couldn't count price changes")
 		}

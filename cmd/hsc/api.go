@@ -622,7 +622,9 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 	var minDuration int64
 	if md != "" {
 		minDuration, err = strconv.ParseInt(md, 10, 64)
-		if err != nil {
+		// The value is converted to uint64 below, so a negative value
+		// would wrap to a filter nothing can pass.
+		if err != nil || minDuration < 0 {
 			writeError(w, "invalid min contract duration", http.StatusBadRequest)
 			return
 		}
@@ -632,7 +634,7 @@ func (api *portalAPI) hostsKeysHandler(w http.ResponseWriter, req *http.Request,
 	var minStorage int64
 	if ms != "" {
 		minStorage, err = strconv.ParseInt(ms, 10, 64)
-		if err != nil {
+		if err != nil || minStorage < 0 {
 			writeError(w, "invalid min available storage", http.StatusBadRequest)
 			return
 		}
