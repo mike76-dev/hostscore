@@ -55,6 +55,16 @@ func (hdb *HostDB) benchmarkHost(host *HostDBEntry) {
 		panic("wrong host network")
 	}
 
+	// Work on a copy of the entry: the shared entry is mutated by the
+	// chain updater and copied by getRecentUpdates under the store mutex,
+	// so the benchmark must not read or write it unsynchronized. The
+	// results, including the updated settings and revision, are merged
+	// back under the mutex by updateBenchmarks.
+	store.mu.Lock()
+	entry := *host
+	store.mu.Unlock()
+	host = &entry
+
 	// Delete the host from scanMap and release the thread on any exit path.
 	defer func() {
 		hdb.mu.Lock()

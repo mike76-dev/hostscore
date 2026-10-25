@@ -58,6 +58,15 @@ func (hdb *HostDB) scanHost(host *HostDBEntry) {
 		panic("wrong host network")
 	}
 
+	// Work on a copy of the entry: the shared entry is mutated by the
+	// chain updater and copied by getRecentUpdates under the store mutex,
+	// so the scan must not read or write it unsynchronized. The results
+	// are merged back under the mutex by updateScanHistory.
+	store.mu.Lock()
+	entry := *host
+	store.mu.Unlock()
+	host = &entry
+
 	// Delete the host from scanMap on any exit path.
 	defer func() {
 		hdb.mu.Lock()
