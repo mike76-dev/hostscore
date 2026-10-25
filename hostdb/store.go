@@ -681,17 +681,6 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 			continue
 		}
 
-		s.tip = cau.State.Index
-		_, err := s.tx.Exec(`
-			REPLACE INTO hdb_tip (network, height, bid)
-			VALUES (?, ?, ?)
-		`, s.network, s.tip.Height, s.tip.ID[:])
-		if err != nil {
-			s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
-			s.reconnect()
-			return err
-		}
-
 		for _, txn := range cau.Block.Transactions {
 			for _, ad := range txn.ArbitraryData {
 				var ha chain.HostAnnouncement
@@ -781,6 +770,23 @@ func (s *hostDBStore) updateChainState(applied []chain.ApplyUpdate, mayCommit bo
 					s.hdb.queueScan(host)
 				}
 			}
+		}
+
+		// Advance the tip only once the block is fully processed: update()
+		// commits mid-block and records lastCommittedTip, which must never
+		// point at a partially applied block, or a retry after an error
+		// (or a restart after a crash) would skip the block's remaining
+		// announcements. Re-applying a block from the start is safe since
+		// the host updates are idempotent upserts.
+		s.tip = cau.State.Index
+		_, err := s.tx.Exec(`
+			REPLACE INTO hdb_tip (network, height, bid)
+			VALUES (?, ?, ?)
+		`, s.network, s.tip.Height, s.tip.ID[:])
+		if err != nil {
+			s.log.Error("couldn't update tip", zap.String("network", s.network), zap.Error(err))
+			s.reconnect()
+			return err
 		}
 	}
 
