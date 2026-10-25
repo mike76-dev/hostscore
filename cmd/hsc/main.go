@@ -116,19 +116,20 @@ func main() {
 
 	api.buildHTTPRoutes()
 
-	closeChan := make(chan int, 1)
 	srv := &http.Server{Handler: api}
 	go srv.Serve(l)
 	fmt.Println("Listening on", l.Addr())
-
-	go func() {
-		<-closeChan
-		srv.Shutdown(context.Background())
-	}()
 
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt)
 	<-signalCh
 	fmt.Println("Shutting down...")
-	closeChan <- 1
+
+	// Wait for in-flight requests to finish before the deferred close
+	// calls shut down the cache, the API and the database under them.
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Println("HTTP server shutdown:", err)
+	}
 }

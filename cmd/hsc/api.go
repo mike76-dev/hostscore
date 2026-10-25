@@ -280,47 +280,29 @@ func (api *portalAPI) requestUpdates() {
 
 func (api *portalAPI) requestStatus() {
 	nodes := make(map[string]nodeStatus)
-	var mu sync.Mutex
 	for n, c := range api.clients {
+		// The context aborts the HTTP request itself, so a hung node
+		// cannot leak a blocked goroutine.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		var status client.NodeStatusResponse
-		var err error
-		done := make(chan struct{})
-		go func() {
-			status, err = c.NodeStatus()
-			close(done)
-		}()
-
-		select {
-		case <-done:
-			if err != nil {
-				api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
-				mu.Lock()
-				nodes[n] = nodeStatus{Online: false}
-				mu.Unlock()
-			} else {
-				mu.Lock()
-				nodes[n] = nodeStatus{
-					Online:   true,
-					Version:  status.Version,
-					Networks: make(map[string]networkStatus),
-				}
-				for _, network := range status.Networks {
-					nodes[n].Networks[network.Network] = networkStatus{
-						Height:  network.Height,
-						Balance: balanceStatus(network.Balance.Confirmed),
-					}
-				}
-				mu.Unlock()
-			}
-		case <-ctx.Done():
-			api.log.Error("NodeStatus call timed out", zap.String("node", n))
-			mu.Lock()
+		status, err := c.NodeStatus(ctx)
+		cancel()
+		if err != nil {
+			api.log.Error("couldn't get node status", zap.String("node", n), zap.Error(err))
 			nodes[n] = nodeStatus{Online: false}
-			mu.Unlock()
+			continue
 		}
+		ns := nodeStatus{
+			Online:   true,
+			Version:  status.Version,
+			Networks: make(map[string]networkStatus),
+		}
+		for _, network := range status.Networks {
+			ns.Networks[network.Network] = networkStatus{
+				Height:  network.Height,
+				Balance: balanceStatus(network.Balance.Confirmed),
+			}
+		}
+		nodes[n] = ns
 	}
 	api.mu.Lock()
 	api.nodes = nodes

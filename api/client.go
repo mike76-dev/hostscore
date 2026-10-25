@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/hex"
 
 	"github.com/mike76-dev/hostscore/hostdb"
@@ -15,9 +16,10 @@ type Client struct {
 	c jape.Client
 }
 
-// NodeStatus returns the status of the node.
-func (c *Client) NodeStatus() (resp NodeStatusResponse, err error) {
-	err = c.c.GET("/node/status", &resp)
+// NodeStatus returns the status of the node. The context bounds the
+// request, so a hung node cannot block the caller forever.
+func (c *Client) NodeStatus(ctx context.Context) (resp NodeStatusResponse, err error) {
+	err = c.c.WithContext(ctx).GET("/node/status", &resp)
 	return
 }
 
