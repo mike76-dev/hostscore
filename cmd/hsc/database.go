@@ -308,6 +308,10 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 
 	for _, h := range updates.Hosts {
+		if !knownNetwork(h.Network) {
+			api.log.Warn("skipping host with unknown network", zap.String("network", h.Network), zap.Stringer("host", h.PublicKey))
+			continue
+		}
 		var host *portalHost
 		var exists bool
 		api.mu.RLock()
@@ -420,7 +424,7 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 				},
 			}
 			var addr string
-			if h.V2 {
+			if h.V2 && len(h.SiamuxAddresses) > 0 {
 				addr = h.SiamuxAddresses[0]
 			} else {
 				addr = h.NetAddress
@@ -476,6 +480,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 
 	for _, scan := range updates.Scans {
+		if !knownNetwork(scan.Network) {
+			continue
+		}
 		toUpdate[scan.Network][scan.PublicKey] = struct{}{}
 		newScans[scan.Network][scan.PublicKey] = append(newScans[scan.Network][scan.PublicKey], portalScan{
 			Timestamp: scan.Timestamp,
@@ -486,6 +493,9 @@ func (api *portalAPI) insertUpdates(node string, updates hostdb.HostUpdates) err
 	}
 
 	for _, benchmark := range updates.Benchmarks {
+		if !knownNetwork(benchmark.Network) {
+			continue
+		}
 		toUpdate[benchmark.Network][benchmark.PublicKey] = struct{}{}
 		newBenchmarks[benchmark.Network][benchmark.PublicKey] = append(newBenchmarks[benchmark.Network][benchmark.PublicKey], benchmark.HostBenchmark)
 	}
@@ -1288,6 +1298,10 @@ func (api *portalAPI) load() error {
 		); err != nil {
 			rows.Close()
 			return utils.AddContext(err, "couldn't decode host data")
+		}
+		if !knownNetwork(network) {
+			api.log.Warn("skipping host with unknown network", zap.String("network", network))
+			continue
 		}
 		host := &portalHost{
 			ID:           id,

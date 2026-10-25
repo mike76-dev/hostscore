@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -182,6 +183,14 @@ const (
 var (
 	networks = []string{"mainnet", "zen"}
 )
+
+// knownNetwork returns whether n is one of the supported networks. Network
+// names arrive in node updates and database rows, and the per-network maps
+// only exist for the supported ones, so unknown names must be skipped
+// rather than used as map keys.
+func knownNetwork(n string) bool {
+	return slices.Contains(networks, n)
+}
 
 type portalAPI struct {
 	router   httprouter.Router
